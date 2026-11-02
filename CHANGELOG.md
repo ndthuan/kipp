@@ -8,6 +8,11 @@ lines and the data directory are the public surface.
 
 ## Unreleased
 
+## [1.0.0] - 2026-11-02
+
+The first stable release. It is rc.2 with the release candidates' name
+removed; what kipp does is listed under 1.0.0-rc.1 below.
+
 ## [1.0.0-rc.2] - 2026-11-02
 
 The first release made from the public repository. Nothing in kipp itself
