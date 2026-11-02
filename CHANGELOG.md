@@ -8,6 +8,12 @@ lines and the data directory are the public surface.
 
 ## Unreleased
 
+## [1.0.0-rc.2] - 2026-11-02
+
+The first release made from the public repository. Nothing in kipp itself
+changed since rc.1; the archives, the image and the Homebrew formula are now
+published from `ndthuan/kipp`.
+
 ## [1.0.0-rc.1] - 2026-11-02
 
 The first release.
