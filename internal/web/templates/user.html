@@ -1,0 +1,75 @@
+{{define "content"}}
+{{with .Data}}{{$path := userPath .Info.Name}}
+<div class="head">
+<h1 class="crumbs"><a class="link-plain" href="/admin/users">Users</a><span aria-hidden="true">/</span><span>{{.Info.Name}}</span>{{if .Info.Admin}} <span class="tag">admin</span>{{end}}</h1>
+<div class="head-actions">
+<details class="build drop">
+<summary class="action action-main">Make a token</summary>
+{{template "token-form" (tokenForm (printf "%s/tokens" $path) .Days $.CSRF $.Once)}}
+</details>
+</div>
+</div>
+{{with .Notice}}<p class="notice" role="status">{{.}}</p>{{end}}
+<p class="sub">Last login {{with .Info.LastLoginAt}}{{clock .}}{{else}}never{{end}}; {{.Info.Sessions}} {{if eq .Info.Sessions 1}}session{{else}}sessions{{end}} now.</p>
+
+<section class="stack narrow" aria-labelledby="admin-heading">
+<h2 id="admin-heading">Admin</h2>
+{{if .Info.Admin}}<p>{{.Info.Name}} is an admin: they see and do everything, and manage users and secrets.</p>
+<p><a class="action action-quiet" href="{{$path}}/admin/off">Take admin away</a></p>
+{{else}}<p>{{.Info.Name}} is not an admin: they see and do what the grants below allow.</p>
+<form method="post" action="{{$path}}/admin/on">
+<input type="hidden" name="csrf" value="{{$.CSRF}}">
+<button class="action action-quiet">Make {{.Info.Name}} an admin</button>
+</form>
+{{end}}</section>
+
+<section class="stack" aria-labelledby="grants-heading">
+<h2 id="grants-heading">Grants</h2>
+{{if .Info.Admin}}<p class="sub">An admin may do everything on every job; these grants count only once admin is taken away.</p>{{end}}
+{{if .Groups}}<form class="stack" method="post" action="{{$path}}/grants">
+<input type="hidden" name="csrf" value="{{$.CSRF}}">
+<div class="scroll">
+<table class="grants">
+<thead><tr><th>Job</th><th>View</th><th>Build</th><th>Cancel</th></tr></thead>
+{{range .Groups}}<tbody>
+<tr><th colspan="4" scope="rowgroup">{{.Label}}</th></tr>
+{{range .Jobs}}<tr>
+<td><code>{{.Job}}</code></td>
+<td><input type="checkbox" name="view" value="{{.Job}}" aria-label="View {{.Job}}"{{if .Perm.View}} checked{{end}}></td>
+<td><input type="checkbox" name="build" value="{{.Job}}" aria-label="Build {{.Job}}"{{if .Perm.Build}} checked{{end}}></td>
+<td><input type="checkbox" name="cancel" value="{{.Job}}" aria-label="Cancel {{.Job}}"{{if .Perm.Cancel}} checked{{end}}></td>
+</tr>
+{{end}}</tbody>
+{{end}}</table>
+</div>
+<div><button class="action action-main">Save the grants</button></div>
+</form>
+{{else}}<p class="sub">No job is loaded.</p>
+{{end}}
+{{if .Info.GoneGrants}}<h3>On jobs no longer in the job files</h3>
+<p class="sub">Kept until removed here: a job of the same name, added again, would be granted at once.</p>
+<ul class="activity">
+{{range .Info.GoneGrants}}<li><code>{{.}}</code>: {{join (index $.Data.Info.Grants .).Names}}
+<form class="inline" method="post" action="{{$path}}/grants/remove">
+<input type="hidden" name="csrf" value="{{$.CSRF}}">
+<input type="hidden" name="job" value="{{.}}">
+<button class="action action-quiet action-small">Remove</button>
+</form></li>
+{{end}}</ul>
+{{end}}</section>
+
+<section class="stack" aria-labelledby="tokens-heading">
+<h2 id="tokens-heading">Tokens</h2>
+{{template "tokens" (tokenList .Info.Tokens (printf "%s/tokens" $path))}}
+</section>
+
+<section class="stack narrow" aria-labelledby="danger-heading">
+<h2 id="danger-heading">Password and deletion</h2>
+<div class="actions">
+<a class="action action-quiet" href="{{$path}}/password">Reset the password</a>
+{{if not .Self}}<a class="action action-danger" href="{{$path}}/delete">Delete {{.Info.Name}}</a>{{end}}
+</div>
+{{if .Self}}<p class="sub">You change your own password on your <a class="link" href="/account">Account</a> page; another admin or the kipp command deletes you.</p>{{end}}
+</section>
+{{end}}
+{{end}}

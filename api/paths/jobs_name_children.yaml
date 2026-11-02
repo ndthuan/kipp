@@ -1,0 +1,20 @@
+get:
+  operationId: listChildren
+  tags: [jobs]
+  summary: The children of a multibranch job
+  x-kipp-package: api
+  parameters:
+    - $ref: ../parameters/JobName.yaml
+  responses:
+    "200":
+      description: The children that build, then the gone ones, then the pull requests from forks.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/ChildList.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "404":
+      $ref: ../responses/NotFound.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

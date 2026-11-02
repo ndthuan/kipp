@@ -1,0 +1,31 @@
+type: object
+additionalProperties: false
+description: An owner job's own page.
+required: [login, app, scan, public_only, repos, old_hooks, overlaps]
+properties:
+  login:
+    type: string
+  app:
+    type: [string, "null"]
+    description: The GitHub App the job signs in as; null for a token.
+  scan:
+    oneOf:
+      - $ref: Scan.yaml
+      - type: "null"
+  public_only:
+    type: boolean
+    description: True when the last read could not list private repos.
+  repos:
+    type: array
+    items:
+      $ref: Repo.yaml
+  old_hooks:
+    type: array
+    items:
+      type: string
+    description: Repos that carry a webhook kipp made and no longer keeps.
+  overlaps:
+    type: array
+    items:
+      $ref: Overlap.yaml
+    description: The repos this job shares with another job.

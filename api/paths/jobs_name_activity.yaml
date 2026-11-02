@@ -1,0 +1,24 @@
+get:
+  operationId: listActivity
+  tags: [jobs]
+  summary: The lines of a job's activity, newest first
+  x-kipp-package: api
+  parameters:
+    - $ref: ../parameters/JobName.yaml
+    - $ref: ../parameters/Limit.yaml
+    - $ref: ../parameters/Cursor.yaml
+  responses:
+    "200":
+      description: Up to `limit` lines, 50 by default.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/ActivityList.yaml
+    "400":
+      $ref: ../responses/BadRequest.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "404":
+      $ref: ../responses/NotFound.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

@@ -1,0 +1,7 @@
+# The smallest job worth having: built by hand, with one parameter.
+name: hello
+description: Says hello, to show a build and its log.
+params:
+  WHO: {default: world, description: "Who to greet."}
+stages:
+  greet: {run: 'echo "hello, $WHO"'}

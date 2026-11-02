@@ -1,0 +1,179 @@
+openapi: 3.1.0
+info:
+  title: kipp API
+  version: 1.0.0-rc.1
+  summary: The HTTP API of a kipp server, version 1.
+  description: |
+    Everything a machine calls on a kipp server lives under `/api/v1`: the
+    JSON API (jobs, builds, logs, artifacts, metrics, the queue and the
+    admin reads), the webhook endpoints GitHub delivers to, and the two
+    protocols between kipp and an agent of the same version (the agent
+    protocol and the build cache), which are tagged `internal`.
+
+    This file is generated: the sources are `api/openapi.yaml` and the files
+    beside it, and `make openapi` writes `api/openapi.gen.yaml`. The gate
+    fails when the two differ, when a route is not described here, when a
+    handler answers something this file does not allow, and when an
+    operation is described that no test reaches.
+  license:
+    name: See the LICENSE file of the kipp repository
+    url: https://github.com/ndthuan/kipp/blob/main/LICENSE
+servers:
+  - url: /api/v1
+    description: This server.
+security:
+  - bearerToken: []
+  - sessionCookie: []
+tags:
+  - name: server
+    description: Whether the server answers, and what it runs with.
+  - name: jobs
+    description: Jobs, their builds, activity and children.
+  - name: builds
+    description: One build, its stages, logs, results and artifacts.
+  - name: metrics
+    description: The metric stores jobs report into.
+  - name: queue
+    description: What runs and what waits.
+  - name: admin
+    description: Reads of users, secrets, engines, agents, the cache and the audit, and the server's quiet mode; for an admin.
+  - name: webhooks
+    description: Deliveries from GitHub.
+  - name: internal
+    description: Between kipp and an agent of the same version. No stability promise.
+paths:
+  /health:
+    $ref: paths/health.yaml
+  /openapi.yaml:
+    $ref: paths/openapi_yaml.yaml
+  /jobs:
+    $ref: paths/jobs.yaml
+  /jobs/{name}:
+    $ref: paths/jobs_name.yaml
+  /jobs/{name}/builds:
+    $ref: paths/jobs_name_builds.yaml
+  /jobs/{name}/builds/{number}:
+    $ref: paths/jobs_name_builds_number.yaml
+  /jobs/{name}/scan:
+    $ref: paths/jobs_name_scan.yaml
+  /jobs/{name}/activity:
+    $ref: paths/jobs_name_activity.yaml
+  /jobs/{name}/children:
+    $ref: paths/jobs_name_children.yaml
+  /jobs/{name}/artifacts/latest:
+    $ref: paths/jobs_name_artifacts_latest.yaml
+  /builds/{id}:
+    $ref: paths/builds_id.yaml
+  /builds/{id}/cancel:
+    $ref: paths/builds_id_cancel.yaml
+  /builds/{id}/again:
+    $ref: paths/builds_id_again.yaml
+  /builds/{id}/keep:
+    $ref: paths/builds_id_keep.yaml
+  /builds/{id}/stages/{stage}/log:
+    $ref: paths/builds_id_stages_stage_log.yaml
+  /builds/{id}/stages/{stage}/log/events:
+    $ref: paths/builds_id_stages_stage_log_events.yaml
+  /builds/{id}/results:
+    $ref: paths/builds_id_results.yaml
+  /builds/{id}/metrics:
+    $ref: paths/builds_id_metrics.yaml
+  /builds/{id}/artifacts:
+    $ref: paths/builds_id_artifacts.yaml
+  /builds/{id}/stages/{stage}/artifacts:
+    $ref: paths/builds_id_stages_stage_artifacts.yaml
+  /builds/{id}/stages/{stage}/artifacts.zip:
+    $ref: paths/builds_id_stages_stage_artifacts_zip.yaml
+  /builds/{id}/stages/{stage}/artifacts/{path}:
+    $ref: paths/builds_id_stages_stage_artifacts_path.yaml
+  /metrics:
+    $ref: paths/metrics.yaml
+  /metrics/{store}:
+    $ref: paths/metrics_store.yaml
+  /metrics/{store}/remembered:
+    $ref: paths/metrics_store_remembered.yaml
+  /metrics/{store}/history:
+    $ref: paths/metrics_store_history.yaml
+  /metrics/{store}/compare:
+    $ref: paths/metrics_store_compare.yaml
+  /queue:
+    $ref: paths/queue.yaml
+  /queue/events:
+    $ref: paths/queue_events.yaml
+  /admin/reload:
+    $ref: paths/admin_reload.yaml
+  /admin/quiet:
+    $ref: paths/admin_quiet.yaml
+  /admin/users:
+    $ref: paths/admin_users.yaml
+  /admin/users/{name}:
+    $ref: paths/admin_users_name.yaml
+  /admin/secrets:
+    $ref: paths/admin_secrets.yaml
+  /admin/server:
+    $ref: paths/admin_server.yaml
+  /admin/engines:
+    $ref: paths/admin_engines.yaml
+  /admin/agents:
+    $ref: paths/admin_agents.yaml
+  /admin/cache:
+    $ref: paths/admin_cache.yaml
+  /admin/audit:
+    $ref: paths/admin_audit.yaml
+  /hooks/github/{job}:
+    $ref: paths/hooks_github_job.yaml
+  /hooks/github-app/{app}:
+    $ref: paths/hooks_github_app_app.yaml
+  /agent/connect:
+    $ref: paths/agent_connect.yaml
+  /agent/claim:
+    $ref: paths/agent_claim.yaml
+  /agent/stages/{id}/log:
+    $ref: paths/agent_stages_id_log.yaml
+  /agent/stages/{id}/control:
+    $ref: paths/agent_stages_id_control.yaml
+  /agent/stages/{id}/done:
+    $ref: paths/agent_stages_id_done.yaml
+  /agent/stages/{id}/artifacts:
+    $ref: paths/agent_stages_id_artifacts.yaml
+  /agent/stages/{id}/inputs/{stage}:
+    $ref: paths/agent_stages_id_inputs_stage.yaml
+  /cache/{scope}/lookup:
+    $ref: paths/cache_scope_lookup.yaml
+  /cache/{scope}/entry/{id}:
+    $ref: paths/cache_scope_entry_id.yaml
+  /cache/{scope}/{key}:
+    $ref: paths/cache_scope_key.yaml
+components:
+  securitySchemes:
+    bearerToken:
+      type: http
+      scheme: bearer
+      description: A user's API token, made on the account page.
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-kipp_session
+      description: |
+        The browser session. A request that is not GET or HEAD must also
+        carry the session's `X-CSRF-Token`, or it is 403.
+    csrfToken:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+      description: The session's CSRF token, sent beside the session cookie on every request that changes something.
+    agentToken:
+      type: http
+      scheme: bearer
+      description: An agent's token (`kippa_` followed by the secret).
+    cacheToken:
+      type: http
+      scheme: bearer
+      description: The token a build's stage is given to reach its caches, valid while the build runs.
+    webhookSignature:
+      type: apiKey
+      in: header
+      name: X-Hub-Signature-256
+      description: |
+        `sha256=` and the hex HMAC-SHA256 of the request body, keyed with the
+        secret of the job (or App) the delivery is for.

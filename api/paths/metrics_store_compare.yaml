@@ -1,0 +1,43 @@
+get:
+  operationId: compareMetric
+  tags: [metrics]
+  summary: One metric in two builds
+  description: |
+    Item by item, between what the build `from` reported into the store and
+    what the build `to` did, or what the store remembers when `to` is
+    `remembered`. The rows are sorted by the size of their change, largest
+    first, then the items on one side only, each part by item. `metric` is
+    needed.
+  x-kipp-package: api
+  parameters:
+    - $ref: ../parameters/StoreName.yaml
+    - name: metric
+      in: query
+      required: true
+      schema:
+        type: string
+    - name: from
+      in: query
+      description: A build's id.
+      schema:
+        type: string
+    - name: to
+      in: query
+      description: A build's id, or `remembered`.
+      schema:
+        type: string
+  responses:
+    "200":
+      description: Each item of the metric with its two values and the difference.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/MetricComparisonList.yaml
+    "400":
+      $ref: ../responses/BadRequest.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "404":
+      $ref: ../responses/NotFound.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

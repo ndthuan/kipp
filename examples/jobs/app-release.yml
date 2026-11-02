@@ -1,0 +1,17 @@
+# Deploys a release: a GitHub release pushes its tag, and a tag that
+# matches v* (secret GITHUB_WEBHOOK_APP_RELEASE) builds the commit the tag
+# names. A push to a branch builds nothing here; app-ci checks main.
+# KIPP_TAG is the tag, KIPP_COMMIT its commit, KIPP_BRANCH empty.
+name: app-release
+group: deploy
+description: Deploy the app to production when a v* tag is pushed.
+triggers:
+  webhook: {repo: example/app, tags: ["v*"]}
+concurrency: queue
+locks: [app-cache]
+keep: {builds: 50}
+workdir: /srv/app
+stages:
+  checkout: {run: 'git fetch --tags origin && git checkout --detach "${KIPP_COMMIT:?a release builds from a pushed tag}"'}
+  build: {needs: [checkout], run: 'make build VERSION="$KIPP_TAG"'}
+  deploy: {needs: [build], run: 'make deploy VERSION="$KIPP_TAG"'}

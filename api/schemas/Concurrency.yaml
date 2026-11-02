@@ -1,0 +1,3 @@
+type: string
+enum: [queue, drop, parallel]
+description: What the job does with a build triggered while another runs.

@@ -1,0 +1,43 @@
+post:
+  operationId: agentDone
+  tags: [internal]
+  summary: An agent says a stage has ended
+  description: The body is a tar of the stage's junit and metrics files.
+  x-kipp-package: agenthub
+  security:
+    - agentToken: []
+  parameters:
+    - $ref: ../parameters/AssignmentId.yaml
+    - name: exit
+      in: query
+      required: true
+      description: The stage's exit code.
+      schema:
+        type: integer
+    - name: tries
+      in: query
+      description: How many times the agent ran the command; absent is once.
+      schema:
+        type: integer
+        minimum: 1
+    - name: error
+      in: query
+      description: Why the stage could not run, when it could not.
+      schema:
+        type: string
+  requestBody:
+    required: false
+    content:
+      application/x-tar:
+        schema:
+          type: string
+          format: binary
+  responses:
+    "204":
+      description: The stage is over.
+    "400":
+      $ref: ../responses/AgentRefusal.yaml
+    "401":
+      $ref: ../responses/AgentRefusal.yaml
+    "410":
+      $ref: ../responses/AgentRefusal.yaml

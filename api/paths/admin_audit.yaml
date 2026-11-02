@@ -1,0 +1,24 @@
+get:
+  operationId: listAudit
+  tags: [admin]
+  summary: A page of the audit, newest first
+  description: For an admin; a token may read it.
+  x-kipp-package: api
+  parameters:
+    - $ref: ../parameters/Limit.yaml
+    - $ref: ../parameters/Cursor.yaml
+  responses:
+    "200":
+      description: Up to `limit` rows, 100 by default.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/AuditList.yaml
+    "400":
+      $ref: ../responses/BadRequest.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "403":
+      $ref: ../responses/Forbidden.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

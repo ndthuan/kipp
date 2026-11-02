@@ -1,0 +1,118 @@
+/* kipp's design tokens. base.css and kipp.css paint only in the colour
+   roles below and size type only from the scale; a test holds kipp.css to
+   that, and another holds every role pair a page shows to its WCAG 2.2
+   contrast: 4.5:1 for text, 3:1 for an outline or a mark, in both themes.
+
+   Every colour is light-dark(light, dark): color-scheme picks the one a
+   page shows. Left alone it is the system's choice, followed the moment
+   the system changes it; data-theme on <html>, from the reader's own pick,
+   holds it to one. */
+
+:root {
+  color-scheme: light dark;
+
+  /* --- colour roles --- */
+  --bg: light-dark(#ffffff, #14181d);
+  --bg-raised: light-dark(#fbfcfd, #1a1f25);
+  --bg-sunken: light-dark(#f3f5f8, #0f1216);
+  --fg: light-dark(#1b2027, #e7eaee);
+  --fg-muted: light-dark(#3f4853, #c0c7cf);
+  --fg-subtle: light-dark(#56616d, #9ba5b0);
+  --line: light-dark(#dde2e8, #2b323a);
+  --line-strong: light-dark(#7d8793, #6c7783);
+
+  /* The main action: deep teal with white on it, or in the dark a light
+     teal with near black on it. */
+  --primary: light-dark(#0c5f58, #3dbdaf);
+  --primary-hover: light-dark(#0a4d47, #5fcdc1);
+  --on-primary: light-dark(#ffffff, #062421);
+
+  /* The accent marks where you are; text in it is the darker step. */
+  --accent: light-dark(#14968a, #2fae9f);
+  --accent-soft: light-dark(#dcf4f0, #123733);
+  --on-accent-soft: light-dark(#0b3f3b, #bdeee7);
+  --accent-text: light-dark(#0b6b62, #62d3c6);
+  --focus: light-dark(#0d776e, #55c9bc);
+
+  /* How a build ended: a strong tone for marks and outlines, a soft one
+     to fill, and the text that goes on the soft one. */
+  --ok: light-dark(#1f7a3d, #43b86a);
+  --ok-soft: light-dark(#e5f5ea, #112b1b);
+  --on-ok-soft: light-dark(#14522a, #b9eac8);
+  --warn: light-dark(#b4570a, #e38d41);
+  --warn-soft: light-dark(#fdf0e1, #30200f);
+  --on-warn-soft: light-dark(#7a3b07, #f7d0a8);
+  --bad: light-dark(#c0262d, #f0676d);
+  --bad-soft: light-dark(#fdeaea, #361517);
+  --on-bad-soft: light-dark(#8f1a20, #f8bdbf);
+  --on-bad: light-dark(#ffffff, #1c0607);
+  --bad-hover: light-dark(#9e1d23, #f58d92);
+  --busy: light-dark(#2563c9, #6199f2);
+  --busy-soft: light-dark(#e6effd, #142440);
+  --on-busy-soft: light-dark(#1a4891, #c0d6fb);
+
+  /* What a build prints in colour on a log's sunken ground: the 16 colours as
+     text, which hold 4.5:1 on it, and as fills for the default text. */
+  --ansi-black: light-dark(#2b323a, #8a94a1);
+  --ansi-black-bright: light-dark(#566170, #a3acb7);
+  --ansi-red: light-dark(#b3202a, #f0676d);
+  --ansi-red-bright: light-dark(#c4262e, #f58d92);
+  --ansi-green: light-dark(#1a6e37, #43b86a);
+  --ansi-green-bright: light-dark(#217a3f, #6bd08a);
+  --ansi-yellow: light-dark(#855500, #d9a835);
+  --ansi-yellow-bright: light-dark(#946000, #ecc15c);
+  --ansi-blue: light-dark(#1f55b8, #6199f2);
+  --ansi-blue-bright: light-dark(#2a60c8, #86b2f7);
+  --ansi-magenta: light-dark(#9c2f9c, #d083d9);
+  --ansi-magenta-bright: light-dark(#ac3aac, #e0a0e6);
+  --ansi-cyan: light-dark(#0c6670, #4cc3d0);
+  --ansi-cyan-bright: light-dark(#0f747f, #7bd8e2);
+  --ansi-white: light-dark(#4a5460, #c9d0d8);
+  --ansi-white-bright: light-dark(#5a6470, #e7eaee);
+  --ansi-bg-black: light-dark(#c4cad2, #2a313a);
+  --ansi-bg-black-bright: light-dark(#aab2bc, #3b444f);
+  --ansi-bg-red: light-dark(#f6c9cb, #4a1d20);
+  --ansi-bg-red-bright: light-dark(#f2a9ac, #6a2a2e);
+  --ansi-bg-green: light-dark(#c6ebd1, #17391f);
+  --ansi-bg-green-bright: light-dark(#a6dfb7, #25552f);
+  --ansi-bg-yellow: light-dark(#f3e2b0, #4a3a0e);
+  --ansi-bg-yellow-bright: light-dark(#ecd085, #6b5413);
+  --ansi-bg-blue: light-dark(#c8dafa, #1c3562);
+  --ansi-bg-blue-bright: light-dark(#a8c4f5, #2a4c8c);
+  --ansi-bg-magenta: light-dark(#ecc9ee, #43204a);
+  --ansi-bg-magenta-bright: light-dark(#e2a8e6, #62306c);
+  --ansi-bg-cyan: light-dark(#bfe6ea, #123f45);
+  --ansi-bg-cyan-bright: light-dark(#9ad7de, #1c5c64);
+  --ansi-bg-white: light-dark(#e4e8ee, #4a525c);
+  --ansi-bg-white-bright: light-dark(#d3d9e0, #5a636e);
+
+  /* --- type: the system's own faces, nothing to download --- */
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-code: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace;
+  --size-xs: 0.75rem;
+  --size-sm: 0.875rem;
+  --size-md: 1rem;
+  --size-lg: 1.125rem;
+  --size-xl: 1.375rem;
+  --weight-normal: 400;
+  --weight-medium: 600;
+  --weight-bold: 700;
+  --leading-tight: 1.25;
+  --leading-snug: 1.45;
+  --leading-body: 1.6;
+  --tracking-tight: -0.01em;
+
+  /* --- space, shape, depth --- */
+  --space: 0.25rem;
+  --radius-s: 0.1875rem;
+  --radius-m: 0.375rem;
+  --radius-l: 0.5rem;
+  --radius-pill: 999px;
+  --shadow-pop: 0 6px 20px -6px light-dark(rgb(15 19 24 / 0.2), rgb(0 0 0 / 0.6));
+  --measure: 42rem;
+  --page: 80rem;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }

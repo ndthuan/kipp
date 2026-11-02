@@ -1,0 +1,26 @@
+type: object
+additionalProperties: false
+description: One entry of the keyed build cache.
+required: [id, scope, namespace, key, size, saved_at, saved_by, last_restored_at]
+properties:
+  id:
+    type: integer
+    format: int64
+  scope:
+    type: string
+  namespace:
+    type: string
+  key:
+    type: string
+  size:
+    type: integer
+    format: int64
+  saved_at:
+    $ref: NullableTimestamp.yaml
+  saved_by:
+    oneOf:
+      - $ref: BuildRef.yaml
+      - type: "null"
+    description: The build that saved it; null once retention has removed the build.
+  last_restored_at:
+    $ref: NullableTimestamp.yaml

@@ -1,0 +1,60 @@
+get:
+  operationId: downloadArtifact
+  tags: [builds]
+  summary: One file a stage kept
+  description: |
+    Always an attachment: never a type a browser renders, never sniffed, and
+    sandboxed. A `Range` request is answered with 206.
+  x-kipp-package: api
+  parameters:
+    - $ref: ../parameters/BuildId.yaml
+    - $ref: ../parameters/StageName.yaml
+    - name: path
+      in: path
+      required: true
+      description: The file's path inside the stage's directory, slashes included.
+      schema:
+        type: string
+  responses:
+    "200":
+      description: The file.
+      headers:
+        Content-Disposition:
+          required: true
+          schema:
+            type: string
+      content:
+        application/octet-stream:
+          schema:
+            type: string
+            format: binary
+    "206":
+      description: The part of the file the `Range` asked for.
+      content:
+        application/octet-stream:
+          schema:
+            type: string
+            format: binary
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "404":
+      $ref: ../responses/NotFound.yaml
+    "412":
+      description: A condition the request made (`If-Match`, `If-Unmodified-Since`) does not hold.
+      content:
+        application/problem+json:
+          schema:
+            $ref: ../schemas/Problem.yaml
+    "416":
+      description: The `Range` is outside the file.
+      headers:
+        Content-Range:
+          description: '`bytes */` and the size of the file.'
+          schema:
+            type: string
+      content:
+        application/problem+json:
+          schema:
+            $ref: ../schemas/Problem.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

@@ -1,0 +1,9 @@
+name: limit
+in: query
+description: |
+  How many rows to return; the default is the list's own, the most 500 (a
+  larger number is read as 500). A value that is not a whole number of 1 or
+  more is refused.
+schema:
+  type: integer
+  minimum: 1

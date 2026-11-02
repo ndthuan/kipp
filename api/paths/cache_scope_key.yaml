@@ -1,0 +1,38 @@
+put:
+  operationId: cachePutEntry
+  tags: [internal]
+  summary: Save a cache entry
+  description: A key that is already there keeps its entry and answers 200.
+  x-kipp-package: cachesrv
+  security:
+    - cacheToken: []
+  parameters:
+    - $ref: ../parameters/CacheScope.yaml
+    - name: key
+      in: path
+      required: true
+      description: 1 to 512 letters, digits and `. _ + = -`.
+      schema:
+        type: string
+  requestBody:
+    required: true
+    content:
+      application/zstd:
+        schema:
+          type: string
+          format: binary
+  responses:
+    "200":
+      description: An entry with that key is there already; the body was not kept.
+    "201":
+      description: The entry was kept.
+    "400":
+      $ref: ../responses/BadRequest.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "403":
+      $ref: ../responses/Forbidden.yaml
+    "413":
+      $ref: ../responses/PayloadTooLarge.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

@@ -1,0 +1,21 @@
+# build output
+/bin/
+
+# data directories and databases
+/data/
+*.sqlite*
+
+# coverage and test output
+*.out
+coverage.*
+*.test
+
+# editors and operating systems
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# release archives
+/dist/

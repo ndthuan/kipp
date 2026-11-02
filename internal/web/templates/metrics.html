@@ -1,0 +1,18 @@
+{{define "content"}}
+<h1>Metrics</h1>
+<p class="lead">What builds measure, by store: the value each store remembers per item, and every build's own in its history. A job names its store with <code>metrics.store</code>, or reports into one of its own name.</p>
+{{if .Data.Stores}}<div class="scroll">
+<table class="stores">
+<thead><tr><th>Store</th><th>Jobs</th><th>Metrics</th></tr></thead>
+<tbody>
+{{range .Data.Stores}}{{$store := .Store}}<tr>
+<td><a class="link" href="{{metricsPath .Store ""}}">{{.Store}}</a>{{if .Orphaned}} <span class="tag">orphaned</span>{{end}}</td>
+<td>{{range $i, $job := .Jobs}}{{if $i}}, {{end}}<a class="link" href="/jobs/{{$job}}">{{$job}}</a>{{else}}<span class="sub">no loaded job names it</span>{{end}}</td>
+<td>{{range $i, $m := .Metrics}}{{if $i}}, {{end}}<a class="link" href="{{metricsPath $store $m.Name}}">{{$m.Name}}</a> <span class="sub">{{$m.Items}}</span>{{end}}</td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>
+{{else}}<p class="sub">No store you may see remembers anything yet.</p>
+{{end}}
+{{end}}

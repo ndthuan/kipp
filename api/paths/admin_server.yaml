@@ -1,0 +1,19 @@
+get:
+  operationId: getServer
+  tags: [admin, server]
+  summary: What the server runs with
+  description: For an admin; a token may read it.
+  x-kipp-package: api
+  responses:
+    "200":
+      description: The server's build, flags and the state of its data directory.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/Server.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "403":
+      $ref: ../responses/Forbidden.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

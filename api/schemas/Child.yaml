@@ -1,0 +1,41 @@
+type: object
+additionalProperties: false
+description: |
+  One child of a multibranch job: a branch or a pull request. The ones that
+  build come first, then the gone ones, then the pull requests from forks.
+required: [job, key, kind, branch, pr, title, author, url, head_commit, base_branch, from_fork, state, gone_at, last_seen_at, last]
+properties:
+  job:
+    type: string
+    description: The child's job name; empty for a pull request from a fork, which has none.
+  key:
+    type: string
+  kind:
+    $ref: ChildKind.yaml
+  branch:
+    type: string
+  pr:
+    type: [integer, "null"]
+  title:
+    type: [string, "null"]
+  author:
+    type: [string, "null"]
+    description: The login that opened the pull request; null for a branch, and for a pull request seen before kipp kept it, until the next webhook or scan.
+  url:
+    type: [string, "null"]
+    description: The pull request's page on GitHub; null as author is.
+  head_commit:
+    type: string
+  base_branch:
+    type: [string, "null"]
+  from_fork:
+    type: boolean
+  state:
+    type: string
+    enum: [live, gone]
+  gone_at:
+    $ref: NullableTimestamp.yaml
+  last_seen_at:
+    $ref: Timestamp.yaml
+  last:
+    $ref: NullableBuild.yaml

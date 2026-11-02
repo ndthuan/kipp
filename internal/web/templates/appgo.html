@@ -1,0 +1,13 @@
+{{define "content"}}
+{{with .Data}}
+<div class="stack narrow">
+<h1>Make the GitHub App {{.Name}}</h1>
+<p>The button sends GitHub the App's description: read access to code and pull requests, write access to commit statuses, a webhook to this server. GitHub asks you to confirm and leads you back here, where kipp keeps the key and the webhook secret. Neither is shown.</p>
+<form method="post" action="{{.Action}}">
+<input type="hidden" name="manifest" value="{{.Manifest}}">
+<button class="action action-main">Go to GitHub</button>
+<a class="link" href="/admin/apps">Cancel</a>
+</form>
+</div>
+{{end}}
+{{end}}

@@ -1,0 +1,128 @@
+/* The element defaults and the few components every page uses: actions,
+   links, panels, tags, notices and form entries. kipp.css lays the pages
+   out on top of them. Fonts are the system's: a page that fetched one
+   from elsewhere would tell that host who reads it. */
+
+@layer base {
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    background-color: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-ui);
+    font-size: var(--size-md);
+    line-height: var(--leading-body);
+  }
+
+  h1, h2, h3 {
+    font-weight: var(--weight-medium);
+    line-height: var(--leading-tight);
+    letter-spacing: var(--tracking-tight);
+    text-wrap: balance;
+  }
+
+  /* Every control shows where the keyboard is. */
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  ::selection { background-color: var(--accent-soft); color: var(--on-accent-soft); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition-duration: 0s !important; animation-duration: 0s !important; }
+  }
+}
+
+@layer components {
+  .action {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    padding: calc(var(--space) * 2) calc(var(--space) * 3.5);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-m);
+    background-color: var(--bg);
+    color: var(--fg);
+    font-size: var(--size-sm);
+    font-weight: var(--weight-medium);
+    line-height: var(--leading-tight);
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color 120ms var(--ease), border-color 120ms var(--ease);
+  }
+  .action:hover:not(:disabled) { background-color: var(--bg-sunken); }
+  .action-main { background-color: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+  .action-main:hover:not(:disabled) { background-color: var(--primary-hover); border-color: var(--primary-hover); }
+  .action-quiet { border-color: transparent; background-color: transparent; color: var(--fg-muted); }
+  .action-quiet:hover:not(:disabled) { color: var(--fg); }
+  .action-danger { background-color: var(--bad); border-color: var(--bad); color: var(--on-bad); }
+  .action-danger:hover:not(:disabled) { background-color: var(--bad-hover); border-color: var(--bad-hover); }
+  .action-small { padding: calc(var(--space) * 1) calc(var(--space) * 2.5); font-size: var(--size-xs); }
+
+  .link { color: var(--accent-text); text-decoration: underline; text-underline-offset: 0.18em; }
+  .link:hover { text-decoration-thickness: 2px; }
+  .link-plain { color: var(--fg-muted); text-decoration: none; }
+  .link-plain:hover { color: var(--fg); text-decoration: underline; }
+
+  .panel {
+    padding: calc(var(--space) * 5);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-l);
+    background-color: var(--bg-raised);
+  }
+
+  .tag {
+    display: inline-block;
+    padding: 0 calc(var(--space) * 2);
+    border-radius: var(--radius-s);
+    background-color: var(--accent-soft);
+    color: var(--on-accent-soft);
+    font-size: var(--size-xs);
+    font-weight: var(--weight-medium);
+    text-decoration: none;
+  }
+
+  /* A notice says something about the page as a whole; its edge says how
+     much it matters, so the colour is not the only sign. */
+  .notice {
+    padding: calc(var(--space) * 3) calc(var(--space) * 4);
+    border-left: 4px solid var(--line-strong);
+    border-radius: var(--radius-s);
+    background-color: var(--bg-sunken);
+    font-size: var(--size-sm);
+  }
+  .notice-warn { border-left-color: var(--warn); background-color: var(--warn-soft); color: var(--on-warn-soft); }
+  .notice-error { border-left-color: var(--bad); background-color: var(--bad-soft); color: var(--on-bad-soft); }
+
+  .entry-label { display: block; margin-bottom: calc(var(--space) * 1); font-size: var(--size-sm); font-weight: var(--weight-medium); }
+  /* What to type, in the job file's own words and line breaks. */
+  .entry-help { margin: 0 0 calc(var(--space) * 1.5); color: var(--fg-subtle); font-size: var(--size-sm); white-space: pre-line; }
+  .entry-help-below { margin: calc(var(--space) * 1.5) 0 0; }
+  .entry {
+    display: block;
+    width: 100%;
+    padding: calc(var(--space) * 2) calc(var(--space) * 2.5);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-m);
+    background-color: var(--bg);
+    color: var(--fg);
+    font-family: inherit;
+    font-size: var(--size-md);
+  }
+
+  /* Off screen until the keyboard reaches it. */
+  .skip {
+    position: absolute;
+    top: calc(var(--space) * 2);
+    left: calc(var(--space) * 2);
+    z-index: 50;
+    padding: calc(var(--space) * 2) calc(var(--space) * 3);
+    border-radius: var(--radius-m);
+    background-color: var(--primary);
+    color: var(--on-primary);
+    font-size: var(--size-sm);
+    transform: translateY(-200%);
+  }
+  .skip:focus { transform: none; }
+}

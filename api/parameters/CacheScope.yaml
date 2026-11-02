@@ -1,0 +1,6 @@
+name: scope
+in: path
+required: true
+description: The cache scope; the token must name it.
+schema:
+  type: string

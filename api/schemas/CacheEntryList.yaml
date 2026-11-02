@@ -1,0 +1,14 @@
+type: object
+additionalProperties: false
+description: |
+  The entries by least recently restored first.
+  `next_cursor` is the `cursor` that reads the page after this one, and null
+  when this is the last (or the list is not paged).
+required: [items, next_cursor]
+properties:
+  items:
+    type: array
+    items:
+      $ref: CacheEntry.yaml
+  next_cursor:
+    $ref: NextCursor.yaml

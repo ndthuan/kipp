@@ -1,0 +1,16 @@
+type: object
+additionalProperties: false
+description: A cache entry a lookup found.
+required: [id, key, exact, size]
+properties:
+  id:
+    type: integer
+    format: int64
+  key:
+    type: string
+  exact:
+    type: boolean
+    description: False when it matched a restore key and not the key.
+  size:
+    type: integer
+    format: int64

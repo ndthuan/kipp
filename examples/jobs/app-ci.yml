@@ -1,0 +1,24 @@
+# Continuous integration of a clone kept in /srv/app: a push to main
+# through GitHub's webhook (secret GITHUB_WEBHOOK_APP_CI) checks out the
+# pushed commit, a build by hand the newest of main. The stages that can
+# run side by side do, and the tests' JUnit report is read. A job with
+# `source` instead of `stages` clones the repository into each build.
+name: app-ci
+group: ci
+description: Lint, test and build the app on every push to main.
+params:
+  RACE: {type: bool, default: true, description: "Run the tests with the race detector."}
+triggers:
+  webhook: {repo: example/app, branches: [main]}
+concurrency: queue
+locks: [app-cache]
+timeout: 30m
+keep: {builds: 100}
+workdir: /srv/app
+stages:
+  checkout: {run: 'git fetch origin && git checkout --detach "${KIPP_COMMIT:-origin/main}"'}
+  lint: {needs: [checkout], run: make lint, unstable_exit: [4]}
+  test: {needs: [checkout], run: 'make test RACE=$RACE', junit: "reports/*.xml", retries: 1}
+  build: {needs: [lint, test], run: make build}
+on_failure: {run: /etc/kipp/hooks/slack.sh}
+secrets: [SLACK_WEBHOOK_URL]

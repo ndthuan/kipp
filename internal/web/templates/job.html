@@ -1,0 +1,182 @@
+{{define "content"}}
+{{with .Data}}
+{{$group := crumb "" true}}{{if not .View.Removed}}{{$group = crumb .View.Job.Group false}}{{end}}
+<div class="head">
+<h1 class="crumbs"><a class="link-plain" href="{{$group.Href}}">{{$group.Label}}</a><span aria-hidden="true">/</span><span>{{.View.Name}}</span></h1>
+{{if and .CanBuild (not .View.Job.IsOwner)}}{{if .View.Job.Params}}<details class="build drop">
+<summary class="action action-main">Build</summary>
+<form class="panel stack pop" method="post" action="/jobs/{{.View.Job.Name}}/build">
+<input type="hidden" name="csrf" value="{{$.CSRF}}">
+{{range .View.Job.Params}}
+<div>
+{{if eq .Type "choice"}}
+<label class="entry-label" for="param-{{.Name}}">{{.Name}}</label>
+{{if .Description}}<p class="entry-help" id="hint-{{.Name}}">{{.Description}}</p>
+{{end}}<select class="entry" id="param-{{.Name}}" name="{{.Name}}"{{if .Description}} aria-describedby="hint-{{.Name}}"{{end}}>
+{{$default := .Default}}{{range .Options}}<option value="{{.}}"{{if eq . $default}} selected{{end}}>{{.}}</option>
+{{end}}</select>
+{{else if eq .Type "bool"}}
+<input type="hidden" name="{{.Name}}" value="false">
+<label class="check"><input type="checkbox" name="{{.Name}}" value="true"{{if eq .Default "true"}} checked{{end}}{{if .Description}} aria-describedby="hint-{{.Name}}"{{end}}> {{.Name}}</label>
+{{if .Description}}<p class="entry-help entry-help-below" id="hint-{{.Name}}">{{.Description}}</p>
+{{end}}{{else if eq .Type "text"}}
+<label class="entry-label" for="param-{{.Name}}">{{.Name}}</label>
+{{if .Description}}<p class="entry-help" id="hint-{{.Name}}">{{.Description}}</p>
+{{end}}<textarea class="entry" id="param-{{.Name}}" name="{{.Name}}" rows="8"{{if .Description}} aria-describedby="hint-{{.Name}}"{{end}}>
+{{.Default}}</textarea>
+{{else}}
+<label class="entry-label" for="param-{{.Name}}">{{.Name}}</label>
+{{if .Description}}<p class="entry-help" id="hint-{{.Name}}">{{.Description}}</p>
+{{end}}<input class="entry" id="param-{{.Name}}" name="{{.Name}}" value="{{.Default}}"{{if .Description}} aria-describedby="hint-{{.Name}}"{{end}}>
+{{end}}
+</div>
+{{end}}
+<button class="action action-main">Start the build</button>
+</form>
+</details>
+{{else}}<form class="build" method="post" action="/jobs/{{.View.Job.Name}}/build">
+<input type="hidden" name="csrf" value="{{$.CSRF}}">
+<button class="action action-main">Build</button>
+</form>
+{{end}}{{end}}</div>
+{{if .View.Removed}}<p class="notice notice-warn">This job was removed from the job files. Its builds and logs stay until retention removes them; nothing builds it any more.</p>
+{{else}}
+{{with .View.Job.Description}}<p class="lead">{{.}}</p>{{end}}
+{{if .View.Job.Disabled}}<p class="notice notice-warn">This job is disabled in its file: its triggers are ignored and nobody can build it.</p>
+{{else}}{{with .View.Job.Triggers.Cron}}<dl class="facts sched">
+<div><dt>Runs on</dt><dd><code>{{.}}</code></dd></div>
+<div><dt>Time zone</dt><dd>{{$.Data.View.Zone}}</dd></div>
+{{with $.Data.View.Next}}<div><dt>Next build</dt><dd>{{zoned .}}</dd></div>
+{{end}}</dl>{{end}}{{end}}
+<p class="sub">Its builds report metrics into the store <a class="link" href="{{.Store}}">{{.StoreName}}</a>.</p>
+{{end}}
+{{if or .View.Vars .View.VarsErr}}
+<h2>Variables</h2>
+{{with .View.VarsErr}}<p class="notice notice-warn">{{.}}</p>{{else}}<p class="sub">What the job files give every stage, none of it secret. A param, a stage's own <code>env</code> or the stages file of the repo can still override one.</p>
+<div class="scroll">
+<table>
+<thead><tr><th>Name</th><th>Value</th><th>From</th></tr></thead>
+<tbody>
+{{range .View.Vars}}<tr><td><code>{{.Name}}</code></td><td><code>{{.Value}}</code></td><td>{{.Source}}</td></tr>
+{{end}}</tbody>
+</table>
+</div>{{end}}
+{{end}}
+{{with .View.Folder}}<p class="sub">A repo of the owner job <a class="link" href="/jobs/{{.}}">{{.}}</a>.</p>
+{{end}}{{with .View.Parent}}<p class="sub">A branch or pull request of the multibranch job <a class="link" href="/jobs/{{.}}">{{.}}</a>.</p>
+{{end}}{{if and .View.Job (not .View.Parent)}}{{if .View.Job.Multibranch}}
+<h2>Branches and pull requests</h2>
+<p class="sub">From <code>{{.View.Job.Multibranch.Repo}}</code>, each building the stages of <code>{{.View.Job.Multibranch.Path}}</code> in its commit.</p>
+{{with .View.Scan}}{{if not .Token}}<p class="notice notice-warn">No scan, no statuses: this job names no <code>token</code> in its <code>multibranch</code>, so kipp does not read the repo and does not report to GitHub.</p>
+{{else}}<p class="sub">{{if .Running}}Scanning now.{{else if .Ended}}Last scan {{zoned .Ended}}{{with .Result}}: {{.}}{{end}}.{{else}}Not scanned yet.{{end}}{{if .Every}} Every {{.Every}}.{{else}} Only on request.{{end}}</p>
+{{with .Err}}<p class="notice notice-warn">The last scan failed: {{.}}</p>{{end}}
+{{if $.Data.CanBuild}}<form class="build" method="post" action="/jobs/{{$.Data.View.Name}}/scan">
+<input type="hidden" name="csrf" value="{{$.CSRF}}">
+<button class="action">Scan now</button>
+</form>{{end}}{{end}}{{end}}
+{{if .Live}}{{template "children" .Live}}{{else}}<p class="sub">Nothing is built yet: a push to the default branch, or a pull request, makes the first.</p>{{end}}
+{{if .Gone}}<h3>Gone</h3>
+<p class="sub">Their branch was deleted or their pull request closed: they build no more, and leave after {{.View.Job.Multibranch.Orphans.Days}} days.</p>
+{{template "children" .Gone}}{{end}}
+{{if .Forks}}<h3>Not built: from a fork</h3>
+<ul class="activity">{{range .Forks}}<li>PR #{{.PR}}{{with .Title}} {{.}}{{end}} <span class="sub">{{.Branch}}</span></li>
+{{end}}</ul>{{end}}
+{{end}}{{end}}
+{{with .View.Owner}}
+<h2>Repos</h2>
+<p class="sub">Every repo of <code>{{$.Data.View.Job.Owner.Login}}</code> that holds <code>{{$.Data.View.Job.Owner.Settings.Path}}</code> at its default branch, each a multibranch job of its own. Archived repos and forks are left out.</p>
+{{with .App}}<p class="sub">Signed in as the GitHub App <code>{{.}}</code>: it delivers every repo's events to <code>/api/v1/hooks/github-app/{{.}}</code>, and the repos are the ones it is installed on.</p>{{end}}
+{{if .PublicOnly}}<p class="notice notice-warn">This account is not the token's own: GitHub lists only its public repos, so private ones are not indexed.</p>{{end}}
+{{range .Overlaps}}<p class="notice notice-warn">{{.}}.</p>{{end}}
+<p class="sub">{{with .Scan}}{{if .Running}}Scanning now.{{else if .Ended}}Last scan {{zoned .Ended}}{{with .Result}}: {{.}}{{end}}.{{else}}Not scanned yet.{{end}}{{if .Every}} Every {{.Every}}.{{else}} Only on request.{{end}}{{end}}</p>
+{{with .Scan.Err}}<p class="notice notice-warn">The last scan failed: {{.}}</p>{{end}}
+{{if $.Data.CanBuild}}<form class="build" method="post" action="/jobs/{{$.Data.View.Name}}/scan">
+<input type="hidden" name="csrf" value="{{$.CSRF}}">
+<button class="action">Scan now</button>
+</form>{{end}}
+{{if $.Data.View.Repos}}<div class="scroll">
+<table>
+<thead><tr><th>Repo</th><th>Children</th><th>Worst last build</th><th>Webhook</th></tr></thead>
+<tbody>
+{{range $.Data.View.Repos}}<tr>
+<td><a class="link" href="/jobs/{{.Node}}">{{.Repo}}</a>{{if eq .State "gone"}} <span class="tag">gone</span>{{end}}</td>
+<td>{{.Children}}</td>
+<td>{{with .Worst}}<span class="status {{.}}">{{.}}</span>{{else}}<span class="sub">never built</span>{{end}}</td>
+<td>{{if $.Data.View.Owner.App}}<span class="sub">the App's webhook</span>{{else if eq .Hook "ok"}}kept by kipp{{else if eq .Hook "off"}}<span class="sub">scan only: {{.Note}}</span>{{else}}<span class="sub">not looked at yet</span>{{end}}</td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>
+{{else}}<p class="sub">No repo yet: one with the stages file at its default branch is found by the next scan.</p>{{end}}
+{{if .OldHooks}}<h3>Old webhooks</h3>
+<p class="sub">These repos carry a webhook kipp made and no longer keeps (they left the set, or the job moved from a token to an App). kipp never deletes one: remove it by hand in the repo's settings.</p>
+<ul class="activity">{{range .OldHooks}}<li>{{.}}</li>
+{{end}}</ul>{{end}}
+{{end}}
+<h2>Builds</h2>
+{{if .View.Builds}}
+<div class="scroll">
+<table>
+<thead><tr><th>Build</th><th>Status</th><th>Trigger</th><th>Started</th><th>Took</th></tr></thead>
+<tbody>
+{{range .View.Builds}}<tr>
+<td><a class="link" href="{{buildPath .}}">#{{.Number}}</a>{{if .KeptAt}} <span class="tag">kept</span>{{end}}</td>
+<td><span class="status {{.Status}}">{{.Status}}</span></td>
+<td>{{.Trigger}}{{with .StartedBy}} <span class="sub">by {{.}}</span>{{end}}{{with .TriggerDetail}} <span class="sub">{{.}}</span>{{end}}</td>
+<td>{{clock .StartedAt}}</td>
+<td>{{took .StartedAt .FinishedAt}}</td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>
+{{else}}
+<p class="sub">{{if .View.Before}}No build before #{{.View.Before}}.{{else}}No build yet.{{end}}</p>
+{{end}}
+{{if or .View.Before .View.Older}}<p class="sub pager">{{if .View.Before}}<a class="link" href="/jobs/{{.View.Name}}">Newest builds</a>{{end}}{{if .View.Older}}<a class="link" href="/jobs/{{.View.Name}}?before={{.View.Older}}">Older builds</a>{{end}}</p>{{end}}
+
+{{with .Tests}}{{if .Total}}
+{{$job := printf "/jobs/%s" $.Data.View.Name}}{{$all := printf "%s?results=all" $job}}
+<details class="results" id="results"{{if or .Failed .All}} open{{end}}>
+<summary><h2>Results</h2> <span class="sub">{{if .Failed}}{{.Failed}} of {{.Total}} cases failed in the last {{.Builds}}.{{else}}No case failed in the last {{.Builds}}.{{end}}</span></summary>
+<div id="results-box" class="stack">
+<p class="sub">{{if .Rows}}One dot for each build, the newest first. {{end}}{{if .All}}<a class="link" href="{{$job}}" hx-get="{{$job}}" hx-select="#results-box" hx-target="#results-box" hx-swap="outerHTML">{{if .Failed}}Show only the {{.Failed}} that failed{{else}}Hide them{{end}}</a>{{else}}<a class="link" href="{{$all}}" hx-get="{{$all}}" hx-select="#results-box" hx-target="#results-box" hx-swap="outerHTML">Show all {{.Total}}</a>{{end}}</p>
+{{if .Rows}}
+<div class="scroll tall">
+<table>
+<thead><tr><th>Suite</th><th>Case</th><th>History</th></tr></thead>
+<tbody>
+{{range .Rows}}<tr>
+<td>{{.Suite}}</td>
+<td>{{.Name}}</td>
+<td class="dots">{{range .Dots}}{{if .Status}}<span class="dot {{.Status}}" title="#{{.Build}} {{.Status}}"></span>{{else}}<span class="dot none" title="#{{.Build}} did not run"></span>{{end}}{{end}}</td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>
+{{end}}
+</div>
+</details>
+{{end}}{{end}}
+
+{{if .View.Activity}}
+<h2>Activity</h2>
+<ul class="activity">
+{{range .View.Activity}}<li><span class="sub">{{clock .At}}</span> {{.Line}}</li>
+{{end}}</ul>
+{{end}}
+{{end}}
+{{end}}
+{{define "children"}}<div class="scroll">
+<table class="children">
+<thead><tr><th>Branch or pull request</th><th>Head</th><th>Last build</th><th>Seen</th></tr></thead>
+<tbody>
+{{range .}}<tr>
+<td><a class="link" href="/jobs/{{.Job}}">{{if .PR}}PR #{{.PR}}{{if eq .Kind "pr-head"}} (head alone){{end}}{{with .Title}} {{.}}{{end}}{{else}}{{.Branch}}{{end}}</a>{{if .PR}} <span class="sub">{{with .Author}}by {{.}}, {{end}}{{.Branch}}{{with .BaseBranch}} into {{.}}{{end}}</span>{{end}}</td>
+<td><code>{{printf "%.7s" .HeadSHA}}</code></td>
+<td>{{with .Last}}<a class="link" href="{{buildPath .}}">#{{.Number}}</a> <span class="status {{.Status}}">{{.Status}}</span>{{else}}<span class="sub">never built</span>{{end}}</td>
+<td>{{template "since" (since .LastSeenAt)}}</td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>
+{{end}}

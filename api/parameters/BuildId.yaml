@@ -1,0 +1,7 @@
+name: id
+in: path
+required: true
+description: The build's id, as `id` in a build (not its number within the job).
+schema:
+  type: integer
+  format: int64

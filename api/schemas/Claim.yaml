@@ -1,0 +1,13 @@
+type: object
+additionalProperties: false
+description: An assignment, or none when the long-poll ran out, and the builds that ended since the last answer.
+required: [Assignment, Ended]
+properties:
+  Assignment:
+    oneOf:
+      - $ref: Assignment.yaml
+      - type: "null"
+  Ended:
+    type: [array, "null"]
+    items:
+      $ref: AgentEnded.yaml

@@ -1,0 +1,51 @@
+{{define "content"}}
+{{with .Data}}
+<div class="head">
+<h1>GitHub Apps</h1>
+{{if .On}}<div class="head-actions">
+<details class="build drop"{{if $.Error}} open{{end}}>
+<summary class="action action-main">Make an App</summary>
+<form class="panel stack pop" id="make" method="post" action="/admin/apps">
+<h2>Make an App</h2>
+{{with $.Error}}<p class="notice notice-error" role="alert">{{.}}</p>{{end}}
+{{if not .BaseURL}}<p class="notice notice-warn">kipp was started without <code>--base-url</code>: GitHub could not send the App's webhook here.</p>{{end}}
+<input type="hidden" name="csrf" value="{{$.CSRF}}">
+<div>
+<label class="entry-label" for="app-name">Name</label>
+<p class="entry-help" id="app-name-help">Lower-case letters, digits and -. It is the App's name at GitHub, so it must be free there, and the name of its key file and of its webhook route.</p>
+<input class="entry" id="app-name" name="name" value="{{.Name}}" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="app-name-help" required>
+</div>
+<div>
+<label class="entry-label" for="app-org">Organization</label>
+<p class="entry-help" id="app-org-help">Leave empty to make the App under your own GitHub account.</p>
+<input class="entry" id="app-org" name="org" value="{{.Org}}" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="app-org-help">
+</div>
+<div><button class="action action-main">Continue</button></div>
+</form>
+</details>
+</div>{{end}}
+</div>
+{{with .Notice}}<p class="notice" role="status">{{.}}</p>{{end}}
+<p class="lead">An owner job can sign in as a GitHub App instead of with a token: its private key stays in a file here, and kipp trades it for a token that lasts an hour. Give the key file the protection of kipp's data directory: whoever reads it signs in as the App.</p>
+{{if .Apps}}<div class="scroll">
+<table>
+<thead><tr><th>Name</th><th>Made</th><th>ID</th><th>Used by</th><th>Webhook</th><th>Job file line</th></tr></thead>
+<tbody>
+{{range .Apps}}<tr id="app-{{.Name}}">
+<td><code>{{.Name}}</code>{{if .InstallURL}}<br><a class="link" href="{{.InstallURL}}">Install it on an account</a>{{end}}
+{{if .Warnings}}<ul class="notice notice-warn">{{range .Warnings}}<li>{{.}}</li>{{end}}</ul>{{end}}</td>
+<td>{{if .MadeHere}}made here{{else}}made at GitHub{{end}}</td>
+<td>{{.ID}}</td>
+<td>{{if .Jobs}}{{range $i, $j := .Jobs}}{{if $i}}, {{end}}<a href="/jobs/{{$j}}">{{$j}}</a>{{end}}{{else}}<span class="sub">no owner job signs in as it</span>{{end}}</td>
+<td><code>/api/v1/hooks/github-app/{{.Name}}</code><br><span class="sub">secret <code>{{.Secret}}</code></span></td>
+<td><code>{{.Line}}</code></td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>
+{{else}}<p class="sub">No App is made here, and no owner job signs in as one.</p>
+{{end}}
+{{if not .On}}<p class="notice notice-warn">This kipp is not set up to make Apps.</p>
+{{end}}
+{{end}}
+{{end}}

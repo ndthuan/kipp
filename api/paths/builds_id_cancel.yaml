@@ -1,0 +1,29 @@
+post:
+  operationId: cancelBuild
+  tags: [builds]
+  summary: Cancel a build
+  description: Needs the `cancel` permission on the job.
+  x-kipp-package: api
+  security:
+    - bearerToken: []
+    - sessionCookie: []
+      csrfToken: []
+  parameters:
+    - $ref: ../parameters/BuildId.yaml
+  responses:
+    "202":
+      description: The build is told to stop, and is as it is now.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/Build.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "403":
+      $ref: ../responses/Forbidden.yaml
+    "404":
+      $ref: ../responses/NotFound.yaml
+    "409":
+      $ref: ../responses/Conflict.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

@@ -1,0 +1,16 @@
+get:
+  operationId: listJobs
+  tags: [jobs]
+  summary: The jobs the caller may see
+  x-kipp-package: api
+  responses:
+    "200":
+      description: Every job the caller may see, with its last build.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/JobList.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

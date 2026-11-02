@@ -1,0 +1,33 @@
+# One job file builds a repo's default branch and its pull requests, each
+# as a child job (site-multibranch.main, site-multibranch.pr-12) that
+# reads its stages from .kipp.yml in the commit it builds; a pull
+# request's child builds its head merged into its base's tip, a fork's
+# is never built. What the repo may not grant itself
+# stays here: the secrets, the lock, the schedule. The repo's .kipp.yml
+# holds stages and nothing else, for example:
+#
+#   stages:
+#     test: {run: make test, junit: "reports/*.xml"}
+#     deploy: {needs: [test], when: {default_branch: true}, run: ./deploy.sh}
+#
+# The webhook is POST /api/v1/hooks/github/site-multibranch, signed with
+# GITHUB_WEBHOOK_SITE_MULTIBRANCH, for the events push and pull_request.
+name: site-multibranch
+group: site
+description: The default branch and the pull requests of acme/site.
+multibranch:
+  repo: acme/site
+  clone: git@github.com:acme/site.git
+  path: .kipp.yml
+  branches: [default]
+  pull_requests: merge
+  branch_with_pr: skip
+  rebuild_on_base: false
+  scan: 30m
+  orphans: {days: 7}
+  token: GITHUB_TOKEN_ACME
+secrets: [DEPLOY_KEY]
+locks: [site-ports]
+triggers:
+  cron: "H 3 * * *"
+keep: {builds: 50}

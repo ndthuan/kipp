@@ -1,0 +1,29 @@
+post:
+  operationId: scanJob
+  tags: [jobs]
+  summary: Have a multibranch job's repo read now
+  description: Needs the `build` permission on the job.
+  x-kipp-package: api
+  security:
+    - bearerToken: []
+    - sessionCookie: []
+      csrfToken: []
+  parameters:
+    - $ref: ../parameters/JobName.yaml
+  responses:
+    "202":
+      description: The scan is under way, and this is how it stands.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/Scan.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "403":
+      $ref: ../responses/Forbidden.yaml
+    "404":
+      $ref: ../responses/NotFound.yaml
+    "409":
+      $ref: ../responses/Conflict.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

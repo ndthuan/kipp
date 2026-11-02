@@ -1,0 +1,8 @@
+type: string
+enum: [gone, job, lock, executor, nothing, start]
+description: |
+  Why a queued build has not started: its job is gone or disabled, a build
+  of the same job is ahead of it, another build holds a lock, every
+  executor is taken, or nothing holds it back and the next pass starts it.
+  Anyone but an admin is told only that it waits to start (start), since
+  what holds it back may be a job they may not view.

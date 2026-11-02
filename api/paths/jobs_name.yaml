@@ -1,0 +1,20 @@
+get:
+  operationId: getJob
+  tags: [jobs]
+  summary: One job, with its latest builds and activity
+  x-kipp-package: api
+  parameters:
+    - $ref: ../parameters/JobName.yaml
+  responses:
+    "200":
+      description: The job. A job that was removed from the job files still answers while it has builds.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/JobDetail.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "404":
+      $ref: ../responses/NotFound.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

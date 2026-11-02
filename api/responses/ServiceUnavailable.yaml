@@ -1,0 +1,10 @@
+description: The server is quiet (it takes no new builds), or busy.
+headers:
+  Retry-After:
+    description: Whole seconds to wait before sending the request again.
+    schema:
+      type: integer
+content:
+  application/problem+json:
+    schema:
+      $ref: ../schemas/Problem.yaml

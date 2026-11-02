@@ -1,0 +1,6 @@
+name: store
+in: path
+required: true
+description: A metric store's name.
+schema:
+  type: string

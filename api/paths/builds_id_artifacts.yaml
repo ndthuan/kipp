@@ -1,0 +1,20 @@
+get:
+  operationId: listArtifacts
+  tags: [builds]
+  summary: What every stage of a build kept
+  x-kipp-package: api
+  parameters:
+    - $ref: ../parameters/BuildId.yaml
+  responses:
+    "200":
+      description: The stages that kept files, each with its files and where to download them.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/StageArtifactsList.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "404":
+      $ref: ../responses/NotFound.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

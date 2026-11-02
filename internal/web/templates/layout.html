@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en"{{with .Theme}} data-theme="{{.}}"{{end}}>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false}'>
+<title>{{.Title}} - kipp</title>
+<link rel="icon" href="{{static "favicon.svg"}}" type="image/svg+xml">
+<link rel="stylesheet" href="{{static "tokens.css"}}">
+<link rel="stylesheet" href="{{static "kipp.css"}}">
+<link rel="stylesheet" href="{{static "base.css"}}">
+<script src="{{static "htmx.min.js"}}" defer></script>
+<script src="{{static "nav.js"}}" defer></script>
+<script src="{{static "theme.js"}}" defer></script>
+{{if .User}}<script src="{{static "queue.js"}}" defer></script>{{end}}
+{{block "scripts" .}}{{end}}
+</head>
+<body{{with .HXHeaders}} hx-headers="{{.}}"{{end}}>
+<a class="skip" href="#main">Skip to content</a>
+<header class="top">
+<a class="brand" href="/"{{if and .Nav .Nav.All}} aria-current="page"{{end}}>kipp</a>
+{{if .User}}{{with .Nav}}{{if .Menus}}<button class="action action-quiet action-small menu-toggle" type="button" aria-controls="groups" aria-expanded="false" hidden>Groups</button>
+<nav class="groups" id="groups" aria-label="Groups">
+{{range .Menus}}<details class="group drop">
+<summary{{if .Here}} aria-current="true"{{end}}>{{.Label}}</summary>
+<ul class="menu">
+<li><a class="menu-all" href="{{.Href}}"{{if .Page}} aria-current="page"{{end}}>All in {{.Label}}</a></li>
+{{range .Jobs}}<li><a href="/jobs/{{.Name}}"{{if eq .Name $.Nav.Job}} aria-current="page"{{end}}><span class="mark{{with .Last}} {{.Status}}{{end}}"{{with .Last}} title="#{{.Number}} {{.Status}}"{{end}}></span>{{.Name}}</a></li>
+{{end}}</ul>
+</details>
+{{end}}</nav>
+{{end}}{{end}}{{end}}<div class="who">
+{{if .User}}{{with .Queue}}{{$busy := or .Running .Queued}}<a id="queue-badge" class="link-plain queue-badge{{if not $busy}} idle{{end}}" href="/queue" hx-get="/queue" hx-select="#queue-badge" hx-target="this" hx-swap="outerHTML" hx-trigger="kipp-changed from:body">{{if $busy}}{{len .Running}} running, {{len .Queued}} queued{{else}}idle{{end}}</a>
+{{end}}{{$mine := or (eq .Here "/metrics") (eq .Here "/account") (eq .Here "/admin/users") (eq .Here "/admin/secrets") (eq .Here "/admin/apps") (eq .Here "/admin/agents") (eq .Here "/admin/cache") (eq .Here "/admin/server")}}<details class="user drop">
+<summary{{if $mine}} aria-current="true"{{end}}><span class="who-name">{{.User.Name}}</span></summary>
+<ul class="menu">
+<li><a href="/metrics"{{if eq .Here "/metrics"}} aria-current="page"{{end}}>Metrics</a></li>
+<li><a href="/account"{{if eq .Here "/account"}} aria-current="page"{{end}}>Account</a></li>
+{{if .User.Admin}}<li><a href="/admin/users"{{if eq .Here "/admin/users"}} aria-current="page"{{end}}>Users</a></li>
+<li><a href="/admin/secrets"{{if eq .Here "/admin/secrets"}} aria-current="page"{{end}}>Secrets</a></li>
+<li><a href="/admin/apps"{{if eq .Here "/admin/apps"}} aria-current="page"{{end}}>GitHub Apps</a></li>
+<li><a href="/admin/agents"{{if eq .Here "/admin/agents"}} aria-current="page"{{end}}>Agents</a></li>
+<li><a href="/admin/cache"{{if eq .Here "/admin/cache"}} aria-current="page"{{end}}>Cache</a></li>
+<li><a href="/admin/server"{{if eq .Here "/admin/server"}} aria-current="page"{{end}}>Server</a></li>
+{{end}}<li><form method="post" action="/logout">
+<input type="hidden" name="csrf" value="{{.CSRF}}">
+<button class="menu-button">Log out</button>
+</form></li>
+</ul>
+</details>
+{{end}}{{$t := or .Theme "system"}}<details class="theme drop" hidden>
+<summary aria-label="Theme" title="Theme" data-now="{{$t}}"><svg class="icon icon-system" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg><svg class="icon icon-light" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg><svg class="icon icon-dark" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg></summary>
+<ul class="menu">
+<li><button class="menu-button" type="button" data-theme-pick="system" aria-pressed="{{eq $t "system"}}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>System</button></li>
+<li><button class="menu-button" type="button" data-theme-pick="light" aria-pressed="{{eq $t "light"}}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>Light</button></li>
+<li><button class="menu-button" type="button" data-theme-pick="dark" aria-pressed="{{eq $t "dark"}}"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>Dark</button></li>
+</ul>
+</details>
+</div>
+</header>
+<main id="main">
+{{with .Banner}}<p class="notice notice-error" role="alert">{{.}}</p>{{end}}
+{{if .Quiet}}<p class="notice notice-warn" role="status">kipp is quiet: it starts no build until it has restarted, and a trigger is refused. Running builds end by themselves.</p>
+{{end}}{{block "content" .}}{{end}}
+</main>
+<footer class="foot">kipp {{.Version}}</footer>
+</body>
+</html>
+{{define "queue"}}<section id="queue" class="stack" hx-get="/queue" hx-select="#queue" hx-target="this" hx-swap="outerHTML" hx-trigger="kipp-changed from:body">
+{{with .Queue}}{{if or .Running .Queued}}<h2>Now{{if .Executors}} <span class="sub">{{.Busy}} of {{.Executors}} build slots busy</span>{{end}}</h2>
+<div class="scroll">
+<table class="queue">
+<thead><tr><th>Build</th><th>Status</th><th>For</th><th><span class="sr-only">Cancel</span></th></tr></thead>
+<tbody>
+{{range .Running}}<tr>
+<td><a class="link" href="{{buildPath .Build}}">{{.Build.Job}} #{{.Build.Number}}</a></td>
+<td><span class="status running">running</span>{{with .Stages}} <span class="sub">{{join .}}</span>{{end}}{{range $stage, $why := .Waiting}}<br><span class="sub">{{$stage}}: {{$why}}</span>{{end}}</td>
+<td>{{template "since" (since .Build.StartedAt)}}</td>
+<td>{{if .CanCancel}}{{template "queue-cancel" (cancelOf .Build $.CSRF)}}{{end}}</td>
+</tr>
+{{end}}{{range .Queued}}<tr>
+<td><a class="link" href="{{buildPath .Build}}">{{.Build.Job}} #{{.Build.Number}}</a></td>
+<td><span class="status queued">queued</span> <span class="sub">{{template "waiting" .}}</span></td>
+<td>{{template "since" (since .Build.QueuedAt)}}</td>
+<td>{{if .CanCancel}}{{template "queue-cancel" (cancelOf .Build $.CSRF)}}{{end}}</td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>
+{{else if $.Full}}<p class="sub">Nothing runs and nothing waits.</p>
+{{end}}{{end}}</section>
+{{end}}
+{{define "since"}}{{with .}}<time class="since" datetime="{{.At}}">{{.Ago}}</time>{{end}}{{end}}
+{{define "dag"}}{{with .}}<svg class="dag" viewBox="0 0 {{.Width}} {{.Height}}" width="{{.Width}}" height="{{.Height}}" role="img" aria-label="Stages and what each one needs">{{range .Lines}}<line x1="{{.X1}}" y1="{{.Y1}}" x2="{{.X2}}" y2="{{.Y2}}"/>{{end}}{{range .Nodes}}<g class="stage {{.Status}}" data-stage="{{.Name}}"><title>{{.Name}}: {{.Status}}</title><rect x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}" rx="8"/><text x="{{.TextX}}" y="{{.TextY}}">{{.Label}}</text></g>{{end}}</svg>{{end}}{{end}}
+{{define "queue-cancel"}}<form method="post" action="{{buildPath .Build}}/cancel">
+<input type="hidden" name="csrf" value="{{.CSRF}}">
+<button class="action action-danger action-small">Cancel</button>
+</form>{{end}}
+{{define "waiting"}}{{$b := .Blocker}}{{if eq .Waiting "job"}}{{if not $b}}waiting for another build of this job{{else if eq $b.Status "queued"}}behind <a class="link" href="{{buildPath $b}}">#{{$b.Number}}</a> of this job{{else}}waiting for <a class="link" href="{{buildPath $b}}">#{{$b.Number}}</a> of this job to end{{end}}{{else if eq .Waiting "lock"}}waiting for lock <code>{{.Lock}}</code>, held by {{with $b}}<a class="link" href="{{buildPath .}}">{{.Job}} #{{.Number}}</a>{{else}}another build{{end}}{{else if eq .Waiting "executor"}}waiting for a free executor{{else if eq .Waiting "start"}}waiting to start{{else if eq .Waiting "gone"}}its job is gone from the job files or disabled, so it will not start{{else}}starting{{end}}{{end}}
+{{define "tokens"}}{{if .Tokens}}<div class="scroll">
+<table>
+<thead><tr><th>Label</th><th>Made</th><th>Last used</th><th>Expires</th><th><span class="sr-only">Revoke</span></th></tr></thead>
+<tbody>
+{{range .Tokens}}<tr>
+<td>{{.Label}}</td>
+<td>{{clock .CreatedAt}}</td>
+<td>{{with .LastUsedAt}}{{clock .}}{{else}}<span class="sub">never</span>{{end}}</td>
+<td>{{with .ExpiresAt}}{{clock .}}{{if expired .}} <span class="status failed">expired</span>{{end}}{{else}}<span class="sub">never</span>{{end}}</td>
+<td><a class="action action-quiet action-small" href="{{$.Base}}/{{.ID}}/revoke">Revoke</a></td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>
+{{else}}<p class="sub">No token.</p>
+{{end}}{{end}}
+{{define "token-form"}}<form class="panel stack pop" method="post" action="{{.Action}}">
+<h3>Make a token</h3>
+<input type="hidden" name="csrf" value="{{.CSRF}}">
+{{with .Once}}<input type="hidden" name="once" value="{{.}}">
+{{end}}
+<div>
+<label class="entry-label" for="token-label">Label</label>
+<p class="entry-help" id="token-label-help">What uses it, to know it by later: up to 100 characters.</p>
+<input class="entry" id="token-label" name="label" maxlength="100" aria-describedby="token-label-help" required>
+</div>
+<div>
+<label class="entry-label" for="token-days">Lasts</label>
+<select class="entry" id="token-days" name="days">
+{{range .Days}}<option value="{{.}}"{{if eq . 90}} selected{{end}}>{{lasts .}}</option>
+{{end}}</select>
+</div>
+<div><button class="action action-main">Make the token</button></div>
+</form>{{end}}

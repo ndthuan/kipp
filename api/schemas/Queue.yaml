@@ -1,0 +1,19 @@
+type: object
+additionalProperties: false
+description: What runs and what waits, as the caller may see it.
+required: [executors, busy, running, queued]
+properties:
+  executors:
+    type: [integer, "null"]
+    description: The server's executors. Only an admin is told, anyone else gets null.
+  busy:
+    type: [integer, "null"]
+    description: How many are taken. Only an admin is told, anyone else gets null.
+  running:
+    type: array
+    items:
+      $ref: RunningBuild.yaml
+  queued:
+    type: array
+    items:
+      $ref: QueuedBuild.yaml

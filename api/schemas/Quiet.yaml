@@ -1,0 +1,18 @@
+type: object
+additionalProperties: false
+description: The server's quiet mode, in which it takes no new builds.
+required: [quiet, since, running, queued, idle]
+properties:
+  quiet:
+    type: boolean
+  since:
+    $ref: NullableTimestamp.yaml
+  running:
+    type: integer
+    description: Builds with something running.
+  queued:
+    type: integer
+    description: Builds waiting to start.
+  idle:
+    type: boolean
+    description: True when nothing runs or waits, so the server may be restarted.

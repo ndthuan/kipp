@@ -1,0 +1,16 @@
+{{define "content"}}
+<form class="panel stack narrow middle" method="post" action="/login">
+<h1>Log in</h1>
+{{with .Error}}<p class="notice notice-error" role="alert">{{.}}</p>{{end}}
+<input type="hidden" name="next" value="{{.Data.Next}}">
+<div>
+<label class="entry-label" for="name">Name</label>
+<input class="entry" id="name" name="name" value="{{.Data.Name}}" autocomplete="username" autocapitalize="none" required{{if not .Data.Name}} autofocus{{end}}>
+</div>
+<div>
+<label class="entry-label" for="password">Password</label>
+<input class="entry" id="password" name="password" type="password" autocomplete="current-password" required{{if .Data.Name}} autofocus{{end}}>
+</div>
+<button class="action action-main">Log in</button>
+</form>
+{{end}}

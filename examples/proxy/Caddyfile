@@ -1,0 +1,28 @@
+# kipp behind Caddy, which gets and renews the TLS certificate itself.
+# Start kipp with --base-url https://ci.example.com, and with
+# --client-ip-header X-Forwarded-For so that wrong passwords are also
+# counted by client (Caddy is on the same machine, in the default
+# --trusted-proxy).
+#
+# Caddy passes the Host header through unchanged, which kipp's login form
+# needs, and sets X-Forwarded-For (the client's address, replacing what the
+# client sent) and X-Forwarded-Proto by default. It sends a stream
+# (text/event-stream) on as it comes and puts no timeout on a response.
+
+ci.example.com {
+	# HSTS is the proxy's to send: kipp speaks plain HTTP and cannot know
+	# the browser came over HTTPS. Add "; preload" only once every name
+	# under the domain is HTTPS for good.
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+	# A webhook's body is at most 25 MiB; kipp refuses more itself.
+	request_body {
+		max_size 26MB
+	}
+
+	reverse_proxy 127.0.0.1:8085 {
+		# Flush at once: the log pages, the queue's events and the long
+		# polls of kipp run --wait stream.
+		flush_interval -1
+	}
+}

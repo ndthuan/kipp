@@ -1,0 +1,37 @@
+get:
+  operationId: getOpenapi
+  tags: [server]
+  summary: This description of the API
+  description: |
+    The OpenAPI 3.1 description of `/api/v1`, `api/openapi.gen.yaml` as it was
+    built into this binary, so it is the description of the code that answers.
+    No login or token is needed. The `ETag` is a hash of the file, and a
+    request with a matching `If-None-Match` is answered 304 without the body.
+  x-kipp-package: api
+  security:
+    - {}
+  parameters:
+    - name: If-None-Match
+      in: header
+      description: The `ETag` of a copy the caller already has.
+      schema:
+        type: string
+  responses:
+    "200":
+      description: The description, in YAML.
+      headers:
+        ETag:
+          description: A hash of the file, in quotes.
+          schema:
+            type: string
+      content:
+        application/yaml:
+          schema:
+            type: string
+    "304":
+      description: The caller's copy is the current one.
+      headers:
+        ETag:
+          description: A hash of the file, in quotes.
+          schema:
+            type: string

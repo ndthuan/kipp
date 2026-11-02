@@ -1,0 +1,2 @@
+type: string
+enum: [branch, pr, pr-head]

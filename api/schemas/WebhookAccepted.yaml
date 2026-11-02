@@ -1,0 +1,29 @@
+oneOf:
+  - type: object
+    additionalProperties: false
+    description: A job's delivery queued its build.
+    required: [id, number]
+    properties:
+      id:
+        type: integer
+        format: int64
+      number:
+        type: integer
+  - type: object
+    additionalProperties: false
+    description: A multibranch or owner job's delivery, with what became of each child build.
+    required: [builds]
+    properties:
+      builds:
+        type: array
+        items:
+          $ref: WebhookBuild.yaml
+  - type: object
+    additionalProperties: false
+    description: A GitHub App installation event asked for scans of these owner jobs.
+    required: [scan]
+    properties:
+      scan:
+        type: array
+        items:
+          type: string

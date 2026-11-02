@@ -1,0 +1,26 @@
+{{define "content"}}
+<h1 class="sr-only">{{.Data.Heading}}</h1>
+{{template "queue" .Data.Queue}}
+<div id="jobs" class="stack" hx-get="{{.Data.Self}}" hx-select="#jobs" hx-target="this" hx-swap="outerHTML" hx-trigger="kipp-changed from:body, every 60s">
+{{range .Data.Groups}}
+<section>
+<h2>{{if .Removed}}Removed from the job files{{else}}{{or .Name "No group"}}{{end}}</h2>
+<div class="scroll">
+<table class="jobs">
+<thead><tr><th>Job</th><th>Last build</th><th>Schedule</th><th>Next</th></tr></thead>
+<tbody>
+{{range .Jobs}}<tr>
+<td><a class="link" href="/jobs/{{.Name}}"{{with .Description}} title="{{.}}"{{end}}>{{.Name}}</a>{{if .Disabled}} <span class="tag">disabled</span>{{end}}</td>
+<td>{{if and .Children (not .Last)}}{{$kids := .Children}}{{with .Worst}}<span class="status {{.}}">{{.}}</span> <span class="sub">worst of {{$kids}} {{if eq $kids 1}}child{{else}}children{{end}}</span>{{else}}<span class="sub">{{$kids}} {{if eq $kids 1}}child{{else}}children{{end}}, none built yet</span>{{end}}{{else}}{{with .Last}}<a class="link" href="{{buildPath .}}">#{{.Number}}</a> <span class="status {{.Status}}">{{.Status}}</span> <span class="sub">{{ago .FinishedAt}}</span>{{else}}<span class="sub">never built</span>{{end}}{{end}}{{if .Recent}} <span class="dots">{{range .Recent}}<a class="dot {{.Status}}" href="{{buildPath .}}" title="#{{.Number}} {{.Status}}"></a>{{end}}</span>{{end}}</td>
+<td>{{with .Cron}}<code>{{.}}</code>{{end}}</td>
+<td>{{clock .Next}}</td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>
+</section>
+{{else}}
+<p class="sub">There is no job you may see.</p>
+{{end}}
+</div>
+{{end}}

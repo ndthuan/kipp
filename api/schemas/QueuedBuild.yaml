@@ -1,0 +1,26 @@
+type: object
+additionalProperties: false
+required: [id, job, number, trigger, started_by, queued_at, waiting, lock, blocker]
+properties:
+  id:
+    type: integer
+    format: int64
+  job:
+    type: string
+  number:
+    type: integer
+  trigger:
+    type: string
+  started_by:
+    type: string
+  queued_at:
+    $ref: Timestamp.yaml
+  waiting:
+    $ref: WaitReason.yaml
+  lock:
+    type: [string, "null"]
+    description: The lock it waits for; null unless `waiting` is `lock`.
+  blocker:
+    oneOf:
+      - $ref: BuildRef.yaml
+      - type: "null"

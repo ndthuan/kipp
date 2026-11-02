@@ -1,0 +1,54 @@
+{{define "content"}}
+{{with .Data}}
+<div class="head">
+<h1>Account <span class="sub">{{$.User.Name}}</span></h1>
+<div class="head-actions">
+<details class="build drop"{{if .PasswordError}} open{{end}}>
+<summary class="action action-main">Change the password</summary>
+<form class="panel stack pop" method="post" action="/account/password">
+<h2>Change the password</h2>
+{{with .PasswordError}}<p class="notice notice-error" role="alert">{{.}}</p>{{end}}
+<input type="hidden" name="csrf" value="{{$.CSRF}}">
+<input type="text" name="name" value="{{$.User.Name}}" autocomplete="username" hidden>
+<div>
+<label class="entry-label" for="current">Current password</label>
+<input class="entry" id="current" name="current" type="password" autocomplete="current-password" required>
+</div>
+<div>
+<label class="entry-label" for="new">New password</label>
+<p class="entry-help" id="new-help">15 to 256 characters, any of them. Not a common or leaked password, and without your name or kipp in it.</p>
+<input class="entry" id="new" name="new" type="password" autocomplete="new-password" minlength="15" maxlength="256" aria-describedby="new-help" required>
+</div>
+<div>
+<label class="entry-label" for="again">New password again</label>
+<input class="entry" id="again" name="again" type="password" autocomplete="new-password" required>
+</div>
+<p class="sub">Every other session of yours ends; this browser stays logged in. Your tokens keep working: revoke them below if somebody else may have one.</p>
+<div><button class="action action-main">Change the password</button></div>
+</form>
+</details>
+<details class="build drop">
+<summary class="action">Make a token</summary>
+{{template "token-form" (tokenForm "/account/tokens" .Days $.CSRF $.Once)}}
+</details>
+</div>
+</div>
+{{with .Notice}}<p class="notice" role="status">{{.}}</p>{{end}}
+
+<section class="stack" aria-labelledby="tokens-heading">
+<h2 id="tokens-heading">Tokens</h2>
+<p class="lead">A token acts as you with the API and the kipp command, for scripts and other machines. It cannot change logins, tokens or secrets.</p>
+{{template "tokens" (tokenList .Tokens "/account/tokens")}}
+</section>
+
+<section class="stack narrow" aria-labelledby="sessions-heading">
+<h2 id="sessions-heading">Sessions</h2>
+{{if .Others}}<p>You are logged in on {{.Others}} other {{if eq .Others 1}}session{{else}}sessions{{end}} beside this one.</p>
+<form method="post" action="/account/sessions/end">
+<input type="hidden" name="csrf" value="{{$.CSRF}}">
+<button class="action action-quiet">End the other sessions</button>
+</form>
+{{else}}<p class="sub">You are logged in here only.</p>
+{{end}}</section>
+{{end}}
+{{end}}

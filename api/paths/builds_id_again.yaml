@@ -1,0 +1,40 @@
+post:
+  operationId: buildAgain
+  tags: [builds]
+  summary: Build a finished build again
+  description: |
+    Needs the `build` permission on the job. Queues a build of the same job
+    with the same params, as they were (a param the job no longer has is
+    dropped, one it gained takes its default), and the same checkout where
+    the original had one: a webhook build's commit, branch and default
+    branch, a pull request's head and the base commit it was merged into.
+    The new build's trigger is `api` and its `trigger_detail` is `again #`
+    and the original's number. A build that has not ended, a job that is
+    disabled or drops builds while one runs, and a server that is quiet
+    refuse.
+  x-kipp-package: api
+  security:
+    - bearerToken: []
+    - sessionCookie: []
+      csrfToken: []
+  parameters:
+    - $ref: ../parameters/BuildId.yaml
+  responses:
+    "202":
+      description: The new build, queued.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/BuildSummary.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "403":
+      $ref: ../responses/Forbidden.yaml
+    "404":
+      $ref: ../responses/NotFound.yaml
+    "409":
+      $ref: ../responses/Conflict.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml
+    "503":
+      $ref: ../responses/ServiceUnavailable.yaml

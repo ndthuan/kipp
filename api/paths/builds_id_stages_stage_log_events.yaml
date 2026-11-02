@@ -1,0 +1,46 @@
+get:
+  operationId: streamStageLog
+  tags: [builds]
+  summary: A stage's console as it is written
+  description: |
+    Every line as it is written until the build's logs are complete, as `id:`
+    and `data:` events (the id is the file offset after the line) closed by
+    `event: end`. With `timestamps=true` an `event: time` with the time the
+    line began, RFC 3339 in UTC, comes before each line. A comment line
+    (`: keep-alive`) is sent when nothing else has been for a while. A
+    `Last-Event-ID` header, or `offset`, resumes a stream.
+  x-kipp-package: api
+  parameters:
+    - $ref: ../parameters/BuildId.yaml
+    - $ref: ../parameters/StageName.yaml
+    - name: offset
+      in: query
+      description: Where to start, in bytes, when no `Last-Event-ID` is sent. One that is not a whole number of 0 or more is refused.
+      schema:
+        type: integer
+        format: int64
+        minimum: 0
+    - name: timestamps
+      in: query
+      description: Set to `true` for the time each line began. Only `true` and `false` are accepted.
+      schema:
+        type: boolean
+  responses:
+    "200":
+      description: The stream.
+      content:
+        text/event-stream:
+          schema:
+            type: string
+    "400":
+      $ref: ../responses/BadRequest.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "404":
+      $ref: ../responses/NotFound.yaml
+    "413":
+      $ref: ../responses/PayloadTooLarge.yaml
+    "429":
+      $ref: ../responses/TooManyRequests.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

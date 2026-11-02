@@ -1,0 +1,67 @@
+get:
+  operationId: listBuilds
+  tags: [jobs]
+  summary: The builds of a job, newest first
+  x-kipp-package: api
+  parameters:
+    - $ref: ../parameters/JobName.yaml
+    - $ref: ../parameters/Limit.yaml
+    - $ref: ../parameters/Cursor.yaml
+  responses:
+    "200":
+      description: Up to `limit` builds, 50 by default; their `stages` are empty.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/BuildList.yaml
+    "400":
+      $ref: ../responses/BadRequest.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "404":
+      $ref: ../responses/NotFound.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml
+post:
+  operationId: triggerBuild
+  tags: [jobs]
+  summary: Start a build of a job
+  description: |
+    Needs the `build` permission on the job. A job that is disabled, or that
+    drops builds while one runs, refuses.
+  x-kipp-package: api
+  security:
+    - bearerToken: []
+    - sessionCookie: []
+      csrfToken: []
+  parameters:
+    - $ref: ../parameters/JobName.yaml
+  requestBody:
+    required: false
+    content:
+      application/json:
+        schema:
+          $ref: ../schemas/TriggerRequest.yaml
+  responses:
+    "201":
+      description: The build, queued.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/BuildSummary.yaml
+    "400":
+      $ref: ../responses/BadRequest.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "403":
+      $ref: ../responses/Forbidden.yaml
+    "404":
+      $ref: ../responses/NotFound.yaml
+    "409":
+      $ref: ../responses/Conflict.yaml
+    "413":
+      $ref: ../responses/PayloadTooLarge.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml
+    "503":
+      $ref: ../responses/ServiceUnavailable.yaml

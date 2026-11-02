@@ -1,0 +1,21 @@
+# A scheduled check that tells somebody when it fails. NTFY_TOKEN is set
+# once with `kipp secret set NTFY_TOKEN`; the hook is examples/hooks/ntfy.sh
+# put where the server can run it.
+name: site-check
+group: ops
+description: Checks every 15 minutes that the site answers.
+triggers:
+  cron: "H/15 * * * *"
+concurrency: drop
+timeout: 2m
+keep: {builds: 200, days: 7}
+env:
+  SITE_URL: https://example.com/
+  NTFY_TOPIC: site-alerts
+secrets: [NTFY_TOKEN]
+stages:
+  fetch:
+    # An env: on a stage reaches that stage alone, after every other variable.
+    env: {CURL_FLAGS: "--max-time 30"}
+    run: 'curl -fsS $CURL_FLAGS -o /dev/null -w "%{http_code} in %{time_total}s\n" "$SITE_URL"'
+on_failure: {run: /etc/kipp/hooks/ntfy.sh}

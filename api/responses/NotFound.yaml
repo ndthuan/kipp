@@ -1,0 +1,7 @@
+description: |
+  No such thing, or a job the caller may not see: the answer is the same
+  for both.
+content:
+  application/problem+json:
+    schema:
+      $ref: ../schemas/Problem.yaml

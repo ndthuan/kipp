@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  kipp as a launchd agent of the user who logs in on the Mac. Replace
+  /Users/you with that user's home, then:
+
+    cp com.example.kipp.plist ~/Library/LaunchAgents/
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.example.kipp.plist
+    kipp user add admin --admin --data /Users/you/kipp/data
+
+  Re-read the job files with `kipp reload`, or
+  `launchctl kill HUP gui/$(id -u)/com.example.kipp`. Stop it with
+  `launchctl bootout gui/$(id -u)/com.example.kipp`.
+
+  To run it with nobody logged in, put the file in /Library/LaunchDaemons
+  instead, owned by root, add a UserName key naming the user it runs as,
+  and use `sudo launchctl bootstrap system` and `system/com.example.kipp`.
+
+  launchd starts a job with a short PATH (/usr/bin:/bin:/usr/sbin:/sbin),
+  and a stage is given the server's PATH: name here where the tools the
+  stages use are.
+-->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.example.kipp</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/usr/local/bin/kipp</string>
+		<string>serve</string>
+		<string>--data</string>
+		<string>/Users/you/kipp/data</string>
+		<string>--jobs</string>
+		<string>/Users/you/kipp/jobs</string>
+		<string>--listen</string>
+		<string>127.0.0.1:8085</string>
+	</array>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PATH</key>
+		<string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+	</dict>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<!-- Given time to end its builds as lost and kill their stages. -->
+	<key>ExitTimeOut</key>
+	<integer>30</integer>
+	<key>StandardOutPath</key>
+	<string>/Users/you/kipp/kipp.log</string>
+	<key>StandardErrorPath</key>
+	<string>/Users/you/kipp/kipp.log</string>
+</dict>
+</plist>

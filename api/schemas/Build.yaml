@@ -1,0 +1,61 @@
+type: object
+additionalProperties: false
+description: |
+  One build with its stages. Only a build of a multibranch job's child has a
+  value in `parent` to `base_commit`, but `built_commit`, which a build of a
+  `source` job has too: the commit its clone checked out. Any other has
+  null.
+required: [id, job, number, status, trigger, trigger_detail, params, started_by, queued_at, started_at, finished_at, parent, branch, built_commit, pr, base_branch, base_commit, kept, stages, complete]
+properties:
+  id:
+    type: integer
+    format: int64
+  job:
+    type: string
+  number:
+    type: integer
+    description: The build's number within its job.
+  status:
+    $ref: BuildStatus.yaml
+  trigger:
+    type: string
+    description: What started it, `cron`, `api`, `web`, `webhook` or `after`.
+  trigger_detail:
+    type: string
+  params:
+    type: [object, "null"]
+    additionalProperties:
+      type: string
+  started_by:
+    type: string
+  queued_at:
+    $ref: Timestamp.yaml
+  started_at:
+    $ref: NullableTimestamp.yaml
+  finished_at:
+    $ref: NullableTimestamp.yaml
+  parent:
+    type: [string, "null"]
+    description: The multibranch job this build's job is a child of.
+  branch:
+    type: [string, "null"]
+  built_commit:
+    type: [string, "null"]
+  pr:
+    type: [integer, "null"]
+  base_branch:
+    type: [string, "null"]
+  base_commit:
+    type: [string, "null"]
+  kept:
+    oneOf:
+      - $ref: Kept.yaml
+      - type: "null"
+    description: Who kept the build out of retention and when, null for a build under its job's rules.
+  stages:
+    type: array
+    items:
+      $ref: Stage.yaml
+  complete:
+    type: boolean
+    description: True when the build has ended and nothing more will be written for it, no stage, test or line of a log.

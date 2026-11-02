@@ -1,0 +1,456 @@
+/* The pages' own rules. Linked before base.css so that the layer order
+   below is the one that holds: the reset under the base layer, the page
+   rules over it. Colours are the roles of tokens.css and sizes are its type
+   scale; a test refuses anything else in this file. */
+@layer reset, base, components, kipp;
+
+@layer reset {
+  *, *::before, *::after { box-sizing: border-box; }
+  body, h1, h2, h3, p, ul, dl, dd, pre, table { margin: 0; }
+  ul { padding: 0; list-style: none; }
+  a { color: inherit; }
+  button, input, select { font: inherit; color: inherit; }
+  table { border-collapse: collapse; }
+}
+
+@layer kipp {
+  body { min-height: 100vh; display: flex; flex-direction: column; }
+
+  /* The header and the page share their sides, so the page's left edge is
+     the brand's at every width. Past --page the sides grow instead of the
+     content: one centred column under a header band still as wide as the
+     window, so a table row on a wide screen stays short enough to follow. */
+  .top, main { padding-inline: max(calc(var(--space) * 4), (100% - var(--page)) / 2); }
+  @media (min-width: 48rem) {
+    .top, main { padding-inline: max(calc(var(--space) * 6), (100% - var(--page)) / 2); }
+  }
+
+  .top {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: calc(var(--space) * 2) calc(var(--space) * 5);
+    padding-block: calc(var(--space) * 3);
+    border-bottom: 1px solid var(--line);
+    background-color: var(--bg-raised);
+    font-size: var(--size-sm);
+  }
+  .brand {
+    font-size: var(--size-lg);
+    font-weight: var(--weight-bold);
+    letter-spacing: var(--tracking-tight);
+    text-decoration: none;
+    border-bottom: 3px solid var(--accent);
+  }
+  .who { display: flex; align-items: center; gap: calc(var(--space) * 4); margin-left: auto; color: var(--fg-subtle); }
+  .queue-badge { font-weight: var(--weight-medium); color: var(--on-busy-soft); white-space: nowrap; }
+  .queue-badge.idle { font-weight: var(--weight-normal); color: var(--fg-subtle); }
+  .queue td:nth-child(3) { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .queue form { margin: 0; }
+  .who form { display: flex; align-items: center; gap: calc(var(--space) * 2); }
+  /* The theme picker, last at the top right: one round button showing the
+     icon of the theme that holds, which opens the three to pick from. Its
+     script shows it; without one the page is the system's. */
+  .theme[hidden] { display: none; }
+  .theme > summary {
+    display: inline-flex;
+    padding: calc(var(--space) * 1.5);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-pill);
+    color: var(--fg-muted);
+  }
+  .theme > summary:hover, .theme[open] > summary { color: var(--fg); background-color: var(--bg-sunken); }
+  .theme > summary .icon { display: none; }
+  .theme > summary[data-now="system"] .icon-system, .theme > summary[data-now="light"] .icon-light, .theme > summary[data-now="dark"] .icon-dark { display: block; }
+  .theme .menu { left: auto; right: 0; min-width: calc(var(--space) * 32); }
+  .theme .menu li:first-child { padding-bottom: 0; margin-bottom: 0; border-bottom: 0; }
+  .menu-button[aria-pressed="true"] { background-color: var(--accent-soft); color: var(--on-accent-soft); font-weight: var(--weight-medium); }
+  .icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* The groups: a row of menus, each one a group's jobs under its name. */
+  .groups { display: flex; flex-wrap: wrap; gap: calc(var(--space) * 1); }
+  .drop { position: relative; }
+  .drop > summary { list-style: none; cursor: pointer; }
+  .drop > summary::-webkit-details-marker { display: none; }
+  .group > summary, .user > summary {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 1.5);
+    padding: calc(var(--space) * 1.5) calc(var(--space) * 3);
+    border-radius: var(--radius-m);
+    color: var(--fg-muted);
+    font-weight: var(--weight-medium);
+    white-space: nowrap;
+  }
+  /* The caret is drawn, so it takes the summary's colour in either theme. */
+  .group > summary::after, .user > summary::after, .menu-toggle::after {
+    content: "";
+    border: 4px solid transparent;
+    border-top-color: currentColor;
+    border-bottom-width: 0;
+  }
+  .group > summary:hover, .group[open] > summary, .user > summary:hover, .user[open] > summary { background-color: var(--bg-sunken); color: var(--fg); }
+  .group > summary[aria-current], .user > summary[aria-current] { color: var(--fg); box-shadow: inset 0 -2px 0 var(--primary); border-radius: var(--radius-m) var(--radius-m) 0 0; }
+  .menu {
+    position: absolute;
+    top: calc(100% + var(--space) * 1);
+    left: 0;
+    min-width: calc(var(--space) * 56);
+    max-height: 70vh;
+    overflow-y: auto;
+    padding: calc(var(--space) * 1);
+    background-color: var(--bg-raised);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-m);
+    box-shadow: var(--shadow-pop);
+  }
+  .menu a, .menu-button {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--space) * 2);
+    padding: calc(var(--space) * 1.5) calc(var(--space) * 3);
+    border-radius: var(--radius-s);
+    color: var(--fg-muted);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .menu-button { width: 100%; border: 0; background-color: transparent; font: inherit; cursor: pointer; }
+  .menu a:hover, .menu-button:hover { background-color: var(--bg-sunken); color: var(--fg); }
+  /* The user's menu opens under its name at the right edge, towards the page. */
+  .user .menu { left: auto; right: 0; min-width: calc(var(--space) * 40); }
+  .menu a[aria-current] { background-color: var(--accent-soft); color: var(--on-accent-soft); font-weight: var(--weight-medium); }
+  .menu-all { font-weight: var(--weight-medium); }
+  .menu li:first-child { padding-bottom: calc(var(--space) * 1); margin-bottom: calc(var(--space) * 1); border-bottom: 1px solid var(--line); }
+  /* How a job's last build ended, beside its name: a failed one is square
+     as well as red. A job never built has an empty ring. */
+  .mark { flex: none; width: 8px; height: 8px; border-radius: var(--radius-pill); border: 1px solid var(--line-strong); }
+  .mark.success { background-color: var(--ok); border-color: var(--ok); }
+  .mark.failed { background-color: var(--bad); border-color: var(--bad); border-radius: 0; }
+  .mark.running { background-color: var(--busy); border-color: var(--busy); }
+  .mark.unstable, .mark.timeout, .mark.lost { background-color: var(--warn); border-color: var(--warn); }
+  .mark.cancelled { background-color: var(--line-strong); }
+
+  /* On a narrow screen the groups fold behind one button, once the script
+     is there to unfold them, and open as a list under the header. */
+  @media (max-width: 47.99rem) {
+    .top.folding .menu-toggle { order: 1; }
+    .top.folding .groups { order: 4; flex-basis: 100%; flex-direction: column; }
+    .top.folding:not(.open) .groups { display: none; }
+    .top.folding .groups .menu { position: static; max-height: none; box-shadow: none; border: 0; border-left: 2px solid var(--line); border-radius: 0; margin: 0 0 calc(var(--space) * 2) calc(var(--space) * 3); }
+    .top.folding .who { order: 2; }
+  }
+  @media (min-width: 48rem) {
+    .menu-toggle { display: none; }
+  }
+  /* The name is the user menu's one label, so a narrow screen cuts it
+     short rather than hiding it. */
+  .who-name { max-width: calc(var(--space) * 40); overflow: hidden; text-overflow: ellipsis; }
+  @media (max-width: 26rem) {
+    .who-name { max-width: calc(var(--space) * 16); }
+  }
+
+  main {
+    flex: 1;
+    width: 100%;
+    padding-block: calc(var(--space) * 4) calc(var(--space) * 8);
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 4);
+  }
+  .foot {
+    padding: calc(var(--space) * 4);
+    border-top: 1px solid var(--line);
+    background-color: var(--bg-sunken);
+    color: var(--fg-subtle);
+    font-size: var(--size-xs);
+    text-align: center;
+  }
+
+
+  h1 { font-size: var(--size-xl); line-height: var(--leading-tight); display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--space) * 3); }
+  h2 { font-size: var(--size-lg); margin-top: calc(var(--space) * 2); }
+  section > h2 { margin-bottom: calc(var(--space) * 2); }
+  code { font-family: var(--font-code); font-size: var(--size-sm); }
+  .lead { font-size: var(--size-sm); color: var(--fg-muted); max-width: var(--measure); }
+  .sub { font-size: var(--size-sm); color: var(--fg-subtle); }
+  .stack { display: flex; flex-direction: column; gap: calc(var(--space) * 4); }
+  .pager { display: flex; gap: calc(var(--space) * 4); }
+  .narrow { width: 100%; max-width: calc(var(--space) * 104); }
+  /* A heading kept for readers that go by headings, out of everyone's way. */
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  /* A page's heading is where it is, the page itself last, with what can be
+     done to it at the other end of the row. */
+  /* The button never takes a line of its own: a long trail wraps beside it. */
+  .head { position: relative; display: flex; align-items: flex-start; justify-content: space-between; gap: calc(var(--space) * 3); }
+  /* A pop is anchored to the heading's row, not to its button, so the first of
+     two buttons does not push its form past a phone's left edge. */
+  .head .drop { position: static; }
+  .head-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: calc(var(--space) * 2); margin-left: auto; }
+  .head-actions .build { margin-left: 0; }
+  .crumbs { gap: 0 calc(var(--space) * 2); min-width: 0; overflow-wrap: anywhere; }
+  .crumbs > [aria-hidden] { color: var(--fg-subtle); font-weight: var(--weight-normal); }
+  .build { flex: none; margin-left: auto; }
+  .build > summary::after { content: ""; border: 4px solid transparent; border-top-color: currentColor; border-bottom-width: 0; }
+  /* A job's params, or any other form kept behind a button, open under the
+     heading's row, over the page. */
+  .pop {
+    position: absolute;
+    right: 0;
+    top: calc(100% + var(--space) * 2);
+    z-index: 5;
+    width: min(calc(var(--space) * 104), calc(100vw - var(--space) * 8));
+    max-height: 75vh;
+    overflow-y: auto;
+    box-shadow: var(--shadow-pop);
+  }
+  /* In a table the row grows to hold the form: a pop over the page would be
+     cut off by the table's scrolling box. */
+  td .pop { position: static; margin-top: calc(var(--space) * 2); box-shadow: none; }
+  /* When a job builds by itself, set apart from the prose around it. */
+  .sched { display: flex; flex-wrap: wrap; gap: calc(var(--space) * 2) calc(var(--space) * 6); font-size: var(--size-sm); }
+  .sched div { display: flex; align-items: center; gap: calc(var(--space) * 2); }
+  .sched dt { color: var(--fg-subtle); }
+  .sched dd {
+    background-color: var(--accent-soft);
+    color: var(--on-accent-soft);
+    border-radius: var(--radius-pill);
+    padding: calc(var(--space) * 0.5) calc(var(--space) * 3);
+    font-weight: var(--weight-medium);
+  }
+  .sched code { font-weight: var(--weight-medium); }
+  /* main is a column as tall as the window, so auto margins centre both ways. */
+  .middle { margin: auto; }
+  .actions { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--space) * 4); }
+  .inline { display: inline; margin-left: calc(var(--space) * 2); }
+  /* A value shown once: whole, to be selected at a click, and broken
+     anywhere rather than pushing the page wider. */
+  .once { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--space) * 3); }
+  .once code { padding: calc(var(--space) * 2) calc(var(--space) * 3); border: 1px solid var(--line-strong); border-radius: var(--radius-m); background-color: var(--bg-sunken); overflow-wrap: anywhere; user-select: all; }
+  .grants td:not(:first-child), .grants th:not(:first-child) { text-align: center; }
+  .grants th[scope="rowgroup"] { text-align: left; color: var(--fg-muted); }
+  .check { display: flex; align-items: center; gap: calc(var(--space) * 2); font-size: var(--size-sm); font-weight: var(--weight-medium); }
+
+  /* The jobs: a row is one short name, so the name gets a third of the
+     width and the last build, the schedule and the next fire share the
+     rest, never broken. The same shares in every group's table line their
+     columns up down the page. */
+  .jobs th:not(:first-child), .jobs td:not(:first-child) { white-space: nowrap; }
+  .jobs th:nth-child(1) { width: 34%; }
+  .jobs th:nth-child(2) { width: 28%; }
+  .jobs th:nth-child(3) { width: 20%; }
+  .jobs th:nth-child(4) { width: 18%; }
+  .jobs td:first-child { min-width: calc(var(--space) * 56); }
+  /* The branches and pull requests: the age in the last column ticks every
+     second, so the columns have fixed shares and the age its own digits'
+     width, and nothing moves as it counts. */
+  .children { table-layout: fixed; }
+  .children th:nth-child(1) { width: 46%; }
+  .children th:nth-child(2) { width: 14%; }
+  .children th:nth-child(3) { width: 24%; }
+  .children th:nth-child(4) { width: 16%; }
+  .children td { overflow-wrap: anywhere; }
+  .children td:nth-child(n+2) { white-space: nowrap; }
+  .children td:last-child { font-variant-numeric: tabular-nums; }
+  /* A table scrolls inside its own box, so the page never does at 360px. */
+  .scroll { overflow-x: auto; }
+  /* A long table also scrolls down inside its box, under its header. While
+     there is more below, the last rows fade into the page: the fade is a
+     block of its own after the table that sticks to the bottom of the box,
+     so at the end of the list, and under a short one, it lies over nothing. */
+  .tall { max-height: 60vh; overflow-y: auto; }
+  .tall th { position: sticky; top: 0; }
+  .tall::after {
+    content: "";
+    display: block;
+    position: sticky;
+    left: 0;
+    bottom: 0;
+    height: calc(var(--space) * 12);
+    background-image: linear-gradient(to bottom, transparent, var(--bg));
+    pointer-events: none;
+  }
+  table { width: 100%; font-size: var(--size-sm); }
+  th, td { padding: calc(var(--space) * 2) calc(var(--space) * 3); text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+  th { background-color: var(--bg-sunken); font-weight: var(--weight-medium); white-space: nowrap; }
+
+  .status {
+    display: inline-block;
+    border-radius: var(--radius-pill);
+    padding: 0 calc(var(--space) * 2.5);
+    font-size: var(--size-xs);
+    font-weight: var(--weight-medium);
+    letter-spacing: 0;
+    background-color: var(--bg-sunken);
+    color: var(--fg-muted);
+    border: 1px solid var(--line-strong);
+  }
+  .status.success { background-color: var(--ok-soft); color: var(--on-ok-soft); border-color: var(--ok); }
+  .status.failed { background-color: var(--bad-soft); color: var(--on-bad-soft); border-color: var(--bad); }
+  .status.running { background-color: var(--busy-soft); color: var(--on-busy-soft); border-color: var(--busy); }
+  .status.unstable, .status.timeout, .status.lost { background-color: var(--warn-soft); color: var(--on-warn-soft); border-color: var(--warn); }
+
+  /* A build's facts are one line under its name, a dot between each. */
+  .title { display: flex; flex-direction: column; gap: calc(var(--space) * 1); min-width: 0; }
+  .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0 calc(var(--space) * 3); font-size: var(--size-sm); color: var(--fg-muted); }
+  .meta > span + span::before {
+    content: "";
+    display: inline-block;
+    width: 3px;
+    height: 3px;
+    margin-right: calc(var(--space) * 3);
+    vertical-align: middle;
+    border-radius: var(--radius-pill);
+    background-color: var(--fg-subtle);
+  }
+  .facts { display: flex; flex-wrap: wrap; gap: calc(var(--space) * 2) calc(var(--space) * 8); font-size: var(--size-sm); }
+  .facts dt { font-size: var(--size-xs); color: var(--fg-subtle); }
+
+  .dag { display: block; overflow: visible; margin: 1px; }
+  .dag line { stroke: var(--line-strong); stroke-width: 2; }
+  .dag rect { fill: var(--bg-sunken); stroke: var(--line-strong); stroke-width: 1.5; }
+  .dag text { fill: var(--fg); font-size: var(--size-sm); font-weight: var(--weight-medium); }
+  .dag .success rect { fill: var(--ok-soft); stroke: var(--ok); }
+  .dag .failed rect { fill: var(--bad-soft); stroke: var(--bad); }
+  /* An unstable node has a heavier outline as well as its colour, which
+     alone is too near a failed one's for some readers. */
+  .dag .unstable rect { fill: var(--warn-soft); stroke: var(--warn); stroke-width: 3; }
+  .dag .running rect { fill: var(--busy-soft); stroke: var(--busy); }
+  .dag .skipped rect, .dag .cancelled rect { stroke-dasharray: 4 3; }
+
+  .log { border: 1px solid var(--line); border-radius: var(--radius-m); }
+  .log summary { padding: calc(var(--space) * 2) calc(var(--space) * 3); font-size: var(--size-sm); font-weight: var(--weight-medium); cursor: pointer; }
+  .log-note { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--space) * 1) calc(var(--space) * 4); padding: calc(var(--space) * 2) calc(var(--space) * 3); border-top: 1px solid var(--line); }
+  .log-note .check { margin-left: auto; font-weight: var(--weight-normal); }
+  .log pre {
+    max-height: 60vh;
+    overflow: auto;
+    padding: calc(var(--space) * 3);
+    border-top: 1px solid var(--line);
+    background-color: var(--bg-sunken);
+    font-family: var(--font-code);
+    font-size: var(--size-xs);
+    line-height: var(--leading-snug);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .log pre:empty::before { content: "Nothing yet."; color: var(--fg-subtle); }
+  /* A line's time is drawn, not written: it stays out of a copy of the
+     log. A line with none keeps the column, and a line that wraps goes on
+     under its text, so the times stand alone down the left. */
+  .log pre.times > span { display: block; padding-left: 9ch; text-indent: -9ch; }
+  .log pre.times > span::before {
+    content: attr(data-t);
+    display: inline-block;
+    width: 9ch;
+    text-indent: 0;
+    color: var(--fg-subtle);
+    user-select: none;
+  }
+
+  /* Colour and weight a build printed (build.js turns its escape sequences
+     into these classes); the roles are in tokens.css. */
+  .log pre .ansi-b { font-weight: var(--weight-bold); }
+  .log pre .ansi-dim { opacity: 0.7; }
+  .log pre .ansi-i { font-style: italic; }
+  .log pre .ansi-u { text-decoration: underline; }
+  .log pre .ansi-fg-black { color: var(--ansi-black); }
+  .log pre .ansi-fg-black-bright { color: var(--ansi-black-bright); }
+  .log pre .ansi-fg-red { color: var(--ansi-red); }
+  .log pre .ansi-fg-red-bright { color: var(--ansi-red-bright); }
+  .log pre .ansi-fg-green { color: var(--ansi-green); }
+  .log pre .ansi-fg-green-bright { color: var(--ansi-green-bright); }
+  .log pre .ansi-fg-yellow { color: var(--ansi-yellow); }
+  .log pre .ansi-fg-yellow-bright { color: var(--ansi-yellow-bright); }
+  .log pre .ansi-fg-blue { color: var(--ansi-blue); }
+  .log pre .ansi-fg-blue-bright { color: var(--ansi-blue-bright); }
+  .log pre .ansi-fg-magenta { color: var(--ansi-magenta); }
+  .log pre .ansi-fg-magenta-bright { color: var(--ansi-magenta-bright); }
+  .log pre .ansi-fg-cyan { color: var(--ansi-cyan); }
+  .log pre .ansi-fg-cyan-bright { color: var(--ansi-cyan-bright); }
+  .log pre .ansi-fg-white { color: var(--ansi-white); }
+  .log pre .ansi-fg-white-bright { color: var(--ansi-white-bright); }
+  .log pre .ansi-bg-black { background-color: var(--ansi-bg-black); }
+  .log pre .ansi-bg-black-bright { background-color: var(--ansi-bg-black-bright); }
+  .log pre .ansi-bg-red { background-color: var(--ansi-bg-red); }
+  .log pre .ansi-bg-red-bright { background-color: var(--ansi-bg-red-bright); }
+  .log pre .ansi-bg-green { background-color: var(--ansi-bg-green); }
+  .log pre .ansi-bg-green-bright { background-color: var(--ansi-bg-green-bright); }
+  .log pre .ansi-bg-yellow { background-color: var(--ansi-bg-yellow); }
+  .log pre .ansi-bg-yellow-bright { background-color: var(--ansi-bg-yellow-bright); }
+  .log pre .ansi-bg-blue { background-color: var(--ansi-bg-blue); }
+  .log pre .ansi-bg-blue-bright { background-color: var(--ansi-bg-blue-bright); }
+  .log pre .ansi-bg-magenta { background-color: var(--ansi-bg-magenta); }
+  .log pre .ansi-bg-magenta-bright { background-color: var(--ansi-bg-magenta-bright); }
+  .log pre .ansi-bg-cyan { background-color: var(--ansi-bg-cyan); }
+  .log pre .ansi-bg-cyan-bright { background-color: var(--ansi-bg-cyan-bright); }
+  .log pre .ansi-bg-white { background-color: var(--ansi-bg-white); }
+  .log pre .ansi-bg-white-bright { background-color: var(--ansi-bg-white-bright); }
+
+  /* The results of a job fold away under their heading and its count. */
+  .results > summary, .guards > summary, .artifacts > summary { margin-top: calc(var(--space) * 2); cursor: pointer; }
+  .results > summary h2, .guards > summary h2, .artifacts > summary h2 { display: inline; margin: 0 calc(var(--space) * 2) 0 0; }
+  .results[open] > summary, .guards[open] > summary, .artifacts[open] > summary { margin-bottom: calc(var(--space) * 4); }
+  .artifacts code { overflow-wrap: anywhere; }
+  .artifacts .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .artifacts td:first-child { white-space: nowrap; }
+
+  /* A failed dot is square as well as red: colour alone does not say it. */
+  .dots { white-space: nowrap; }
+  .dot { display: inline-block; width: 10px; height: 10px; margin-right: 2px; border-radius: var(--radius-pill); background-color: var(--line-strong); }
+  .dot.passed, .dot.success { background-color: var(--ok); }
+  .dot.unstable, .dot.timeout, .dot.lost { background-color: var(--warn); }
+  .dot.failed { background-color: var(--bad); border-radius: 0; }
+  .dot.none { background-color: transparent; border: 1px solid var(--line); }
+  .message { margin-top: calc(var(--space) * 1); max-height: calc(var(--space) * 40); overflow: auto; font-family: var(--font-code); font-size: var(--size-xs); color: var(--on-bad-soft); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+  .activity { font-size: var(--size-sm); display: flex; flex-direction: column; gap: calc(var(--space) * 1); }
+
+  /* The Metrics page: a pick of the store's metrics, its table, whose
+     headings sort it once metrics.js has made them buttons, a sparkline per
+     row and the compare form. */
+  .picks ul { display: flex; flex-wrap: wrap; gap: calc(var(--space) * 2); }
+  .pick { display: inline-flex; align-items: baseline; gap: calc(var(--space) * 2); padding: calc(var(--space) * 1) calc(var(--space) * 3); border: 1px solid var(--line); border-radius: var(--radius-pill); font-size: var(--size-sm); text-decoration: none; }
+  .pick:hover { background-color: var(--bg-sunken); }
+  .pick[aria-current] { background-color: var(--accent-soft); color: var(--on-accent-soft); border-color: var(--accent); font-weight: var(--weight-medium); }
+  .pick[aria-current] .sub { color: var(--on-accent-soft); }
+  .metric .item { overflow-wrap: anywhere; min-width: calc(var(--space) * 40); }
+  .metric .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .metric .when { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .sort { width: 100%; padding: 0; border: 0; background-color: transparent; font-weight: inherit; text-align: inherit; cursor: pointer; }
+  .sort:hover { color: var(--fg); text-decoration: underline; }
+  th[aria-sort="ascending"] .sort::after { content: " \2191"; }
+  th[aria-sort="descending"] .sort::after { content: " \2193"; }
+  .spark-cell { width: 100px; padding-block: 0; }
+  .spark { display: block; overflow: visible; }
+  .spark polyline { fill: none; stroke: var(--accent-text); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+  .spark circle { fill: var(--accent-text); }
+  .compare { display: flex; flex-wrap: wrap; align-items: flex-end; gap: calc(var(--space) * 4); }
+  .compare > div:not(:last-child) { flex: 1 1 calc(var(--space) * 64); min-width: 0; }
+
+  /* The set form shows the fields of the kind picked, and those alone. A
+     browser without :has shows them all, and the server reads only the
+     kind's own. */
+  #set:has(#secret-kind option[value="text"]:checked) [data-kind]:not([data-kind="text"]),
+  #set:has(#secret-kind option[value="file"]:checked) [data-kind]:not([data-kind="file"]),
+  #set:has(#secret-kind option[value="userpass"]:checked) [data-kind]:not([data-kind="userpass"]) { display: none; }
+
+  /* A scopes field once scopes.js has made it tags: each scope picked is a
+     tag with its own remove button, and the select below adds one. */
+  .entry-scopes[hidden] { display: none; }
+  .scope-tags { display: flex; flex-wrap: wrap; gap: calc(var(--space) * 1.5); margin-bottom: calc(var(--space) * 1.5); }
+  .scope-tags:empty { display: none; }
+  .scope-tag { display: inline-flex; align-items: center; gap: calc(var(--space) * 1); padding-right: calc(var(--space) * 1); font-size: var(--size-sm); }
+  .scope-tag button {
+    padding: 0 calc(var(--space) * 1);
+    border: 0;
+    border-radius: var(--radius-s);
+    background: none;
+    color: inherit;
+    cursor: pointer;
+    line-height: 1;
+  }
+  .scope-tag button:hover, .scope-tag button:focus-visible { background-color: var(--bg-raised); }
+}

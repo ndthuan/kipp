@@ -1,0 +1,23 @@
+{{define "content"}}
+{{with .Data}}
+<form class="panel stack narrow middle" method="post" action="/sudo">
+<h1>Confirm your password</h1>
+{{with $.Error}}<p class="notice notice-error" role="alert">{{.}}</p>{{end}}
+<p>You were about to {{.What}}{{with .About}} (<strong>{{.}}</strong>){{end}}. Changes to logins, tokens and secrets need your password once more; then for 10 minutes they do not.</p>
+<p class="sub">Nothing was changed yet: once the password is right you are back on the page you came from, to send the change again.</p>
+<input type="hidden" name="csrf" value="{{$.CSRF}}">
+<input type="hidden" name="next" value="{{.Next}}">
+<input type="hidden" name="action" value="{{.Action}}">
+<input type="hidden" name="about" value="{{.About}}">
+<input type="text" name="name" value="{{$.User.Name}}" autocomplete="username" hidden>
+<div>
+<label class="entry-label" for="password">Your password</label>
+<input class="entry" id="password" name="password" type="password" autocomplete="current-password" required autofocus>
+</div>
+<div class="actions">
+<button class="action action-main">Confirm</button>
+<a class="link" href="{{.Next}}">Cancel</a>
+</div>
+</form>
+{{end}}
+{{end}}

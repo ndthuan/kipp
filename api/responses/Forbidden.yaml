@@ -1,0 +1,8 @@
+description: |
+  The caller may not do this: not an admin, a job without the permission,
+  a session request without its CSRF header, or a password to be asked
+  again.
+content:
+  application/problem+json:
+    schema:
+      $ref: ../schemas/Problem.yaml

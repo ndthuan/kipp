@@ -1,0 +1,31 @@
+get:
+  operationId: getBuild
+  tags: [builds]
+  summary: One build with its stages
+  x-kipp-package: api
+  parameters:
+    - $ref: ../parameters/BuildId.yaml
+    - name: wait
+      in: query
+      description: Set to `true` to hold the request until the build has ended, or the server's wait is over, and answer it as it is then. Only `true` and `false` are accepted.
+      schema:
+        type: boolean
+  responses:
+    "200":
+      description: The build.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/Build.yaml
+    "400":
+      $ref: ../responses/BadRequest.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "404":
+      $ref: ../responses/NotFound.yaml
+    "413":
+      $ref: ../responses/PayloadTooLarge.yaml
+    "429":
+      $ref: ../responses/TooManyRequests.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

@@ -1,0 +1,36 @@
+type: object
+additionalProperties: false
+description: A standing agent, its record and, once it has connected, what the server sees of it now. Never its token.
+required: [name, labels, executors, busy, enabled, online, since, version, os, arch, stages, last_seen_at]
+properties:
+  name:
+    type: string
+  labels:
+    type: array
+    items:
+      type: string
+  executors:
+    type: integer
+    description: 0 for as many at once as it is given.
+  busy:
+    type: integer
+    description: How many stages it runs or has been given now.
+  enabled:
+    type: boolean
+  online:
+    type: boolean
+  since:
+    $ref: NullableTimestamp.yaml
+  version:
+    type: string
+  os:
+    type: string
+  arch:
+    type: string
+  stages:
+    type: array
+    items:
+      $ref: AgentStage.yaml
+    description: What it runs or has been given.
+  last_seen_at:
+    $ref: NullableTimestamp.yaml

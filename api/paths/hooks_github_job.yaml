@@ -1,0 +1,78 @@
+post:
+  operationId: deliverGithubJobEvent
+  tags: [webhooks]
+  summary: A GitHub event for a job
+  description: |
+    The body is "a GitHub event" as GitHub sends it
+    (https://docs.github.com/en/webhooks/webhook-events-and-payloads); kipp
+    reads the repository and the push or pull request in it. The delivery is
+    checked with the job's secret and recorded by `X-GitHub-Delivery`, so a
+    delivery sent twice is built once.
+  x-kipp-package: webhook
+  security:
+    - webhookSignature: []
+  parameters:
+    - name: job
+      in: path
+      required: true
+      description: The job the hook is registered for.
+      schema:
+        type: string
+    - name: X-GitHub-Event
+      in: header
+      required: true
+      description: The kind of event, for example `push`, `pull_request` or `ping`.
+      schema:
+        type: string
+    - name: X-GitHub-Delivery
+      in: header
+      required: true
+      description: The delivery's GUID. A delivery without one is refused.
+      schema:
+        type: string
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          type: object
+          description: A GitHub event.
+  responses:
+    "200":
+      description: A valid delivery that changes nothing, and why.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/WebhookIgnored.yaml
+    "202":
+      description: The build, or the builds, queued.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/WebhookAccepted.yaml
+    "400":
+      $ref: ../responses/BadRequest.yaml
+    "401":
+      description: The signature is missing or does not match. Nothing says which, or whether the job exists.
+      content:
+        application/problem+json:
+          schema:
+            $ref: ../schemas/Problem.yaml
+    "408":
+      description: The body was not all sent in time.
+      content:
+        application/problem+json:
+          schema:
+            $ref: ../schemas/Problem.yaml
+    "409":
+      $ref: ../responses/Conflict.yaml
+    "413":
+      $ref: ../responses/PayloadTooLarge.yaml
+    "500":
+      description: Something failed inside the server.
+      content:
+        application/problem+json:
+          schema:
+            $ref: ../schemas/Problem.yaml
+    "503":
+      $ref: ../responses/ServiceUnavailable.yaml

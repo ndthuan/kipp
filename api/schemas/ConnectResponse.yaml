@@ -1,0 +1,25 @@
+type: object
+additionalProperties: false
+description: Who the server says the agent is. Labels and executors are the server's to set.
+required: [Name, Labels, Executors, ServerVersion, Heartbeat, Kill]
+properties:
+  Name:
+    type: string
+  Labels:
+    type: [array, "null"]
+    items:
+      type: string
+  Executors:
+    type: integer
+    description: 0 for as many at once as it is given.
+  ServerVersion:
+    type: string
+  Heartbeat:
+    type: integer
+    format: int64
+    description: How often to connect again, in nanoseconds.
+  Kill:
+    type: [array, "null"]
+    items:
+      type: string
+    description: Assignments the agent said it runs that the server does not know as running there.

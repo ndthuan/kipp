@@ -1,0 +1,44 @@
+get:
+  operationId: cacheLookup
+  tags: [internal]
+  summary: Look for a cache entry
+  description: |
+    The entry saved under `key`, else the newest one whose key begins with
+    one of the `restore` prefixes.
+  x-kipp-package: cachesrv
+  security:
+    - cacheToken: []
+  parameters:
+    - $ref: ../parameters/CacheScope.yaml
+    - name: key
+      in: query
+      required: true
+      description: 1 to 512 letters, digits and `. _ + = -`.
+      schema:
+        type: string
+    - name: restore
+      in: query
+      description: Key prefixes to fall back to, in order; given once for each.
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+  responses:
+    "200":
+      description: The entry that was found.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/CacheFound.yaml
+    "400":
+      $ref: ../responses/BadRequest.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "403":
+      $ref: ../responses/Forbidden.yaml
+    "404":
+      $ref: ../responses/NotFound.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

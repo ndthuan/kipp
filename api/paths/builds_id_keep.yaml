@@ -1,0 +1,67 @@
+put:
+  operationId: keepBuild
+  tags: [builds]
+  summary: Keep a finished build out of retention
+  description: |
+    Needs the `build` permission on the job. The build is no longer removed
+    by the job's `keep` rule, the rule for removed jobs or the artifacts cap,
+    and does not count toward `keep.builds`. Keeping a build that is kept
+    changes nothing: it stays kept by the first user. A build that has not
+    ended is a conflict.
+  x-kipp-package: api
+  security:
+    - bearerToken: []
+    - sessionCookie: []
+      csrfToken: []
+  parameters:
+    - $ref: ../parameters/BuildId.yaml
+  responses:
+    "200":
+      description: The build, kept.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/Build.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "403":
+      $ref: ../responses/Forbidden.yaml
+    "404":
+      $ref: ../responses/NotFound.yaml
+    "409":
+      $ref: ../responses/Conflict.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml
+delete:
+  operationId: unkeepBuild
+  tags: [builds]
+  summary: Put a build back under the retention rules
+  description: |
+    Needs the `build` permission on the job. The build is removed again by
+    the rules that leave it alone while it is kept, as soon as one reaches it.
+    Stopping what is not kept changes nothing. A build that has not ended is
+    a conflict.
+  x-kipp-package: api
+  security:
+    - bearerToken: []
+    - sessionCookie: []
+      csrfToken: []
+  parameters:
+    - $ref: ../parameters/BuildId.yaml
+  responses:
+    "200":
+      description: The build, no longer kept.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/Build.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "403":
+      $ref: ../responses/Forbidden.yaml
+    "404":
+      $ref: ../responses/NotFound.yaml
+    "409":
+      $ref: ../responses/Conflict.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

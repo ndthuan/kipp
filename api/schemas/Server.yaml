@@ -1,0 +1,86 @@
+type: object
+additionalProperties: false
+description: What the server runs with.
+required:
+  - version
+  - go_version
+  - schema
+  - started_at
+  - listen
+  - base_url
+  - executors
+  - builds
+  - default_runs_on
+  - agent_env
+  - agent_url
+  - agent_listen
+  - shell
+  - session_ttl_seconds
+  - timezone
+  - data_dir
+  - jobs_dir
+  - free_disk_bytes
+  - db_size_bytes
+  - last_reload_at
+  - last_reload_error
+  - jobs
+properties:
+  version:
+    type: string
+  go_version:
+    type: string
+  schema:
+    type: integer
+    description: The database's schema version.
+  started_at:
+    $ref: Timestamp.yaml
+  listen:
+    type: string
+  base_url:
+    type: string
+  executors:
+    type: integer
+    description: The server's own stages at once; 0 for none.
+  builds:
+    type: integer
+    description: The builds with something running at once.
+  default_runs_on:
+    type: array
+    items:
+      type: string
+    description: The labels of a stage that names none, on a server with no executors.
+  agent_env:
+    type: array
+    items:
+      type: string
+    description: The variables of the server's environment that agents' stages are given.
+  agent_url:
+    type: string
+    description: The URL a container's agent dials.
+  agent_listen:
+    type: string
+    description: The listener of the agent protocol and the cache apart from `listen`.
+  shell:
+    type: string
+  session_ttl_seconds:
+    type: integer
+  timezone:
+    type: string
+  data_dir:
+    type: string
+  jobs_dir:
+    type: string
+  free_disk_bytes:
+    type: [integer, "null"]
+    description: Bytes free on the data directory's disk; null when they could not be read.
+  db_size_bytes:
+    type: [integer, "null"]
+    description: The database file's size; null when it could not be read.
+  last_reload_at:
+    $ref: Timestamp.yaml
+  last_reload_error:
+    type: string
+    description: Why the last read of the job files was refused; empty when it was taken.
+  jobs:
+    type: integer
+    description: How many jobs are loaded.

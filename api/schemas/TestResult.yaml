@@ -1,0 +1,18 @@
+type: object
+additionalProperties: false
+description: One JUnit case of a build.
+required: [stage, suite, name, status, duration_ms, message]
+properties:
+  stage:
+    type: string
+  suite:
+    type: string
+  name:
+    type: string
+  status:
+    type: string
+    enum: [passed, failed, skipped]
+  duration_ms:
+    type: integer
+  message:
+    type: string

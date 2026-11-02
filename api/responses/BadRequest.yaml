@@ -1,0 +1,5 @@
+description: The request is not one the server can read, for example a parameter or a body that does not parse.
+content:
+  application/problem+json:
+    schema:
+      $ref: ../schemas/Problem.yaml

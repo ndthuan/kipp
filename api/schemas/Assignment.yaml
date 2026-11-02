@@ -1,0 +1,57 @@
+type: object
+additionalProperties: false
+description: One stage to run.
+required: [ID, Job, Number, Stage, Command, Env, Workspace, Workdir, Junit]
+properties:
+  ID:
+    type: string
+  Job:
+    type: string
+  Number:
+    type: integer
+  Stage:
+    type: string
+  Command:
+    type: string
+    description: Run with the agent's shell, `-c`.
+  Env:
+    type: [array, "null"]
+    items:
+      type: string
+    description: The variables the server gives the stage, as `NAME=value`.
+  Workspace:
+    type: string
+    description: The build's directory under the agent's workdir; empty is the workdir itself.
+  Workdir:
+    type: string
+    description: A path inside the workspace the stage runs in.
+  Junit:
+    type: string
+    description: The stage's junit glob; empty is none.
+  Metrics:
+    type: string
+    description: The stage's metrics file glob.
+  Baseline:
+    type: string
+    contentEncoding: base64
+    description: What the stage's store remembers; absent for a stage that declares no metrics.
+  Artifacts:
+    $ref: AgentArtifacts.yaml
+  Inputs:
+    type: array
+    items:
+      $ref: AgentInput.yaml
+  Cache:
+    type: array
+    items:
+      $ref: AgentCache.yaml
+  UnstableExit:
+    type: array
+    items:
+      type: integer
+    description: The exit codes that count as ending well besides 0, and that are not run again.
+  Retries:
+    type: integer
+    minimum: 0
+    maximum: 10
+    description: How many more times the agent runs the command when it ends with a code that is neither 0 nor in UnstableExit; absent is none.

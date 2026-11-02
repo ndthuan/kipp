@@ -1,0 +1,868 @@
+package cli
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"log/slog"
+	"net"
+	"net/http"
+	"net/netip"
+	"net/url"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
+
+	"github.com/ndthuan/kipp/internal/agentbin"
+	"github.com/ndthuan/kipp/internal/agenthub"
+	"github.com/ndthuan/kipp/internal/agentproto"
+	"github.com/ndthuan/kipp/internal/api"
+	"github.com/ndthuan/kipp/internal/auth"
+	"github.com/ndthuan/kipp/internal/cache"
+	"github.com/ndthuan/kipp/internal/cachesrv"
+	"github.com/ndthuan/kipp/internal/config"
+	"github.com/ndthuan/kipp/internal/dispatch"
+	"github.com/ndthuan/kipp/internal/enginepool"
+	"github.com/ndthuan/kipp/internal/github"
+	"github.com/ndthuan/kipp/internal/index"
+	"github.com/ndthuan/kipp/internal/problem"
+	"github.com/ndthuan/kipp/internal/retain"
+	"github.com/ndthuan/kipp/internal/runner"
+	"github.com/ndthuan/kipp/internal/secretbox"
+	"github.com/ndthuan/kipp/internal/store"
+	"github.com/ndthuan/kipp/internal/version"
+	"github.com/ndthuan/kipp/internal/web"
+	"github.com/ndthuan/kipp/internal/webhook"
+)
+
+const serveUsage = `serve --data <dir> --jobs <dir> [flags]
+
+kipp speaks plain HTTP and leaves TLS to a reverse proxy in front of it.
+A browser keeps the session cookie only over HTTPS (or, with no proxy
+between, on the server's own machine at http://127.0.0.1 or localhost), and
+the login form is refused as cross-origin unless the proxy passes the
+request's Host header through unchanged.
+
+SIGHUP re-reads the jobs directory, as kipp reload does. SIGINT and SIGTERM
+stop the server; a build running then ends as lost. A second one kills a
+server that is still stopping, and leaves what its stages started running.
+So does a crash. The next serve on the data directory kills what it finds
+of those stages before it runs anything.
+
+A stage is given of the server's environment only what --pass-env names,
+then the job's env, its params, its secrets and the KIPP_ variables. A
+stage on an agent is given of it only what --agent-env names, by name.
+
+A stage with runs_on runs on a standing agent (kipp agent add), or with an
+image in a container on a Docker engine (kipp engine add), that carries its
+labels; agents dial the server under /agent/, on --listen or on
+--agent-listen. --executors 0 is a server that runs no stage itself: one
+that names no runs_on goes where --default-runs-on says.
+
+A stage with cache_scopes restores and saves keyed caches through kipp cache,
+kept under the data directory; --cache-max bounds them. A stage on an agent
+reaches them at --agent-url, which it must be given, on --listen or on
+--agent-listen.
+
+A cron is read in its job's timezone, else in --timezone, else in the
+host's zone (TZ, or /etc/localtime). The pages show times in --timezone,
+else the host's zone, and the retention sweep runs at 03:30 there.
+
+One server at a time uses a data directory: it holds a lock on it for as
+long as it runs. Only serve makes the directory and the database in it;
+the user, token and secret commands work on one a server has made.
+`
+
+const (
+	headerTimeout = 10 * time.Second
+	idleTimeout   = 2 * time.Minute
+	// drainGrace is how long requests still open may take to end once the
+	// builds have.
+	drainGrace = 5 * time.Second
+)
+
+func cmdServe(args []string, _ io.Reader, stdout, stderr io.Writer) int {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	// The first signal starts the shutdown and hands both back to their
+	// default, so that a second one kills a shutdown that does not end.
+	context.AfterFunc(ctx, stop)
+	// The site and the webhook log through the default logger; in this
+	// process that is the server's own log.
+	slog.SetDefault(slog.New(slog.NewTextHandler(stderr, nil)))
+	return serve(ctx, args, stdout, stderr)
+}
+
+type serveFlags struct {
+	data, jobs, listen, baseURL, shell string
+	executors, builds                  int
+	// The agents': the labels of a stage that names none on a server
+	// that runs no stage, the variables they are given of the server's,
+	// the URL a container's agent dials, the listener of /agent/ apart
+	// from --listen, and the key of an ssh:// engine.
+	defaultRunsOn                 []string
+	agentEnv                      []string
+	agentURL, agentListen, sshKey string
+	// githubAPI is where the multibranch jobs' repos are read.
+	githubAPI  string
+	sessionTTL time.Duration
+	clientIP   api.ClientIP
+	// passEnv names the server's variables a stage is given.
+	passEnv []string
+	// zone is --timezone, else the host's by name, else nil for time.Local.
+	zone *time.Location
+	// artifactsMax is the most every build's artifacts may come to.
+	artifactsMax config.ByteSize
+	// cacheMax is the most every cache entry comes to.
+	cacheMax config.ByteSize
+}
+
+func parseServeFlags(args []string, stderr io.Writer) (*serveFlags, error) {
+	f := &serveFlags{artifactsMax: 50 * config.GB, cacheMax: 20 * config.GB}
+	fs := newFlags(serveUsage, stderr)
+	fs.StringVar(&f.data, "data", "", "`directory` for the database, the secrets' key, logs and workspaces (required)")
+	fs.StringVar(&f.jobs, "jobs", "", "`directory` of job files (required)")
+	fs.StringVar(&f.listen, "listen", "127.0.0.1:8085", "`address` to listen on, in plain HTTP")
+	fs.StringVar(&f.baseURL, "base-url", "", "`URL` stages see as KIPP_URL (default http://<listen>); commit statuses link to builds under it only when it is given")
+	fs.StringVar(&f.shell, "shell", "sh", "shell that runs stages, as <shell> -c <command>")
+	fs.IntVar(&f.executors, "executors", 4, "stages the server runs itself at once; 0 runs none, and every stage goes to an agent")
+	fs.IntVar(&f.builds, "builds", 0, "builds with something running at once: preparing, a stage on the server, or a stage started on an agent or engine; one waiting to be placed counts for none (default --executors, or 4 when that is 0)")
+	defaultRunsOn := fs.String("default-runs-on", "", "`labels`, comma-separated, where a stage that names no runs_on goes on a server with --executors 0")
+	agentEnv := fs.String("agent-env", "", "`names`, comma-separated, of the server's environment variables a stage on an agent is also given")
+	fs.StringVar(&f.agentURL, "agent-url", "", "`URL` a container's agent dials the server at (default --base-url)")
+	fs.StringVar(&f.agentListen, "agent-listen", "", "`address` of a second listener that serves /api/v1/agent/ and /api/v1/cache/ and nothing else; /api/v1/agent/ is then not on --listen")
+	fs.StringVar(&f.sshKey, "ssh-key", "", "private key `file` for ssh:// engines that name none (default the user's own under ~/.ssh)")
+	fs.StringVar(&f.githubAPI, "github-api", "https://api.github.com", "`URL` of GitHub's API, where a multibranch job's repo is scanned and its commit statuses are posted (GitHub Enterprise has its own)")
+	fs.DurationVar(&f.sessionTTL, "session-ttl", 30*24*time.Hour, "how long a browser login lasts")
+	fs.StringVar(&f.clientIP.Header, "client-ip-header", "", "`header` a proxy in front puts the client's address in, like X-Forwarded-For; failed logins are then counted by client too (default none)")
+	trusted := fs.String("trusted-proxy", "127.0.0.0/8,::1/128", "`CIDRs`, comma-separated, of the proxies whose --client-ip-header is believed")
+	passEnv := fs.String("pass-env", strings.Join(dispatch.DefaultPassEnv, ","), "`names`, comma-separated, of the server's environment variables a stage is given; NAME_* for a prefix, * for all")
+	fs.Var(&f.artifactsMax, "artifacts-max", "the most every build's artifacts come to, a `size` like 50GB; past it the oldest builds' are removed")
+	fs.Var(&f.cacheMax, "cache-max", "the most every cache entry comes to, a `size` like 20GB; past it the least recently restored are removed")
+	var zone string
+	fs.StringVar(&zone, "timezone", "", "IANA `zone` a cron is read in when its job names none, like Europe/Paris (default the host's)")
+	positional, err := parseArgs(fs, args)
+	switch {
+	case err != nil:
+		return nil, err
+	case len(positional) != 0:
+		fs.Usage()
+		return nil, refused("it takes flags only")
+	case f.data == "" || f.jobs == "":
+		return nil, refused("--data and --jobs are required")
+	case f.executors < 0:
+		return nil, refused("--executors is 0 or more")
+	case f.builds < 0:
+		return nil, refused("--builds is 0, for the default, or more")
+	case f.sessionTTL <= 0:
+		return nil, refused("--session-ttl is a time to come")
+	}
+	if f.clientIP.Trusted, err = parsePrefixes(*trusted); err != nil {
+		return nil, refused("--trusted-proxy " + err.Error())
+	}
+	if f.passEnv, err = dispatch.ParsePassEnv(*passEnv); err != nil {
+		return nil, refused(err.Error())
+	}
+	if err := f.parseAgentFlags(*defaultRunsOn, *agentEnv); err != nil {
+		return nil, err
+	}
+	switch {
+	case !headerName(f.clientIP.Header):
+		return nil, refused("--client-ip-header is a header's name, like X-Forwarded-For")
+	case zone != "":
+		z, err := config.LoadZone(zone)
+		if err != nil {
+			return nil, refused("--timezone " + err.Error())
+		}
+		f.zone = z
+	default:
+		tz, set := os.LookupEnv("TZ")
+		f.zone = hostZone(tz, set, "/etc/localtime")
+	}
+	return f, nil
+}
+
+// parseAgentFlags reads the flags of where the server's stages run.
+func (f *serveFlags) parseAgentFlags(defaultRunsOn, agentEnv string) error {
+	if defaultRunsOn != "" {
+		labels, err := config.ParseLabels(defaultRunsOn)
+		if err != nil {
+			return refused("--default-runs-on " + err.Error())
+		}
+		f.defaultRunsOn = labels
+	}
+	var err error
+	if f.agentEnv, err = dispatch.ParseAgentEnv(agentEnv); err != nil {
+		return refused(err.Error())
+	}
+	if f.agentURL != "" {
+		if u, err := url.Parse(f.agentURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			return refused("--agent-url is an http:// or https:// URL")
+		}
+	}
+	return nil
+}
+
+// headerName reports whether h may name a header: letters, digits and
+// hyphens, or nothing for no header at all.
+func headerName(h string) bool {
+	for _, r := range h {
+		if r != '-' && (r < '0' || r > '9') && (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') {
+			return false
+		}
+	}
+	return true
+}
+
+// parsePrefixes reads a comma-separated list of CIDRs; an address alone
+// is the prefix of that one address.
+func parsePrefixes(list string) ([]netip.Prefix, error) {
+	var out []netip.Prefix
+	for item := range strings.SplitSeq(list, ",") {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		if addr, err := netip.ParseAddr(item); err == nil {
+			out = append(out, netip.PrefixFrom(addr, addr.BitLen()))
+			continue
+		}
+		p, err := netip.ParsePrefix(item)
+		if err != nil {
+			return nil, fmt.Errorf("%q is not a CIDR such as 10.0.0.0/8", item)
+		}
+		out = append(out, p.Masked())
+	}
+	return out, nil
+}
+
+// hostZone is the host's zone by its IANA name, so that a page and the API
+// can say which zone it is: Go calls the host's zone "Local", whatever it
+// is. It is read from TZ when that is set and from the link /etc/localtime
+// is otherwise. nil, for time.Local, is when neither names a zone.
+func hostZone(tz string, set bool, localtime string) *time.Location {
+	name := strings.TrimPrefix(tz, ":")
+	if !set {
+		target, err := os.Readlink(localtime)
+		if err != nil {
+			return nil
+		}
+		_, after, found := strings.Cut(target, "zoneinfo/")
+		if !found {
+			return nil
+		}
+		name = after
+	}
+	z, err := config.LoadZone(name)
+	if err != nil {
+		return nil
+	}
+	return z
+}
+
+// listen is net.Listen, a variable so that a test can have the listener
+// say it took an address it did not.
+var listen = net.Listen
+
+// server is one running kipp.
+type server struct {
+	f   *serveFlags
+	log *slog.Logger
+	key []byte
+	// unset is a value sealed with key, opened in place of a secret that
+	// is not set.
+	unset []byte
+	// deviceKey signs the device cookies logins hand out.
+	deviceKey []byte
+	// lock is held on the data directory for as long as the process lives.
+	lock *os.File
+	st   *store.Store
+	d    *dispatch.Dispatcher
+	// ix is the children of the multibranch jobs, which it adds to the
+	// job set it hands the dispatcher.
+	ix *index.Index
+	// scanner reads the multibranch jobs' repos, now and then; it is made
+	// when the server runs, and ends with its work.
+	scanner *index.Scanner
+	// apps signs in as the GitHub Apps the owner jobs name.
+	apps *github.Apps
+	// hub is the agents, and pool the engines, a stage may be placed on;
+	// agentLn is the --agent-listen listener, nil without one.
+	hub     *agenthub.Hub
+	pool    *enginepool.Pool
+	agentLn net.Listener
+	// cache is the keyed caches stages restore and save; cacheURL is where
+	// a stage on this machine reaches them, and agentURLSet whether
+	// --agent-url was given, which a stage on an agent needs to reach them.
+	cache       *cachesrv.Service
+	cacheURL    string
+	agentURLSet bool
+	// publicURL is --base-url as it was given, empty when it was not.
+	publicURL string
+	// listenAddr is the address taken, the port the system picked included.
+	listenAddr string
+
+	// startedAt is when the server began to open its data directory.
+	startedAt time.Time
+
+	// mu is held through a reload, so that of two the later one stays.
+	mu        sync.Mutex
+	reloadErr string
+	// reloadAt is when the job files were last read: at the start, then
+	// at each reload, taken or refused.
+	reloadAt time.Time
+}
+
+// serve is the server; it returns once ctx has ended and everything it
+// started has stopped.
+func serve(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	f, err := parseServeFlags(args, stderr)
+	var bad refused
+	switch {
+	case errors.As(err, &bad):
+		return fail(stderr, "serve", err)
+	case err != nil:
+		return exitFor(err)
+	}
+	s := &server{f: f, log: slog.New(slog.NewTextHandler(stderr, nil))}
+	ln, err := s.open(ctx)
+	if err != nil {
+		return fail(stderr, "serve", err)
+	}
+	defer s.close()
+	return s.run(ctx, ln, stdout)
+}
+
+func (s *server) close() {
+	if s.st != nil {
+		_ = s.st.Close()
+	}
+	if s.lock != nil {
+		_ = s.lock.Close()
+	}
+}
+
+// open reads the jobs, opens the data directory and takes the address. On
+// an error nothing is left open. The jobs come first: a bad set starts
+// nothing and creates nothing.
+func (s *server) open(ctx context.Context) (net.Listener, error) {
+	s.startedAt = time.Now()
+	s.reloadAt = s.startedAt
+	snap, err := config.Load(s.f.jobs)
+	if err != nil {
+		return nil, fmt.Errorf("the jobs directory has errors; not starting:\n%w", err)
+	}
+	ln, err := s.openData(ctx, snap)
+	if err != nil {
+		s.close()
+	}
+	return ln, err
+}
+
+// openData makes the data directory if it is not there, locks it, and
+// opens what it holds. The lock comes before anything is read or written:
+// a second server on the same directory would call the first one's running
+// builds lost and remove the workspaces they run in.
+func (s *server) openData(ctx context.Context, snap *config.Snapshot) (net.Listener, error) {
+	var err error
+	// Absolute, because a stage reads KIPP_WORKSPACE from inside it.
+	if s.f.data, err = filepath.Abs(s.f.data); err != nil {
+		return nil, err
+	}
+	if err := makeDataDir(s.f.data, s.log); err != nil {
+		return nil, err
+	}
+	if s.lock, err = lockData(s.f.data); err != nil {
+		return nil, err
+	}
+	if s.key, err = secretbox.LoadOrCreateKey(filepath.Join(s.f.data, keyFile)); err != nil {
+		return nil, err
+	}
+	if s.unset, err = secretbox.Seal(s.key, unsetName, make([]byte, unsetSize)); err != nil {
+		return nil, err
+	}
+	if s.deviceKey, err = secretbox.LoadOrCreateKey(filepath.Join(s.f.data, deviceKeyFile)); err != nil {
+		return nil, err
+	}
+	if s.st, err = openStore(s.f.data, true); err != nil {
+		return nil, err
+	}
+	logUpgrade(s.log, s.st.Upgrade())
+	return s.listen(ctx, snap)
+}
+
+// logUpgrade says when the database was brought up from an older schema,
+// and where the copy of it as it was is: going back to the kipp before is
+// that copy, put back while no server runs.
+func logUpgrade(log *slog.Logger, up store.Upgrade) {
+	if up.From > 0 && up.To != up.From {
+		log.Info("database upgraded", "from_schema", up.From, "to_schema", up.To, "copy", up.Backup)
+	}
+}
+
+// listen takes the address, then makes the dispatcher and has it clear
+// what the last process left. The address comes first, so that a server
+// that cannot be reached changes nothing.
+func (s *server) listen(ctx context.Context, snap *config.Snapshot) (net.Listener, error) {
+	ln, err := listen("tcp", s.f.listen)
+	if err != nil {
+		return nil, err
+	}
+	// The default below is an address for stages on this machine; a status
+	// links to the build's page only when the operator said where that is.
+	s.publicURL = s.f.baseURL
+	if s.f.baseURL == "" {
+		s.f.baseURL = baseURLFor(ln.Addr())
+	}
+	s.listenAddr = ln.Addr().String()
+	if s.f.agentListen != "" {
+		if s.agentLn, err = listen("tcp", s.f.agentListen); err != nil {
+			_ = ln.Close()
+			return nil, fmt.Errorf("--agent-listen: %w", err)
+		}
+	}
+	s.agentURLSet = s.f.agentURL != ""
+	s.places()
+	s.cacheURL = baseURLFor(ln.Addr())
+	s.cache = cachesrv.New(cachesrv.Options{
+		Dir: filepath.Join(s.f.data, "cache"), Store: s.st, Max: int64(s.f.cacheMax), Log: s.log,
+	})
+	var agentURL string // only what the operator gave: the default is no address agents are known to reach
+	if s.agentURLSet {
+		agentURL = s.f.agentURL
+	}
+	s.apps = github.NewApps(s.f.githubAPI)
+	s.d = dispatch.New(s.st, runner.Local{Shell: s.f.shell}, dispatch.Options{
+		DataDir: s.f.data, Executors: s.f.executors, RunsNoStages: s.f.executors == 0, Builds: s.f.builds,
+		BaseURL: s.f.baseURL, TimeZone: s.f.zone,
+		Secrets: s.secrets, Retain: retain.Job, Logger: s.log, PassEnv: s.f.passEnv,
+		Hub: s.hub, Engines: s.pool, DefaultRunsOn: s.f.defaultRunsOn, AgentEnv: s.f.agentEnv,
+		ArtifactsMax: int64(s.f.artifactsMax),
+		Cache:        s.cache, CacheURL: s.cacheURL, AgentURL: agentURL,
+		Status: index.PostStatusFor(s.f.githubAPI, s.secret, s.appClient), PublicURL: s.publicURL,
+	})
+	// Before anything can ask: the dispatcher has no jobs until it is given some.
+	s.ix = index.New(s.st, s.d.SetSnapshot)
+	if err := s.ix.SetBase(ctx, snap); err != nil {
+		s.log.Error("reading the children of the multibranch jobs; they build again once a push makes them", "err", err)
+	}
+	s.loadPlaces(ctx)
+	if err := s.d.Recover(ctx); err != nil {
+		_ = ln.Close()
+		if s.agentLn != nil {
+			_ = s.agentLn.Close()
+		}
+		return nil, err
+	}
+	return ln, nil
+}
+
+// places makes the hub of the agents and the pool of the engines.
+func (s *server) places() {
+	if s.f.agentURL == "" {
+		s.f.agentURL = s.f.baseURL
+	}
+	s.hub = agenthub.New(agenthub.Options{
+		Version: version.Version, Log: s.log,
+		Standing: func(ctx context.Context, hash string) (*agenthub.Identity, error) {
+			a, err := s.st.AgentByTokenHash(ctx, hash)
+			if err != nil {
+				return nil, err
+			}
+			id := identityOf(a)
+			return &id, nil
+		},
+		Seen: func(ctx context.Context, name, os, arch, version string, at time.Time) {
+			if err := s.st.SetAgentSeen(ctx, name, at, os, arch, version); err != nil && !errors.Is(err, store.ErrNotFound) {
+				s.log.Warn("recording an agent's connect", "agent", name, "err", err)
+			}
+		},
+	})
+	s.pool = enginepool.New(enginepool.Options{
+		Hub: s.hub, AgentURL: s.f.agentURL, ServerID: s.f.baseURL, Binary: agentbin.For, SSHKey: s.f.sshKey, Log: s.log,
+	})
+}
+
+func identityOf(a *store.Agent) agenthub.Identity {
+	return agenthub.Identity{Name: a.Name, Labels: a.Labels, Executors: a.Executors, Enabled: a.Enabled}
+}
+
+// loadPlaces gives the pool the engines and the hub the standing agents
+// the database holds. What cannot be read is logged, and what the server
+// had stays.
+func (s *server) loadPlaces(ctx context.Context) {
+	es, err := s.st.Engines(ctx)
+	if err != nil {
+		s.log.Error("reading the engines; the ones before stay", "err", err)
+		return
+	}
+	as, err := s.st.Agents(ctx)
+	if err != nil {
+		s.log.Error("reading the agents; the ones before stay", "err", err)
+		return
+	}
+	ids := make([]agenthub.Identity, len(as))
+	for i, a := range as {
+		ids[i] = identityOf(a)
+	}
+	s.pool.SetEngines(es)
+	s.hub.SetStanding(ids)
+	s.log.Info("engines reloaded", "count", len(es), "agents", len(as))
+}
+
+// baseURLFor is where a stage on this machine reaches a server listening
+// on addr. An address that means every interface (":8085", "0.0.0.0:8085")
+// is none a client can call, so that one is the loopback.
+func baseURLFor(addr net.Addr) string {
+	host, port, err := net.SplitHostPort(addr.String())
+	if err != nil {
+		return "http://" + addr.String()
+	}
+	if ip := net.ParseIP(host); ip != nil && ip.IsUnspecified() {
+		host = "127.0.0.1"
+	}
+	return "http://" + net.JoinHostPort(host, port)
+}
+
+// secrets opens the named secrets for a build.
+func (s *server) secrets(ctx context.Context, names []string) (map[string]dispatch.Secret, error) {
+	out := make(map[string]dispatch.Secret, len(names))
+	for _, name := range names {
+		sec, err := s.openSecretRecord(ctx, name)
+		if err != nil {
+			return nil, err
+		}
+		out[name] = sec
+	}
+	return out, nil
+}
+
+// openSecret is secretbox.Open, which a test counts.
+var openSecret = secretbox.Open
+
+// What is opened for a secret that is not set: a value of a webhook
+// secret's usual length, under a name no secret has.
+const (
+	unsetName = "kipp: no such secret"
+	unsetSize = 40
+)
+
+// secret opens one secret. Its errors name it and never hold its value;
+// one that is not set is still a store.ErrNotFound, which the webhook asks
+// for. That one opens a value of the same kind first: the webhook asks for
+// the secret of every name it is sent, and an answer that came sooner for
+// a name without one would tell which jobs have a webhook.
+func (s *server) secret(ctx context.Context, name string) (string, error) {
+	sec, err := s.openSecretRecord(ctx, name)
+	if sec.Kind == config.SecretFile {
+		return string(sec.Data), err
+	}
+	return sec.Value, err
+}
+
+// openSecretRecord is secret for any kind: a file's bytes are Data, and
+// a userpass secret's password is Value.
+func (s *server) openSecretRecord(ctx context.Context, name string) (dispatch.Secret, error) {
+	rec, err := s.st.SecretRecord(ctx, name)
+	if errors.Is(err, store.ErrNotFound) {
+		_, _ = openSecret(s.key, unsetName, s.unset)
+		return dispatch.Secret{}, fmt.Errorf("secret %s is not set (kipp secret set %s): %w", name, name, err)
+	}
+	if err != nil {
+		return dispatch.Secret{}, fmt.Errorf("secret %s: %w", name, err)
+	}
+	value, err := openSecret(s.key, name, rec.Sealed)
+	if err != nil {
+		return dispatch.Secret{}, fmt.Errorf("secret %s does not open with this data directory's key, or was sealed under another name: %w", name, err)
+	}
+	if rec.Kind == config.SecretFile {
+		return dispatch.Secret{Kind: rec.Kind, Data: value, Scopes: rec.Scopes}, nil
+	}
+	return dispatch.Secret{Kind: rec.Kind, User: rec.User, Value: string(value), Scopes: rec.Scopes}, nil
+}
+
+// reload re-reads the jobs directory. A set with an error in it changes
+// nothing: the jobs stay as they were and the error is kept for the banner.
+//
+// The two messages below, "jobs reloaded" and "reload refused", are read
+// from the log by deploy scripts: their wording is part of what kipp
+// promises. TestTheTwoReloadLinesInTheLogKeepTheirWording holds them.
+func (s *server) reload(ctx context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.reloadAt = time.Now()
+	s.loadPlaces(ctx)
+	snap, err := config.Load(s.f.jobs)
+	if err != nil {
+		s.reloadErr = err.Error()
+		s.log.Error("reload refused; the previous job set stays", "err", err)
+		return &api.JobsRefused{Err: err}
+	}
+	s.reloadErr = ""
+	if err := s.ix.SetBase(ctx, snap); err != nil {
+		s.log.Error("reading the children of the multibranch jobs; the ones read before stay", "err", err)
+	}
+	if s.scanner != nil {
+		s.scanner.Reload() // a new file, or a new token, is read at once
+	}
+	s.log.Info("jobs reloaded", "count", len(snap.Names))
+	return nil
+}
+
+func (s *server) reloadError() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.reloadErr == "" {
+		return ""
+	}
+	return "The last reload was refused, so the jobs are as they were before it. " + s.reloadErr
+}
+
+func (s *server) handler() http.Handler {
+	au := auth.New(s.st, s.f.sessionTTL, s.deviceKey)
+	a := api.New(s.deps(au))
+	mux := http.NewServeMux()
+	mux.Handle("/api/", a.Handler())
+	hooks := webhook.New(s.d, webhook.Options{
+		Secret: s.secret,
+		Record: func(ctx context.Context, id, job string) error { return s.st.RecordDelivery(ctx, id, job, time.Now()) },
+		Index:  s.ix,
+		Rescan: func(job string) error {
+			if s.scanner == nil {
+				return nil
+			}
+			return s.scanner.Rescan(job)
+		},
+	})
+	mux.Handle(webhook.Prefix, hooks.Handler())
+	// With a listener of their own, the agents' calls are not on this one.
+	agents := s.hub.Handler()
+	if s.agentLn != nil {
+		agents = problem.NotFoundHandler()
+	}
+	mux.Handle(agentproto.Root, agents)
+	mux.Handle(cache.Prefix, s.cache.Handler())
+	data, err := filepath.Abs(s.f.data)
+	if err != nil {
+		data = s.f.data
+	}
+	mux.Handle("/", web.New(a, au, s.st, version.Version,
+		web.WithApps(web.AppFlow{DataDir: data, BaseURL: s.f.baseURL, API: s.f.githubAPI}))) // the pages and /static/
+	return mux
+}
+
+// deps are what the API is given of this server.
+func (s *server) deps(au *auth.Service) api.Deps {
+	return api.Deps{
+		Auth: au, Dispatch: s.d, Store: s.st, Reload: s.reload, ReloadError: s.reloadError,
+		Version: version.Version, Logger: s.log, ClientIP: s.f.clientIP,
+		Seal:       func(name string, value []byte) ([]byte, error) { return secretbox.Seal(s.key, name, value) },
+		ServerInfo: s.info, Listen: s.listenAddr,
+		Engines: s.pool.Status, Agents: s.hub.Agents, PlacesChanged: s.loadPlaces,
+		Cache: s.cache, Scanner: s.scanner,
+	}
+}
+
+// info is what the server runs with, as of now.
+func (s *server) info() api.ServerInfo {
+	s.mu.Lock()
+	reloadAt, reloadErr := s.reloadAt, s.reloadErr
+	s.mu.Unlock()
+	free, known := freeDisk(s.f.data)
+	dbSize := int64(-1)
+	if fi, err := os.Stat(filepath.Join(s.f.data, dbFile)); err == nil {
+		dbSize = fi.Size()
+	}
+	return api.ServerInfo{
+		Version: version.Version, GoVersion: runtime.Version(), Schema: s.st.Upgrade().To, StartedAt: s.startedAt,
+		Listen: s.listenAddr, BaseURL: s.f.baseURL, Executors: s.f.executors, Builds: s.d.Builds(), Shell: s.f.shell, SessionTTL: s.f.sessionTTL,
+		DefaultRunsOn: s.f.defaultRunsOn, AgentEnv: s.f.agentEnv, AgentURL: s.f.agentURL, AgentListen: s.agentListenAddr(),
+		TimeZone: s.d.Zone(nil).String(), DataDir: s.f.data, JobsDir: s.f.jobs,
+		FreeDisk: free, FreeDiskKnown: known, DBSize: dbSize, LastReloadAt: reloadAt, LastReloadError: reloadErr,
+	}
+}
+
+// agentListenAddr is the address --agent-listen took, empty without one.
+func (s *server) agentListenAddr() string {
+	if s.agentLn == nil {
+		return ""
+	}
+	return s.agentLn.Addr().String()
+}
+
+// hookPlan is the webhook kept on the repos of an owner job: one URL and
+// one secret for the job. Without --base-url GitHub has no address to
+// deliver to, and without the secret set a hook could not be verified, so
+// the repos are left to the scan and the reason is shown.
+func (s *server) hookPlan(ctx context.Context, owner string) index.HookPlan {
+	name := webhook.SecretName(owner)
+	if s.publicURL == "" {
+		return index.HookPlan{Off: "serve has no --base-url, so GitHub has no address to deliver to"}
+	}
+	secret, err := s.secret(ctx, name)
+	switch {
+	case errors.Is(err, store.ErrNotFound) || err == nil && secret == "":
+		return index.HookPlan{Off: "the secret " + name + " is not set (kipp secret set " + name + ")"}
+	case err != nil:
+		return index.HookPlan{Off: err.Error()}
+	}
+	return index.HookPlan{
+		URL: webhook.JobURL(s.publicURL, owner), Secret: secret,
+	}
+}
+
+// appClient is a client signed in as the App, for the account login.
+func (s *server) appClient(ctx context.Context, app *config.App, login string) (*github.Client, error) {
+	return s.apps.Get(app.ID, app.KeyFile).Client(ctx, login)
+}
+
+// run serves until ctx ends or the listener fails, then stops everything.
+func (s *server) run(ctx context.Context, ln net.Listener, stdout io.Writer) int {
+	// Not ctx's child: stop decides when the builds end.
+	work, stopWork := context.WithCancel(context.WithoutCancel(ctx))
+	defer stopWork()
+	s.scanner = index.NewScanner(work, s.ix, index.ScannerOptions{API: s.f.githubAPI, Token: s.secret, Trigger: s.d.Trigger, Quiet: s.d.Quiet, Hook: s.hookPlan, Log: s.log, App: s.appClient})
+	srv := &http.Server{
+		Handler:           s.handler(),
+		ReadHeaderTimeout: headerTimeout,
+		IdleTimeout:       idleTimeout,
+		// No WriteTimeout: the long-poll answers after up to a minute and
+		// a log stream stays open for as long as its build runs. No
+		// ReadTimeout either: its deadline stays on the connection while
+		// the handler runs, and the read that watches for a client leaving
+		// would then end every stream after it. The webhook, the one route
+		// that reads a large body from anyone, gives its body a deadline of
+		// its own; every other body is MaxBody at most.
+		ErrorLog: slog.NewLogLogger(s.log.Handler(), slog.LevelWarn),
+	}
+	// SIGHUP stays a reload until run returns: handed back any sooner, one
+	// that arrives while the builds are ending would kill the server.
+	hup := make(chan os.Signal, 1)
+	signal.Notify(hup, syscall.SIGHUP)
+	defer signal.Stop(hup)
+	var wg sync.WaitGroup
+	s.startWork(work, hup, &wg)
+	failed := make(chan error, 2)
+	go func() { failed <- srv.Serve(ln) }()
+	agentSrv := s.serveAgents(failed)
+	say(stdout, "kipp %s listening on http://%s, %s from %s, data in %s",
+		version.Version, ln.Addr(), jobCount(len(s.d.Snapshot().Names)), s.f.jobs, s.f.data)
+
+	code := 0
+	select {
+	case err := <-failed:
+		s.log.Error("the HTTP server stopped", "err", err)
+		code = 1
+	case <-ctx.Done():
+		s.log.Info("shutting down")
+	}
+	s.stop(stopWork, &wg, srv, agentSrv)
+	return code
+}
+
+// serveAgents serves /api/v1/agent/ on --agent-listen, when there is one; its
+// failure is the server's, as the main listener's is.
+func (s *server) serveAgents(failed chan<- error) *http.Server {
+	if s.agentLn == nil {
+		return nil
+	}
+	srv := &http.Server{
+		Handler: s.agentMux(), ReadHeaderTimeout: headerTimeout, IdleTimeout: idleTimeout,
+		ErrorLog: slog.NewLogLogger(s.log.Handler(), slog.LevelWarn),
+	}
+	go func() { failed <- srv.Serve(s.agentLn) }()
+	return srv
+}
+
+// agentMux is what --agent-listen serves: the agents' calls and the
+// stages' cache, both reached with a token and nothing else.
+func (s *server) agentMux() http.Handler {
+	mux := http.NewServeMux()
+	mux.Handle(agentproto.Root, s.hub.Handler())
+	mux.Handle(cache.Prefix, s.cache.Handler())
+	mux.Handle("/", problem.NotFoundHandler()) // nothing else is served here
+	return mux
+}
+
+// startWork starts what runs beside the HTTP server until work ends: the
+// queue, the cron and sweep clocks, and the reload on SIGHUP.
+func (s *server) startWork(work context.Context, hup <-chan os.Signal, wg *sync.WaitGroup) {
+	wg.Go(func() { s.d.Run(work) })
+	wg.Go(func() { s.hub.Run(work) })
+	wg.Go(func() { s.pool.Run(work) })
+	wg.Go(func() { every(work, time.Now, sleep, cronAt, s.d.Tick) })
+	// The sweep's half past three is in the server's zone.
+	zone := s.d.Zone(nil)
+	wg.Go(func() { every(work, func() time.Time { return time.Now().In(zone) }, sleep, sweepAt, s.sweep) })
+	wg.Go(func() { s.reloadOn(work, hup) })
+	// The first scan is at start; a job whose scan is 0 never scans on its own.
+	wg.Go(func() { s.scanner.Reload(); s.scanner.Run(work) })
+}
+
+// stop ends the server's work: it takes no new connection, ends the
+// builds, and lets the requests still open finish. The builds end while
+// those requests are open, not after, so that whoever waits on a build is
+// told it was lost instead of being cut off.
+func (s *server) stop(stopWork context.CancelFunc, wg *sync.WaitGroup, srvs ...*http.Server) {
+	ctx, giveUp := context.WithCancel(context.Background())
+	defer giveUp()
+	var drained sync.WaitGroup
+	for _, srv := range srvs {
+		if srv != nil {
+			drained.Go(func() { _ = srv.Shutdown(ctx) })
+		}
+	}
+	done := make(chan struct{})
+	go func() { drained.Wait(); close(done) }()
+	stopWork()
+	wg.Wait() // Run returns once its builds have ended as lost
+	select {
+	case <-done:
+	case <-time.After(drainGrace):
+		giveUp()
+		<-done
+		for _, srv := range srvs {
+			if srv != nil {
+				_ = srv.Close()
+			}
+		}
+	}
+}
+
+func (s *server) reloadOn(ctx context.Context, hup <-chan os.Signal) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-hup:
+			_ = s.reload(ctx) // it has logged why
+		}
+	}
+}
+
+// sweep is the daily retention pass. What it could not remove is logged,
+// and tomorrow's pass tries again.
+func (s *server) sweep(ctx context.Context, now time.Time) {
+	// The gone children past their days leave the job set first, so that
+	// their builds are kept as a removed job's.
+	if err := s.ix.Sweep(ctx); err != nil {
+		s.log.Error("sweeping the children of the multibranch jobs", "err", err)
+	}
+	if n, err := s.cache.Sweep(ctx); err != nil {
+		s.log.Error("cache sweep", "removed", n, "err", err)
+	} else if n > 0 {
+		s.log.Info("cache sweep", "removed", n)
+	}
+	n, err := retain.Sweep(ctx, s.st, s.d.Snapshot(), s.d.LogsDir(), now)
+	if err != nil {
+		s.log.Error("retention sweep", "deleted", n, "err", err)
+		return
+	}
+	s.log.Info("retention sweep", "deleted", n)
+}

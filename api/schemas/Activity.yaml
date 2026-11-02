@@ -1,0 +1,9 @@
+type: object
+additionalProperties: false
+description: One line of a job's activity, for example a reload or a scan.
+required: [at, line]
+properties:
+  at:
+    $ref: Timestamp.yaml
+  line:
+    type: string

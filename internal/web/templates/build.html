@@ -1,0 +1,121 @@
+{{define "scripts"}}<script src="{{static "build.js"}}" defer></script>{{end}}
+{{define "content"}}
+{{with .Data}}
+{{$build := .View.Build}}{{$page := buildPath $build}}
+<section id="live" class="stack" data-logs="{{range .Logs}}{{.Name}} {{end}}" data-open="{{range .Logs}}{{if .Open}}{{.Name}} {{end}}{{end}}"{{if .Live}} hx-get="{{$page}}" hx-select="#live" hx-target="this" hx-swap="outerHTML" hx-trigger="every 2s"{{end}}>
+{{$group := crumb .View.Group .View.Removed}}<div class="head">
+<div class="title">
+<h1 class="crumbs"><a class="link-plain" href="{{$group.Href}}">{{$group.Label}}</a><span aria-hidden="true">/</span><a class="link-plain" href="/jobs/{{$build.Job}}">{{$build.Job}}</a><span aria-hidden="true">/</span><span>#{{$build.Number}}</span> <span class="status {{$build.Status}}">{{$build.Status}}</span></h1>
+<p class="meta"><span>{{$build.Trigger}}{{with $build.StartedBy}} by {{.}}{{end}}{{with $build.TriggerDetail}} ({{.}}){{end}}</span>{{if $build.StartedAt}}<span>started {{clock $build.StartedAt}}</span>{{with .Waited}}<span>waited {{.}}</span>{{end}}<span>took {{took $build.StartedAt $build.FinishedAt}}</span>{{else}}<span>queued {{clock $build.QueuedAt}}</span>{{end}}{{with .Exit}}<span>exit {{.}}</span>{{end}}{{with $build.KeptAt}}<span>kept by {{$build.KeptBy}} {{clock .}}</span>{{end}}</p>
+</div>
+{{if .CanCancel}}<form class="build" method="post" action="{{$page}}/cancel">
+<input type="hidden" name="csrf" value="{{$.CSRF}}">
+<button class="action action-danger action-small">Cancel</button>
+</form>
+{{end}}{{if .CanKeep}}<form class="build" method="post" action="{{$page}}/{{if $build.KeptAt}}unkeep{{else}}keep{{end}}">
+<input type="hidden" name="csrf" value="{{$.CSRF}}">
+<button class="action">{{if $build.KeptAt}}Stop keeping{{else}}Keep{{end}}</button>
+</form>
+{{end}}{{if .CanAgain}}<form class="build" method="post" action="{{$page}}/again">
+<input type="hidden" name="csrf" value="{{$.CSRF}}">
+<button class="action action-main">Build again</button>
+</form>
+{{end}}</div>
+{{if $build.Params}}<dl class="facts">
+<div><dt>Params</dt><dd>{{range $name, $value := $build.Params}}{{if lines $value}}<code>{{$name}}</code><pre>
+{{$value}}</pre>{{else}}<code>{{$name}}={{$value}}</code> {{end}}{{end}}</dd></div>
+</dl>{{end}}
+
+{{if gt (len .View.Stages) 1}}
+<div class="scroll">{{template "dag" (dag .View.Stages .View.Needs)}}</div>
+<div class="scroll">
+<table>
+<thead><tr><th>Stage</th><th>Status</th><th>Exit</th><th>Started</th><th>Took</th><th>On</th></tr></thead>
+<tbody>
+{{range .View.Stages}}<tr>
+<td>{{.Name}}</td>
+<td><span class="status {{.Status}}">{{.Status}}</span>{{if gt .Tries 1}}<span class="sub">, {{.Tries}} tries</span>{{end}}</td>
+<td>{{with .ExitCode}}{{.}}{{end}}</td>
+<td>{{clock .StartedAt}}</td>
+<td>{{took .StartedAt .FinishedAt}}</td>
+<td>{{with .RanOn}}{{if ne . "local"}}<code>{{.}}</code>{{else}}<span class="sub">the server</span>{{end}}{{end}}</td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>
+{{end}}
+
+{{if .Guards}}
+<details class="guards" id="guards" open>
+<summary><h2>Guards</h2></summary>
+<div class="scroll">
+<table>
+<thead><tr><th>Stage</th><th>Result</th><th>Guard</th></tr></thead>
+<tbody>
+{{range .Guards}}<tr>
+<td>{{.Stage}}</td>
+<td><span class="status {{if eq .Outcome "held"}}success{{else}}{{.Outcome}}{{end}}">{{.Outcome}}</span></td>
+<td><code>{{.Line}}</code></td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>
+</details>
+{{end}}
+
+{{if .Artifacts}}
+<details class="artifacts" id="artifacts" open>
+<summary><h2>Artifacts</h2></summary>
+<div class="scroll">
+<table>
+<thead><tr><th>Stage</th><th>File</th><th class="num">Size</th></tr></thead>
+<tbody>
+{{range .Artifacts}}{{$stage := .Stage}}{{$zip := .Zip}}{{range $i, $f := .Files}}<tr>
+<td>{{if eq $i 0}}{{$stage}} <a class="link sub" href="{{$zip}}" download>zip</a>{{end}}</td>
+<td><a class="link" href="{{$f.Href}}" download><code>{{$f.Path}}</code></a></td>
+<td class="num">{{$f.Size}}</td>
+</tr>
+{{end}}{{end}}</tbody>
+</table>
+</div>
+</details>
+{{end}}
+
+{{if .Total}}
+{{$all := printf "%s?results=all" $page}}{{$failed := index .Counts "failed"}}
+<details class="results" id="results"{{if or $failed .AllTests}} open{{end}}>
+<summary><h2>Results</h2> {{with $failed}}<span class="status failed">{{.}} failed</span> {{end}}{{with index .Counts "passed"}}<span class="status success">{{.}} passed</span> {{end}}{{with index .Counts "skipped"}}<span class="status skipped">{{.}} skipped</span>{{end}}</summary>
+<div id="results-box" class="stack">
+<p class="sub">{{if .AllTests}}<a class="link" href="{{$page}}" hx-get="{{$page}}" hx-select="#results-box" hx-target="#results-box" hx-swap="outerHTML">{{if $failed}}Show only the {{$failed}} that failed{{else}}Hide them{{end}}</a>{{else}}<a class="link" href="{{$all}}" hx-get="{{$all}}" hx-select="#results-box" hx-target="#results-box" hx-swap="outerHTML">Show all {{.Total}}</a>{{end}}</p>
+{{if .Tests}}
+<div class="scroll tall">
+<table>
+<thead><tr><th>Stage</th><th>Suite</th><th>Case</th><th>Result</th><th>Took</th></tr></thead>
+<tbody>
+{{range .Tests}}<tr>
+<td>{{.Stage}}</td>
+<td>{{.Suite}}</td>
+<td>{{.Name}}{{with .Message}}<div class="message">{{.}}</div>{{end}}</td>
+<td><span class="dot {{.Status}}"></span> {{.Status}}</td>
+<td>{{millis .DurationMs}}</td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>
+{{end}}
+</div>
+</details>
+{{end}}
+</section>
+
+{{if .Logs}}
+<h2>Logs</h2>
+{{range .Logs}}<details class="log" id="log-{{.Name}}"{{if .Open}} open{{end}}>
+<summary>{{.Name}}</summary>
+{{$log := printf "/api/v1/builds/%d/stages/%s/log" $build.ID .Name}}<div class="sub log-note"><span data-cut hidden></span><span>Download the whole log: <a class="link" href="{{$log}}?download=true">as written</a>, <a class="link" href="{{$log}}?download=true&amp;timestamps=true">with times</a></span><label class="check"><input type="checkbox" data-times checked> Timestamps</label></div>
+<pre data-log="/api/v1/builds/{{$build.ID}}/stages/{{.Name}}/log" tabindex="0"></pre>
+</details>
+{{end}}
+{{end}}
+{{end}}
+{{end}}

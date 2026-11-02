@@ -1,0 +1,24 @@
+name: smoke
+group: ci
+description: Lint, unit tests and a smoke test of the example app.
+params:
+  TIER: {type: choice, options: [quick, full], default: quick}
+  DRY_RUN: {type: bool, default: true}
+  TARGET: {default: staging, description: "Where to deploy: staging or production."}
+  NOTES: {type: text, default: "what this run is for\nand why\n"}
+triggers:
+  cron: "H 3 * * *"
+  after: [cleanup]
+concurrency: drop
+locks: [checkout]
+timeout: 2h
+keep: {builds: 50, days: 30}
+env: {LOG_LEVEL: debug}
+secrets: [CHAT_TOKEN]
+workdir: /tmp
+stages:
+  lint: {run: make lint}
+  unit: {run: make test, unstable_exit: [4]}
+  smoke: {needs: [lint, unit], run: make smoke TIER=$TIER, junit: "reports/*.xml"}
+on_failure: {run: ./notify.sh failed}
+on_success: {run: ./notify.sh passed}

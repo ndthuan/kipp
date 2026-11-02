@@ -1,0 +1,18 @@
+type: object
+additionalProperties: false
+description: A parameter a build of the job may be given.
+required: [name, type, options, default, description]
+properties:
+  name:
+    type: string
+  type:
+    type: string
+  options:
+    type: array
+    items:
+      type: string
+  default:
+    type: string
+  description:
+    type: [string, "null"]
+    description: What the job's file says of it; null when it says nothing.

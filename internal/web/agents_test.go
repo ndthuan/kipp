@@ -1,0 +1,155 @@
+package web
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/ndthuan/kipp/internal/api"
+	"github.com/ndthuan/kipp/internal/auth"
+	"github.com/ndthuan/kipp/internal/store"
+)
+
+func TestTheAgentsPageIsForAnAdminOnly(t *testing.T) {
+	e := site(t)
+	bob := e.login(t, "bob")
+	code, _ := get(t, bob, e.srv.URL+"/admin/agents")
+	eq(t, "a user", code, http.StatusForbidden)
+	res, _ := e.form(t, bob, "/admin/agents/engines", url.Values{"name": {"mac"}, "url": {"unix:///d.sock"}, "labels": {"linux"}, "max": {"1"}})
+	eq(t, "a user adding an engine", res.StatusCode, http.StatusForbidden)
+	_, page := get(t, e.login(t, "admin"), e.srv.URL+"/jobs/smoke")
+	contains(t, page, `<a href="/admin/agents">Agents</a>`)
+	if strings.Index(page, `href="/admin/secrets"`) > strings.Index(page, `href="/admin/agents"`) || strings.Index(page, `href="/admin/agents"`) > strings.Index(page, `href="/admin/server"`) {
+		t.Fatal("Agents is not between Secrets and Server")
+	}
+}
+
+func TestTheAgentsPageAddsAnEngineAndAnAgentWhoseTokenIsShownOnce(t *testing.T) {
+	e := site(t)
+	admin := e.login(t, "admin")
+	code, page := get(t, admin, e.srv.URL+"/admin/agents")
+	eq(t, "agents", code, http.StatusOK)
+	selfContained(t, page)
+	contains(t, page, "No engine is registered.", "No standing agent is registered.", `action="/admin/agents/engines"`, `action="/admin/agents/agents"`)
+
+	engine := url.Values{"name": {"mac"}, "url": {"ssh://me@192.0.2.1?socket=/s.sock"}, "labels": {"linux,arm64"}, "max": {"2"}}
+	res, _ := e.form(t, admin, "/admin/agents/engines", engine)
+	eq(t, "without sudo", res.StatusCode, http.StatusForbidden)
+	e.sudo(t, admin)
+	res, _ = e.form(t, admin, "/admin/agents/engines", engine)
+	eq(t, "add an engine", res.StatusCode, http.StatusSeeOther)
+	got, err := e.st.Engine(context.Background(), "mac")
+	must(t, err)
+	if got.URL != "ssh://me@192.0.2.1?socket=/s.sock" || got.Max != 2 || len(got.Labels) != 2 || !got.Enabled {
+		t.Fatalf("%+v", got)
+	}
+	res, page = e.form(t, admin, "/admin/agents/engines", url.Values{"name": {"tcp"}, "url": {"tcp://host:2376"}, "labels": {"linux"}, "max": {"1"}})
+	eq(t, "an engine kipp would not dial", res.StatusCode, http.StatusBadRequest)
+	contains(t, page, "a tcp engine needs --tls-ca, --tls-cert and --tls-key", `value="tcp://host:2376"`, `role="alert"`)
+
+	res, page = e.form(t, admin, "/admin/agents/agents", url.Values{"name": {"box"}, "labels": {"linux"}, "executors": {"2"}})
+	eq(t, "add an agent", res.StatusCode, http.StatusOK)
+	contains(t, page, "Token for the agent box", "KIPP_AGENT_TOKEN")
+	token := onceValue(t, page)
+	a, err := e.st.AgentByTokenHash(context.Background(), auth.HashToken(token))
+	must(t, err)
+	eq(t, "the agent", a.Name, "box")
+	_, page = get(t, admin, e.srv.URL+"/admin/agents")
+	contains(t, page, "<code>linux, arm64</code>", "box", "never seen", "0 of 2", "not asked yet")
+	lacks(t, page, token)
+	lacks(t, e.audit(t), token)
+	contains(t, e.audit(t), "admin engine.add mac", "admin agent.add box")
+}
+
+func TestAnEngineAndAnAgentAreDisabledAndRemovedAfterAPageThatAsks(t *testing.T) {
+	e := site(t)
+	admin := e.login(t, "admin")
+	e.sudo(t, admin)
+	ctx := context.Background()
+	must(t, e.st.PutEngine(ctx, store.Engine{Name: "mac", Kind: "docker", URL: "unix:///d.sock", Labels: []string{"linux"}, Max: 1, Enabled: true}))
+	must(t, e.st.PutAgent(ctx, store.Agent{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true, TokenHash: "old"}))
+	for _, path := range []string{"/admin/agents/engines/mac/disable", "/admin/agents/agents/box/disable"} {
+		res, _ := e.form(t, admin, path, nil)
+		eq(t, path, res.StatusCode, http.StatusSeeOther)
+	}
+	en, err := e.st.Engine(ctx, "mac")
+	must(t, err)
+	ag, err := e.st.Agent(ctx, "box")
+	must(t, err)
+	if en.Enabled || ag.Enabled {
+		t.Fatal("not disabled")
+	}
+	_, page := get(t, admin, e.srv.URL+"/admin/agents")
+	contains(t, page, `<span class="tag">disabled</span>`, `action="/admin/agents/engines/mac/enable"`, `action="/admin/agents/agents/box/enable"`)
+
+	code, page := get(t, admin, e.srv.URL+"/admin/agents/agents/box/token")
+	eq(t, "confirm a new token", code, http.StatusOK)
+	contains(t, page, "A new token for the agent box?")
+	res, page := e.form(t, admin, "/admin/agents/agents/box/token", nil)
+	eq(t, "a new token", res.StatusCode, http.StatusOK)
+	if _, err := e.st.AgentByTokenHash(ctx, auth.HashToken(onceValue(t, page))); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, which := range []string{"engines/mac", "agents/box"} {
+		code, page := get(t, admin, e.srv.URL+"/admin/agents/"+which+"/delete")
+		eq(t, "confirm "+which, code, http.StatusOK)
+		contains(t, page, "Remove the")
+		res, _ := e.form(t, admin, "/admin/agents/"+which+"/delete", nil)
+		eq(t, "remove "+which, res.StatusCode, http.StatusSeeOther)
+	}
+	if _, err := e.st.Engine(ctx, "mac"); err == nil {
+		t.Fatal("the engine is still there")
+	}
+	if _, err := e.st.Agent(ctx, "box"); err == nil {
+		t.Fatal("the agent is still there")
+	}
+	code, _ = get(t, admin, e.srv.URL+"/admin/agents/agents/none/delete")
+	eq(t, "no such agent", code, http.StatusNotFound)
+}
+
+func TestTheBuildPageSaysWhereEachStageRan(t *testing.T) {
+	e := site(t)
+	ctx := context.Background()
+	b := &store.Build{Job: "smoke", Status: store.Success, Trigger: "api"}
+	must(t, e.st.CreateBuild(ctx, b))
+	must(t, e.st.PutStages(ctx, b.ID, []string{"a", "b"}, nil))
+	must(t, e.st.SetStageRanOn(ctx, b.ID, "a", "mac/1"))
+	must(t, e.st.SetStageRanOn(ctx, b.ID, "b", "local"))
+	_, page := get(t, e.login(t, "admin"), e.srv.URL+"/jobs/smoke/"+strconv.Itoa(b.Number))
+	contains(t, page, "<th>On</th>", "<code>mac/1</code>", `<span class="sub">the server</span>`)
+}
+
+func TestTheQueueSaysWhatAStageWaitsForToBePlaced(t *testing.T) {
+	e := site(t)
+	rec := httptest.NewRecorder()
+	q := &api.QueueView{Running: []api.RunningView{{
+		Build:   &store.Build{ID: 1, Job: "smoke", Number: 3, Status: store.Running},
+		Stages:  []string{"s"},
+		Waiting: map[string]string{"s": "waiting for an agent with labels [linux]"},
+	}}}
+	e.site.render(rec, httptest.NewRequest(http.MethodGet, "/queue", nil), "queue", http.StatusOK, page{Title: "Queue", Data: queueData{Queue: q, Full: true}, Queue: q})
+	eq(t, "status", rec.Code, http.StatusOK)
+	contains(t, rec.Body.String(), `<span class="sub">s: waiting for an agent with labels [linux]</span>`)
+}
+
+func TestTheBuildPageSaysHowManyTriesAStageTookOnlyWhenItWasMoreThanOne(t *testing.T) {
+	e := site(t)
+	ctx := context.Background()
+	b := &store.Build{Job: "smoke", Status: store.Success, Trigger: "api"}
+	must(t, e.st.CreateBuild(ctx, b))
+	must(t, e.st.PutStages(ctx, b.ID, []string{"a", "b"}, nil))
+	must(t, e.st.SetStage(ctx, b.ID, "a", store.StageSuccess, nil, time.Now()))
+	must(t, e.st.SetStage(ctx, b.ID, "b", store.StageSuccess, nil, time.Now()))
+	must(t, e.st.SetStageTries(ctx, b.ID, "a", 2))
+	_, page := get(t, e.login(t, "admin"), e.srv.URL+"/jobs/smoke/"+strconv.Itoa(b.Number))
+	contains(t, page, `>success</span><span class="sub">, 2 tries</span>`)
+	if strings.Count(page, " tries</span>") != 1 {
+		t.Fatalf("a stage that ran once says its tries:\n%s", page)
+	}
+}

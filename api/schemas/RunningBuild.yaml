@@ -1,0 +1,29 @@
+type: object
+additionalProperties: false
+required: [id, job, number, trigger, started_by, queued_at, started_at, stages, waiting_stages]
+properties:
+  id:
+    type: integer
+    format: int64
+  job:
+    type: string
+  number:
+    type: integer
+  trigger:
+    type: string
+  started_by:
+    type: string
+  queued_at:
+    $ref: Timestamp.yaml
+  started_at:
+    $ref: NullableTimestamp.yaml
+  stages:
+    type: array
+    items:
+      type: string
+    description: The stages running now.
+  waiting_stages:
+    type: object
+    additionalProperties:
+      type: string
+    description: By stage, what one that waits for an agent or an engine waits for.

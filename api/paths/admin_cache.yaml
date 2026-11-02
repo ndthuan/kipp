@@ -1,0 +1,27 @@
+get:
+  operationId: listCacheEntries
+  tags: [admin]
+  summary: The entries of the build cache
+  description: For an admin; a token may read it.
+  x-kipp-package: api
+  parameters:
+    - $ref: ../parameters/Limit.yaml
+    - $ref: ../parameters/Cursor.yaml
+  responses:
+    "200":
+      description: |
+        Up to `limit` entries, 100 by default, the least recently restored
+        first. An entry restored while the pages are read moves to the end, so
+        it can be read twice, and no entry is missed.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/CacheEntryList.yaml
+    "400":
+      $ref: ../responses/BadRequest.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "403":
+      $ref: ../responses/Forbidden.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

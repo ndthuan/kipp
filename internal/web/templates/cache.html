@@ -1,0 +1,26 @@
+{{define "content"}}
+{{with .Data}}
+<h1>Cache</h1>
+{{with .Notice}}<p class="notice" role="status">{{.}}</p>{{end}}
+<p class="lead">The keyed caches stages declare with <code>cache</code> or save with <code>kipp cache save</code>, kept under the data directory. {{bytes .Total}} in all. The least recently restored go first when <code>--cache-max</code> is passed, and any not restored for 7 days go daily.</p>
+{{range .Scopes}}<h2>{{.Name}} <span class="sub">{{len .Entries}} {{if eq (len .Entries) 1}}entry{{else}}entries{{end}}, {{bytes .Size}}</span></h2>
+<div class="scroll">
+<table>
+<thead><tr><th>Key</th><th>Namespace</th><th>Size</th><th>Saved</th><th>Restored</th><th><span class="sr-only">Actions</span></th></tr></thead>
+<tbody>
+{{range .Entries}}<tr>
+<td><code>{{.Key}}</code></td>
+<td>{{.Namespace}}</td>
+<td>{{bytes .Size}}</td>
+<td>{{clock .SavedAt}}</td>
+<td>{{if .LastRestoredAt.IsZero}}<span class="sub">never</span>{{else}}{{clock .LastRestoredAt}}{{end}}</td>
+<td><a class="action action-quiet action-small" href="/admin/cache/entries/{{.ID}}/delete">Remove</a></td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>
+<p><a class="action action-quiet action-small" href="{{scopePath .Name}}/delete">Remove every entry of {{.Name}}</a></p>
+{{else}}<p class="sub">No cache is kept yet.</p>
+{{end}}
+{{end}}
+{{end}}

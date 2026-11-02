@@ -1,0 +1,77 @@
+{{define "scripts"}}<script src="{{static "metrics.js"}}" defer></script>{{end}}
+{{define "content"}}
+{{with .Data}}{{$store := .Store.Store}}{{$metric := .Metric}}
+<div class="head">
+<h1 class="crumbs"><a class="link-plain" href="/metrics">Metrics</a><span aria-hidden="true">/</span><span>{{$store}}</span></h1>
+</div>
+{{if .Store.Orphaned}}<p class="notice notice-warn">No loaded job names this store, so only an admin sees it. What it remembers stays until <code>kipp metrics forget</code> takes it.</p>
+{{else}}<dl class="facts">
+<div><dt>Jobs</dt><dd>{{range $i, $job := .Store.Jobs}}{{if $i}}, {{end}}<a class="link" href="/jobs/{{$job}}">{{$job}}</a>{{end}}</dd></div>
+</dl>
+{{end}}
+{{if .Store.Metrics}}
+<nav class="picks" aria-label="Metrics">
+<ul>
+{{range .Store.Metrics}}<li><a class="pick" href="{{metricsPath $store .Name}}"{{if eq .Name $metric}} aria-current="page"{{end}}>{{.Name}} <span class="sub">{{.Items}}</span></a></li>
+{{end}}</ul>
+</nav>
+
+<h2 id="remembered">{{$metric}}</h2>
+<p class="sub">{{.Total}} {{if eq .Total 1}}item{{else}}items{{end}} remembered{{if gt .Total (len .Rows)}}; the first {{len .Rows}} by item are listed here, and the API answers every one{{end}}. The line is each item's last 50 values, the oldest at the left.</p>
+<div class="scroll tall">
+<table class="metric" data-sortable>
+<thead><tr><th data-sort="text">Item</th><th class="num" data-sort="number">Value</th><th>Last 50</th><th>Unit</th><th data-sort="text">Remembered from</th><th data-sort="number" class="when">When</th></tr></thead>
+<tbody>
+{{range .Rows}}<tr>
+<td class="item">{{.Item}}</td>
+<td class="num" data-value="{{.Value}}">{{.Value}}</td>
+<td class="spark-cell" data-values="{{.Spark}}"></td>
+<td>{{.Unit}}</td>
+<td data-value="{{.From}}">{{if .Build}}<a class="link" href="{{.Build}}">{{.From}}</a>{{else}}<span class="sub">{{.From}}</span>{{end}}</td>
+<td class="when" data-value="{{.At.Unix}}">{{clock .At}}</td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>
+
+<h2 id="compare">Compare</h2>
+{{if .Builds}}<form class="compare" method="get" action="{{metricsPath $store ""}}">
+<input type="hidden" name="metric" value="{{$metric}}">
+<div>
+<label class="entry-label" for="compare-from">From the build</label>
+<select class="entry" id="compare-from" name="from">
+{{range .Builds}}<option value="{{.ID}}"{{if eq (printf "%d" .ID) $.Data.From}} selected{{end}}>{{.Job}} #{{.Number}}, {{.Status}}, {{clock .At}}</option>
+{{end}}</select>
+</div>
+<div>
+<label class="entry-label" for="compare-to">To</label>
+<select class="entry" id="compare-to" name="to">
+<option value="remembered"{{if or (eq $.Data.To "") (eq $.Data.To "remembered")}} selected{{end}}>what the store remembers</option>
+{{range .Builds}}<option value="{{.ID}}"{{if eq (printf "%d" .ID) $.Data.To}} selected{{end}}>{{.Job}} #{{.Number}}, {{.Status}}, {{clock .At}}</option>
+{{end}}</select>
+</div>
+<div><button class="action action-main">Compare</button></div>
+</form>
+{{else}}<p class="sub">No build you may see has reported into this store, so there is nothing to compare.</p>
+{{end}}
+{{with .CompareError}}<p class="notice notice-error" role="alert">{{.}}</p>
+{{else}}{{if .Compared}}
+<p class="sub">{{.CompareTotal}} {{if eq .CompareTotal 1}}item{{else}}items{{end}}, the largest change first, then those on one side only{{if gt .CompareTotal (len .Compare)}}; the first {{len .Compare}} are listed here, and the API answers every one{{end}}.</p>
+{{if .Compare}}<div class="scroll tall">
+<table class="metric" data-sortable>
+<thead><tr><th data-sort="text">Item</th><th class="num" data-sort="number">From</th><th class="num" data-sort="number">To</th><th class="num" data-sort="number">Change</th></tr></thead>
+<tbody>
+{{range .Compare}}<tr>
+<td class="item">{{.Item}}</td>
+<td class="num" data-value="{{.From}}">{{or .From "-"}}</td>
+<td class="num" data-value="{{.To}}">{{or .To "-"}}</td>
+<td class="num" data-value="{{if .Delta}}{{.Change}}{{end}}">{{if .Delta}}{{.Delta}}{{else}}<span class="sub">{{if .From}}not in To{{else}}not in From{{end}}</span>{{end}}</td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>{{end}}
+{{end}}{{end}}
+{{else}}<p class="sub">This store remembers nothing yet.</p>
+{{end}}
+{{end}}
+{{end}}

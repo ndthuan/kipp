@@ -1,0 +1,27 @@
+type: object
+additionalProperties: false
+description: One stage of a build.
+required: [name, needs, status, exit_code, started_at, finished_at, ran_on, tries]
+properties:
+  name:
+    type: string
+  needs:
+    type: array
+    items:
+      type: string
+    description: The stages that must end well before this one starts.
+  status:
+    $ref: StageStatus.yaml
+  exit_code:
+    type: [integer, "null"]
+  started_at:
+    $ref: NullableTimestamp.yaml
+  finished_at:
+    $ref: NullableTimestamp.yaml
+  ran_on:
+    type: string
+    description: Where it ran, `local`, an agent's name, or `engine/n` for a container; empty before it starts.
+  tries:
+    type: integer
+    minimum: 1
+    description: How many times its command ran, which `retries` makes more than one; 1 for a stage that ran once or has not run.

@@ -1,0 +1,2 @@
+type: string
+enum: [pending, running, success, unstable, failed, skipped, cancelled]

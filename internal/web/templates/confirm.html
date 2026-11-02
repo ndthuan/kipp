@@ -1,0 +1,16 @@
+{{define "content"}}
+{{with .Data}}
+<form class="panel stack narrow" method="post" action="{{.Action}}">
+<h1>{{.Heading}}</h1>
+{{range .Lines}}<p>{{.}}</p>
+{{end}}<input type="hidden" name="csrf" value="{{$.CSRF}}">
+{{with $.Once}}<input type="hidden" name="once" value="{{.}}">
+{{end}}
+{{with .Check}}<label class="check"><input type="checkbox" name="{{.Name}}"> {{.Label}}</label>
+{{end}}<div class="actions">
+<button class="action action-danger">{{.Button}}</button>
+<a class="link" href="{{.Back}}">Cancel</a>
+</div>
+</form>
+{{end}}
+{{end}}

@@ -1,0 +1,47 @@
+get:
+  operationId: redirectToLatestArtifacts
+  tags: [jobs]
+  summary: Redirect to the artifacts of a job's newest good build
+  description: |
+    Redirects to the newest build of the job that ended with one of the given
+    statuses and whose stage kept something: to its listing, or with `path` to
+    that file of it.
+  x-kipp-package: api
+  parameters:
+    - $ref: ../parameters/JobName.yaml
+    - name: stage
+      in: query
+      required: true
+      description: The name of one of the job's stages.
+      schema:
+        type: string
+    - name: path
+      in: query
+      description: A file's path inside the stage's directory.
+      schema:
+        type: string
+    - name: status
+      in: query
+      description: The statuses a build may have ended with, given once or more, each one status or several separated by commas. `success` when none is given.
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          $ref: ../schemas/BuildStatus.yaml
+  responses:
+    "302":
+      description: Where the artifacts are.
+      headers:
+        Location:
+          required: true
+          schema:
+            type: string
+    "400":
+      $ref: ../responses/BadRequest.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "404":
+      $ref: ../responses/NotFound.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

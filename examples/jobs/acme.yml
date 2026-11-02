@@ -1,0 +1,40 @@
+# One job file indexes every repo of a GitHub owner that holds .kipp.yml at
+# its default branch. Each such repo is a multibranch job of its own
+# (acme.site, acme.api), and its branches and pull requests are that job's
+# children (acme.site.main, acme.site.pr-12). Archived repos and forks are
+# skipped. What a repo may not grant itself stays here, for every repo
+# unless owner.repos says otherwise.
+#
+# kipp makes the webhook on each repo (push and pull_request, to
+# POST /api/v1/hooks/github/acme, signed with GITHUB_WEBHOOK_ACME) when serve has
+# --base-url and the token may write webhooks; where it cannot, the scan
+# builds what a delivery would have.
+#
+# To sign in as a GitHub App rather than with a token, replace the token line
+# by the next one (docs/organization-folders.md, GitHub App); the App's own
+# webhook, POST /api/v1/hooks/github-app/acme with GITHUB_APP_WEBHOOK_ACME, then
+# takes the place of the per-repo hooks:
+#   app: {id: 123456, key_file: /var/lib/kipp/apps/acme.pem}
+name: acme
+group: acme
+description: Every repo of acme that holds .kipp.yml.
+owner:
+  login: acme
+  token: GITHUB_TOKEN_ACME     # a kipp secret; Webhooks read and write, Contents read
+  include: ["*"]               # names and path.Match patterns, any case
+  exclude: ["*-archive", "sandbox-*"]
+  clone: https://github.com/%s.git
+  path: .kipp.yml
+  branches: [default]
+  pull_requests: merge
+  scan: 30m
+  orphans: {days: 7}
+  repos:
+    api:
+      secrets: [API_DEPLOY_KEY]    # replaces the job's secrets for acme/api
+      env: {REGION: eu}            # added to the job's env
+secrets: [DEPLOY_KEY]
+locks: [acme-ports]
+triggers:
+  cron: "H 3 * * *"              # builds the default branch of every repo
+keep: {builds: 50}

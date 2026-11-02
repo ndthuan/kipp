@@ -1,0 +1,25 @@
+type: object
+additionalProperties: false
+description: One repo of an owner job.
+required: [job, repo, state, hook, hook_note, children_count, worst]
+properties:
+  job:
+    type: string
+  repo:
+    type: string
+  state:
+    type: string
+    enum: [live, gone]
+  hook:
+    type: [string, "null"]
+    enum: [ok, "off", null]
+    description: "`ok` where kipp keeps the repo's webhook, `off` where it cannot."
+  hook_note:
+    type: [string, "null"]
+    description: Why the hook is off.
+  children_count:
+    type: integer
+  worst:
+    oneOf:
+      - $ref: BuildStatus.yaml
+      - type: "null"

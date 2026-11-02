@@ -1,0 +1,13 @@
+type: object
+additionalProperties: false
+description: What the stages of a build reported and what the guards made of it.
+required: [build, store, stages]
+properties:
+  build:
+    $ref: BuildRef.yaml
+  store:
+    type: string
+  stages:
+    type: array
+    items:
+      $ref: StageMetrics.yaml

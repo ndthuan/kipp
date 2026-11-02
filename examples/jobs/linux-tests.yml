@@ -1,0 +1,20 @@
+# The tests on Linux, from a server on any system: the stage runs in a
+# golang container that kipp starts on an engine carrying the label linux
+# (kipp engine add), and the container is removed when the build ends. A
+# stage on an agent shares no files with the server, so it clones the
+# repository itself; a stage with runs_on and no image runs on a standing
+# agent instead (kipp agent add).
+name: linux-tests
+group: ci
+description: Run the tests on Linux in a fresh container on every push to main.
+triggers:
+  webhook: {repo: example/app, branches: [main]}
+timeout: 30m
+stages:
+  test:
+    runs_on: linux
+    image: golang:1.27
+    run: |
+      git clone --quiet https://github.com/example/app.git src
+      cd src && git checkout --quiet --detach "${KIPP_COMMIT:-origin/main}"
+      go test ./...

@@ -1,0 +1,16 @@
+type: object
+additionalProperties: false
+description: What is known of an API token, never the token or its hash.
+required: [id, label, created_at, last_used_at, expires_at]
+properties:
+  id:
+    type: integer
+    format: int64
+  label:
+    type: string
+  created_at:
+    $ref: Timestamp.yaml
+  last_used_at:
+    $ref: NullableTimestamp.yaml
+  expires_at:
+    $ref: NullableTimestamp.yaml

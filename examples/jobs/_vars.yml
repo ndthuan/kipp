@@ -1,0 +1,11 @@
+# Variables declared once for the jobs that name them. This file is no job.
+# A job's own env: overrides these, and a param overrides both. Nothing here
+# is secret: use `kipp secret set` for that.
+global:
+  REGISTRY: registry.example.com
+groups:
+  ci:
+    CI_CACHE_URL: https://cache.example.com
+jobs:
+  "site-*":
+    SITE_REGION: eu

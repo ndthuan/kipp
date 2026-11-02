@@ -1,0 +1,14 @@
+type: object
+additionalProperties: false
+required: [name, metrics, guards]
+properties:
+  name:
+    type: string
+  metrics:
+    type: array
+    items:
+      $ref: ReportedMetric.yaml
+  guards:
+    type: array
+    items:
+      $ref: Guard.yaml

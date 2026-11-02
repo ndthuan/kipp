@@ -1,0 +1,20 @@
+get:
+  operationId: getBuildMetrics
+  tags: [builds, metrics]
+  summary: What the stages of a build reported, and what the guards made of it
+  x-kipp-package: api
+  parameters:
+    - $ref: ../parameters/BuildId.yaml
+  responses:
+    "200":
+      description: The build's metrics by stage.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/BuildMetrics.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "404":
+      $ref: ../responses/NotFound.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

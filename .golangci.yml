@@ -1,0 +1,142 @@
+version: "2"
+# The tests against a real engine are linted with the rest.
+run:
+  build-tags: [dockerreal]
+# staticcheck runs here, not standalone: v0.8.1 cannot read Go 1.27 export data.
+linters:
+  default: standard
+  enable:
+    - modernize
+    - gocritic
+    - revive
+    - errorlint
+    - misspell
+    - unconvert
+    - unparam
+    - nolintlint
+    - gosec
+    - gocognit
+    - staticcheck
+  settings:
+    gocognit:
+      min-complexity: 15
+    revive:
+      rules:
+        - name: exported
+          arguments: [checkPrivateReceivers]
+  # The one list of findings that stay. Each is a file and a rule, and the
+  # flagged behaviour is what the code is for; //nolint is not used. Add to
+  # it only what cannot be fixed in the code without hiding it from the
+  # linter or giving the feature up, with the reason beside it.
+  exclusions:
+    warn-unused: true
+    rules:
+      # Running a job's command is what kipp is for.
+      - path: ^internal/runner/local\.go$
+        text: "G204"
+      # git on the repo and ref of a job file; a leading dash is refused.
+      - path: ^internal/dispatch/build\.go$
+        text: "G204"
+      # The coverage tool reads the reports its caller names.
+      - path: ^internal/devtools/coverage/main\.go$
+        text: "G304"
+      # The CLI talks to the server its user names (--url, KIPP_URL) and
+      # reads the token from its user's config directory.
+      - path: ^internal/cli/client\.go$
+        text: "G703|G704|G304"
+      # The ssh key of an engine is the file its admin named, or one of the
+      # user's own under ~/.ssh.
+      - path: ^internal/engine/docker/transport\.go$
+        text: "G304"
+      # metrics check reads the file KIPP_METRICS names: the one kipp wrote
+      # for the stage it runs in.
+      - path: ^internal/metrics/guard\.go$
+        text: "G304"
+      # A parameter file is the file the user names on the command line.
+      - path: ^internal/cli/run\.go$
+        text: "G304"
+      # A file secret is the file the user names on the command line.
+      - path: ^internal/cli/secret\.go$
+        text: "G304"
+      # The cookie for a login over plain http://127.0.0.1, which a browser
+      # keeps only when it is not Secure; every other login gets the Secure one.
+      - path: ^internal/api/auth\.go$
+        text: "G124"
+      # latest redirects to a path of the server's own API: a build's id,
+      # a stage's name and a kept file's path, each checked, the path
+      # escaped part by part.
+      - path: ^internal/api/artifacts\.go$
+        text: "G710"
+      # A log is sent as text/plain with nosniff, never as markup.
+      - path: ^internal/api/log\.go$
+        text: "G705"
+      # The test that a commit status is not sent on to another host makes
+      # the server that answers with a redirect: that is its subject.
+      - path: ^internal/github/client_test\.go$
+        text: "G710"
+      # The test of the merge commit kipp writes reads it back with git.
+      - path: ^internal/dispatch/pr_test\.go$
+        text: "G204"
+      # Tests whose subject is a repo URL with a user and password in it,
+      # which must stay out of every log.
+      - path: ^internal/(cli/agent|config/repo|dispatch/dispatch|engine/docker/client|enginepool/pool)_test\.go$
+        text: "G101"
+      # Tests whose subject is an agent's token: who it lets in, and that it
+      # never reaches a stage.
+      - path: ^internal/agenthub/hub_test\.go$
+        text: "G101"
+      # kipp cache packs and hashes the paths and files the stage's own
+      # command names, in the stage's own directory and as its own user; an
+      # archive's members are held under those paths by Unpack, which is
+      # what its tests are for.
+      - path: ^internal/cache/(hash|tar)\.go$
+        text: "G304"
+      # The name of the variable that carries the cache token, not a token.
+      - path: ^internal/cache/client\.go$
+        text: "G101"
+      # The scope and the key in the path are checked by authorize and
+      # ValidKey before they reach the file system, and the namespace is
+      # made by kipp.
+      - path: ^internal/cachesrv/srv\.go$
+        text: "G703"
+      # A test whose subject is a file's mode survives a restore.
+      - path: ^internal/cache/tar_test\.go$
+        text: "G302|G304"
+      # The cache test removes and damages entry files it found under its
+      # own t.TempDir().
+      - path: ^internal/cachesrv/srv_test\.go$
+        text: "G703|G304"
+      # The key file of a GitHub App is the file the job file names; it is
+      # opened once, checked on the descriptor and refused when others can
+      # read it. The Apps page lists the records kipp wrote beside its keys.
+      - path: ^internal/(github/app|web/apps)\.go$
+        text: "G304"
+      # Tests whose subject is an App's key or webhook secret, and what an
+      # owner job names.
+      - path: ^internal/(web/apps|webhook/app|cli/owner)_test\.go$
+        text: "G101"
+      - path: ^internal/web/apps_test\.go$
+        text: "G304"
+      # Tests read the files they wrote under t.TempDir().
+      - path: ^internal/(agenthub/artifacts|agenthub/hub|api/api|artifacts/artifacts|cli/serve|dispatch/dispatch|logtime/logtime|runner/local)_test\.go$
+        text: "G304"
+      # Tests whose subject is a file's mode: a key or a database others can
+      # read, a folder that can be entered and not written, an executable
+      # stand-in for git.
+      - path: ^internal/(api/apps|cli/serve|dispatch/dispatch|retain/retain|secretbox/secretbox)_test\.go$
+        text: "G302|G306"
+      # Tests start the test binary itself (os.Args[0]) as a server, and
+      # git on a repo of their own.
+      - path: ^internal/(cli/serve|cli/multibranch|cli/owner|dispatch/dispatch|dispatch/child)_test\.go$
+        text: "G204|G702"
+      # Tests run the release scripts and make dist with hostile versions:
+      # what reaches the shell is their subject.
+      - path: ^scripts/scripts_test\.go$
+        text: "G204"
+      # A server that redirects elsewhere is the case those tests are about.
+      - path: ^internal/cli/serve_test\.go$
+        text: "G710"
+formatters:
+  enable:
+    - gofmt
+    - goimports

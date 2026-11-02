@@ -1,0 +1,4146 @@
+openapi: 3.1.0
+info:
+  description: |
+    Everything a machine calls on a kipp server lives under `/api/v1`: the
+    JSON API (jobs, builds, logs, artifacts, metrics, the queue and the
+    admin reads), the webhook endpoints GitHub delivers to, and the two
+    protocols between kipp and an agent of the same version (the agent
+    protocol and the build cache), which are tagged `internal`.
+
+    This file is generated: the sources are `api/openapi.yaml` and the files
+    beside it, and `make openapi` writes `api/openapi.gen.yaml`. The gate
+    fails when the two differ, when a route is not described here, when a
+    handler answers something this file does not allow, and when an
+    operation is described that no test reaches.
+  license:
+    name: See the LICENSE file of the kipp repository
+    url: https://github.com/ndthuan/kipp/blob/main/LICENSE
+  summary: The HTTP API of a kipp server, version 1.
+  title: kipp API
+  version: 1.0.0-rc.1
+servers:
+  - description: This server.
+    url: /api/v1
+security:
+  - bearerToken: []
+  - sessionCookie: []
+tags:
+  - description: Whether the server answers, and what it runs with.
+    name: server
+  - description: Jobs, their builds, activity and children.
+    name: jobs
+  - description: One build, its stages, logs, results and artifacts.
+    name: builds
+  - description: The metric stores jobs report into.
+    name: metrics
+  - description: What runs and what waits.
+    name: queue
+  - description: Reads of users, secrets, engines, agents, the cache and the audit, and the server's quiet mode; for an admin.
+    name: admin
+  - description: Deliveries from GitHub.
+    name: webhooks
+  - description: Between kipp and an agent of the same version. No stability promise.
+    name: internal
+paths:
+  /admin/agents:
+    get:
+      description: For an admin; a token may read it.
+      operationId: listAgents
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentList"
+          description: The agents by name.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: The standing agents
+      tags:
+        - admin
+      x-kipp-package: api
+  /admin/audit:
+    get:
+      description: For an admin; a token may read it.
+      operationId: listAudit
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditList"
+          description: Up to `limit` rows, 100 by default.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: A page of the audit, newest first
+      tags:
+        - admin
+      x-kipp-package: api
+  /admin/cache:
+    get:
+      description: For an admin; a token may read it.
+      operationId: listCacheEntries
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CacheEntryList"
+          description: |
+            Up to `limit` entries, 100 by default, the least recently restored
+            first. An entry restored while the pages are read moves to the end, so
+            it can be read twice, and no entry is missed.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: The entries of the build cache
+      tags:
+        - admin
+      x-kipp-package: api
+  /admin/engines:
+    get:
+      description: For an admin; a token may read it.
+      operationId: listEngines
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EngineList"
+          description: The engines by name.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: The Docker engines
+      tags:
+        - admin
+      x-kipp-package: api
+  /admin/quiet:
+    delete:
+      operationId: clearQuiet
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quiet"
+          description: The quiet mode, now off.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - bearerToken: []
+        - csrfToken: []
+          sessionCookie: []
+      summary: End the server's quiet mode
+      tags:
+        - admin
+      x-kipp-package: api
+    get:
+      description: |
+        In quiet mode the server takes no new builds (triggers answer 503) and
+        lets the ones that run finish, so that it can be restarted. For an
+        admin.
+      operationId: getQuiet
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quiet"
+          description: The quiet mode and what still runs or waits.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: Whether the server is quiet
+      tags:
+        - admin
+      x-kipp-package: api
+    post:
+      operationId: setQuiet
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quiet"
+          description: The quiet mode, now on.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - bearerToken: []
+        - csrfToken: []
+          sessionCookie: []
+      summary: Make the server quiet
+      tags:
+        - admin
+      x-kipp-package: api
+  /admin/reload:
+    post:
+      description: For an admin.
+      operationId: reloadJobs
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ok"
+          description: The job files were read and taken.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - bearerToken: []
+        - csrfToken: []
+          sessionCookie: []
+      summary: Read the job files again
+      tags:
+        - admin
+      x-kipp-package: api
+  /admin/secrets:
+    get:
+      description: For an admin; a token may read it.
+      operationId: listSecrets
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Secrets"
+          description: Every secret that is set, and every name a loaded job asks for that none holds.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: Which secrets are set and which are missing, never a value
+      tags:
+        - admin
+      x-kipp-package: api
+  /admin/server:
+    get:
+      description: For an admin; a token may read it.
+      operationId: getServer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Server"
+          description: The server's build, flags and the state of its data directory.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: What the server runs with
+      tags:
+        - admin
+        - server
+      x-kipp-package: api
+  /admin/users:
+    get:
+      description: For an admin; a token may read it. The changes are made in a browser.
+      operationId: listUsers
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserList"
+          description: The users by name.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: Every user
+      tags:
+        - admin
+      x-kipp-package: api
+  /admin/users/{name}:
+    get:
+      description: For an admin; a token may read it.
+      operationId: getUser
+      parameters:
+        - description: The user's name.
+          in: path
+          name: name
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+          description: The user.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: One user
+      tags:
+        - admin
+      x-kipp-package: api
+  /agent/claim:
+    get:
+      description: |
+        A long-poll: it answers as soon as there is a stage for the agent, or a
+        build ended, or when the server's wait is over with neither.
+      operationId: agentClaim
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Claim"
+          description: An assignment, or none, and the builds that ended since the last answer.
+        "400":
+          $ref: "#/components/responses/AgentRefusal"
+        "401":
+          $ref: "#/components/responses/AgentRefusal"
+      security:
+        - agentToken: []
+      summary: An agent asks for a stage to run
+      tags:
+        - internal
+      x-kipp-package: agenthub
+  /agent/connect:
+    post:
+      description: |
+        Sent when the agent starts and again every heartbeat. The server refuses
+        an agent that is not its own version (409), and counts one offline after
+        three missed. Every agent call carries the agent's token.
+      operationId: agentConnect
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConnectRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConnectResponse"
+          description: Who the server says the agent is.
+        "400":
+          $ref: "#/components/responses/AgentRefusal"
+        "401":
+          $ref: "#/components/responses/AgentRefusal"
+        "409":
+          $ref: "#/components/responses/AgentRefusal"
+      security:
+        - agentToken: []
+      summary: An agent says who it is
+      tags:
+        - internal
+      x-kipp-package: agenthub
+  /agent/stages/{id}/artifacts:
+    put:
+      description: |
+        Once the stage's command has ended and before it is done. The body is a
+        tar of the files; one the stage's files could not have made, or one over
+        the stage's `max_size`, is refused.
+      operationId: agentPutArtifacts
+      parameters:
+        - $ref: "#/components/parameters/AssignmentId"
+        - description: What the files come to, in bytes.
+          in: query
+          name: size
+          schema:
+            format: int64
+            minimum: 0
+            type: integer
+      requestBody:
+        content:
+          application/x-tar:
+            schema:
+              format: binary
+              type: string
+        required: true
+      responses:
+        "204":
+          description: The files were kept.
+        "400":
+          $ref: "#/components/responses/AgentRefusal"
+        "401":
+          $ref: "#/components/responses/AgentRefusal"
+        "409":
+          $ref: "#/components/responses/AgentRefusal"
+        "410":
+          $ref: "#/components/responses/AgentRefusal"
+        "413":
+          $ref: "#/components/responses/AgentRefusal"
+      security:
+        - agentToken: []
+      summary: An agent sends the files a stage keeps
+      tags:
+        - internal
+      x-kipp-package: agenthub
+  /agent/stages/{id}/control:
+    get:
+      description: A long-poll. It answers `cancel` once the stage is to be killed, and `none` when the server's wait is over first.
+      operationId: agentControl
+      parameters:
+        - $ref: "#/components/parameters/AssignmentId"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Control"
+          description: What to do.
+        "401":
+          $ref: "#/components/responses/AgentRefusal"
+        "410":
+          $ref: "#/components/responses/AgentRefusal"
+      security:
+        - agentToken: []
+      summary: An agent asks whether to stop a stage
+      tags:
+        - internal
+      x-kipp-package: agenthub
+  /agent/stages/{id}/done:
+    post:
+      description: The body is a tar of the stage's junit and metrics files.
+      operationId: agentDone
+      parameters:
+        - $ref: "#/components/parameters/AssignmentId"
+        - description: The stage's exit code.
+          in: query
+          name: exit
+          required: true
+          schema:
+            type: integer
+        - description: How many times the agent ran the command; absent is once.
+          in: query
+          name: tries
+          schema:
+            minimum: 1
+            type: integer
+        - description: Why the stage could not run, when it could not.
+          in: query
+          name: error
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/x-tar:
+            schema:
+              format: binary
+              type: string
+      responses:
+        "204":
+          description: The stage is over.
+        "400":
+          $ref: "#/components/responses/AgentRefusal"
+        "401":
+          $ref: "#/components/responses/AgentRefusal"
+        "410":
+          $ref: "#/components/responses/AgentRefusal"
+      security:
+        - agentToken: []
+      summary: An agent says a stage has ended
+      tags:
+        - internal
+      x-kipp-package: agenthub
+  /agent/stages/{id}/inputs/{stage}:
+    get:
+      description: Only those of a stage the assignment is given the artifacts of; the agent puts them under the workspace before the command.
+      operationId: agentGetInputs
+      parameters:
+        - $ref: "#/components/parameters/AssignmentId"
+        - $ref: "#/components/parameters/StageName"
+      responses:
+        "200":
+          content:
+            application/x-tar:
+              schema:
+                format: binary
+                type: string
+          description: A tar of the files.
+        "401":
+          $ref: "#/components/responses/AgentRefusal"
+        "404":
+          $ref: "#/components/responses/AgentRefusal"
+        "410":
+          $ref: "#/components/responses/AgentRefusal"
+      security:
+        - agentToken: []
+      summary: An agent fetches the files another stage kept
+      tags:
+        - internal
+      x-kipp-package: agenthub
+  /agent/stages/{id}/log:
+    post:
+      description: The body is the stage's output as a chunked stream, copied into its log as it arrives. Once per stage.
+      operationId: agentSendLog
+      parameters:
+        - $ref: "#/components/parameters/AssignmentId"
+      requestBody:
+        content:
+          application/octet-stream:
+            schema:
+              format: binary
+              type: string
+        required: true
+      responses:
+        "204":
+          description: The output ended and was kept.
+        "401":
+          $ref: "#/components/responses/AgentRefusal"
+        "409":
+          $ref: "#/components/responses/AgentRefusal"
+        "410":
+          $ref: "#/components/responses/AgentRefusal"
+      security:
+        - agentToken: []
+      summary: An agent sends a stage's output
+      tags:
+        - internal
+      x-kipp-package: agenthub
+  /builds/{id}:
+    get:
+      operationId: getBuild
+      parameters:
+        - $ref: "#/components/parameters/BuildId"
+        - description: Set to `true` to hold the request until the build has ended, or the server's wait is over, and answer it as it is then. Only `true` and `false` are accepted.
+          in: query
+          name: wait
+          schema:
+            type: boolean
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Build"
+          description: The build.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: One build with its stages
+      tags:
+        - builds
+      x-kipp-package: api
+  /builds/{id}/again:
+    post:
+      description: |
+        Needs the `build` permission on the job. Queues a build of the same job
+        with the same params, as they were (a param the job no longer has is
+        dropped, one it gained takes its default), and the same checkout where
+        the original had one: a webhook build's commit, branch and default
+        branch, a pull request's head and the base commit it was merged into.
+        The new build's trigger is `api` and its `trigger_detail` is `again #`
+        and the original's number. A build that has not ended, a job that is
+        disabled or drops builds while one runs, and a server that is quiet
+        refuse.
+      operationId: buildAgain
+      parameters:
+        - $ref: "#/components/parameters/BuildId"
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BuildSummary"
+          description: The new build, queued.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      security:
+        - bearerToken: []
+        - csrfToken: []
+          sessionCookie: []
+      summary: Build a finished build again
+      tags:
+        - builds
+      x-kipp-package: api
+  /builds/{id}/artifacts:
+    get:
+      operationId: listArtifacts
+      parameters:
+        - $ref: "#/components/parameters/BuildId"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StageArtifactsList"
+          description: The stages that kept files, each with its files and where to download them.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: What every stage of a build kept
+      tags:
+        - builds
+      x-kipp-package: api
+  /builds/{id}/cancel:
+    post:
+      description: Needs the `cancel` permission on the job.
+      operationId: cancelBuild
+      parameters:
+        - $ref: "#/components/parameters/BuildId"
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Build"
+          description: The build is told to stop, and is as it is now.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - bearerToken: []
+        - csrfToken: []
+          sessionCookie: []
+      summary: Cancel a build
+      tags:
+        - builds
+      x-kipp-package: api
+  /builds/{id}/keep:
+    delete:
+      description: |
+        Needs the `build` permission on the job. The build is removed again by
+        the rules that leave it alone while it is kept, as soon as one reaches it.
+        Stopping what is not kept changes nothing. A build that has not ended is
+        a conflict.
+      operationId: unkeepBuild
+      parameters:
+        - $ref: "#/components/parameters/BuildId"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Build"
+          description: The build, no longer kept.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - bearerToken: []
+        - csrfToken: []
+          sessionCookie: []
+      summary: Put a build back under the retention rules
+      tags:
+        - builds
+      x-kipp-package: api
+    put:
+      description: |
+        Needs the `build` permission on the job. The build is no longer removed
+        by the job's `keep` rule, the rule for removed jobs or the artifacts cap,
+        and does not count toward `keep.builds`. Keeping a build that is kept
+        changes nothing: it stays kept by the first user. A build that has not
+        ended is a conflict.
+      operationId: keepBuild
+      parameters:
+        - $ref: "#/components/parameters/BuildId"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Build"
+          description: The build, kept.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - bearerToken: []
+        - csrfToken: []
+          sessionCookie: []
+      summary: Keep a finished build out of retention
+      tags:
+        - builds
+      x-kipp-package: api
+  /builds/{id}/metrics:
+    get:
+      operationId: getBuildMetrics
+      parameters:
+        - $ref: "#/components/parameters/BuildId"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BuildMetrics"
+          description: The build's metrics by stage.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: What the stages of a build reported, and what the guards made of it
+      tags:
+        - builds
+        - metrics
+      x-kipp-package: api
+  /builds/{id}/results:
+    get:
+      operationId: listResults
+      parameters:
+        - $ref: "#/components/parameters/BuildId"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestResultList"
+          description: Up to `limit` cases the build's stages reported, 100 by default, in the order they were stored.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: The JUnit cases of a build
+      tags:
+        - builds
+      x-kipp-package: api
+  /builds/{id}/stages/{stage}/artifacts:
+    get:
+      description: A stage that kept nothing is 404.
+      operationId: getStageArtifacts
+      parameters:
+        - $ref: "#/components/parameters/BuildId"
+        - $ref: "#/components/parameters/StageName"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StageArtifacts"
+          description: The stage's files and where to download them.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: What one stage of a build kept
+      tags:
+        - builds
+      x-kipp-package: api
+  /builds/{id}/stages/{stage}/artifacts.zip:
+    get:
+      description: The zip is made as it is sent.
+      operationId: downloadStageArtifacts
+      parameters:
+        - $ref: "#/components/parameters/BuildId"
+        - $ref: "#/components/parameters/StageName"
+      responses:
+        "200":
+          content:
+            application/octet-stream:
+              schema:
+                format: binary
+                type: string
+          description: The zip, as a file to save.
+          headers:
+            Content-Disposition:
+              required: true
+              schema:
+                type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: A stage's artifacts as one zip
+      tags:
+        - builds
+      x-kipp-package: api
+  /builds/{id}/stages/{stage}/artifacts/{path}:
+    get:
+      description: |
+        Always an attachment: never a type a browser renders, never sniffed, and
+        sandboxed. A `Range` request is answered with 206.
+      operationId: downloadArtifact
+      parameters:
+        - $ref: "#/components/parameters/BuildId"
+        - $ref: "#/components/parameters/StageName"
+        - description: The file's path inside the stage's directory, slashes included.
+          in: path
+          name: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/octet-stream:
+              schema:
+                format: binary
+                type: string
+          description: The file.
+          headers:
+            Content-Disposition:
+              required: true
+              schema:
+                type: string
+        "206":
+          content:
+            application/octet-stream:
+              schema:
+                format: binary
+                type: string
+          description: The part of the file the `Range` asked for.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: A condition the request made (`If-Match`, `If-Unmodified-Since`) does not hold.
+        "416":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: The `Range` is outside the file.
+          headers:
+            Content-Range:
+              description: "`bytes */` and the size of the file."
+              schema:
+                type: string
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: One file a stage kept
+      tags:
+        - builds
+      x-kipp-package: api
+  /builds/{id}/stages/{stage}/log:
+    get:
+      description: |
+        One of two forms; `Accept` does not change it (the stream is at
+        `/log/events`). By default one chunk from `offset`, with the log's size
+        in the `X-Kipp-*` headers (a HEAD request answers the headers alone).
+        With `download=true` the whole log as a file, each line beginning with
+        when it began (RFC 3339 in UTC) if `timestamps=true`. A stage the build
+        does not have is 404.
+      operationId: getStageLog
+      parameters:
+        - $ref: "#/components/parameters/BuildId"
+        - $ref: "#/components/parameters/StageName"
+        - description: Where to read from, in bytes. One that is not a whole number of 0 or more is refused.
+          in: query
+          name: offset
+          schema:
+            format: int64
+            minimum: 0
+            type: integer
+        - description: Set to `true` for the whole log as a file. Only `true` and `false` are accepted.
+          in: query
+          name: download
+          schema:
+            type: boolean
+        - description: Set to `true` for the time each line began in a download. Only `true` and `false` are accepted.
+          in: query
+          name: timestamps
+          schema:
+            type: boolean
+      responses:
+        "200":
+          content:
+            text/plain:
+              schema:
+                type: string
+          description: The log in the form asked for.
+          headers:
+            Content-Disposition:
+              description: Download form. The log as a file to save.
+              schema:
+                type: string
+            X-Kipp-More:
+              description: Chunk form. `true` while there is more to read now or later, `false` once the log is complete and read to its end.
+              schema:
+                enum:
+                  - "true"
+                  - "false"
+                type: string
+            X-Kipp-Offset:
+              description: Chunk form. The offset after the chunk, where the next one begins.
+              schema:
+                format: int64
+                type: integer
+            X-Kipp-Size:
+              description: Chunk form. The log's size in bytes when it was read.
+              schema:
+                format: int64
+                type: integer
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: A stage's console
+      tags:
+        - builds
+      x-kipp-package: api
+  /builds/{id}/stages/{stage}/log/events:
+    get:
+      description: |
+        Every line as it is written until the build's logs are complete, as `id:`
+        and `data:` events (the id is the file offset after the line) closed by
+        `event: end`. With `timestamps=true` an `event: time` with the time the
+        line began, RFC 3339 in UTC, comes before each line. A comment line
+        (`: keep-alive`) is sent when nothing else has been for a while. A
+        `Last-Event-ID` header, or `offset`, resumes a stream.
+      operationId: streamStageLog
+      parameters:
+        - $ref: "#/components/parameters/BuildId"
+        - $ref: "#/components/parameters/StageName"
+        - description: Where to start, in bytes, when no `Last-Event-ID` is sent. One that is not a whole number of 0 or more is refused.
+          in: query
+          name: offset
+          schema:
+            format: int64
+            minimum: 0
+            type: integer
+        - description: Set to `true` for the time each line began. Only `true` and `false` are accepted.
+          in: query
+          name: timestamps
+          schema:
+            type: boolean
+      responses:
+        "200":
+          content:
+            text/event-stream:
+              schema:
+                type: string
+          description: The stream.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: A stage's console as it is written
+      tags:
+        - builds
+      x-kipp-package: api
+  /cache/{scope}/entry/{id}:
+    get:
+      operationId: cacheGetEntry
+      parameters:
+        - $ref: "#/components/parameters/CacheScope"
+        - description: The entry's id, from a lookup.
+          in: path
+          name: id
+          required: true
+          schema:
+            format: int64
+            type: integer
+      responses:
+        "200":
+          content:
+            application/zstd:
+              schema:
+                format: binary
+                type: string
+          description: The entry's archive.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - cacheToken: []
+      summary: Download a cache entry
+      tags:
+        - internal
+      x-kipp-package: cachesrv
+  /cache/{scope}/lookup:
+    get:
+      description: |
+        The entry saved under `key`, else the newest one whose key begins with
+        one of the `restore` prefixes.
+      operationId: cacheLookup
+      parameters:
+        - $ref: "#/components/parameters/CacheScope"
+        - description: 1 to 512 letters, digits and `. _ + = -`.
+          in: query
+          name: key
+          required: true
+          schema:
+            type: string
+        - description: Key prefixes to fall back to, in order; given once for each.
+          explode: true
+          in: query
+          name: restore
+          schema:
+            items:
+              type: string
+            type: array
+          style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CacheFound"
+          description: The entry that was found.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - cacheToken: []
+      summary: Look for a cache entry
+      tags:
+        - internal
+      x-kipp-package: cachesrv
+  /cache/{scope}/{key}:
+    put:
+      description: A key that is already there keeps its entry and answers 200.
+      operationId: cachePutEntry
+      parameters:
+        - $ref: "#/components/parameters/CacheScope"
+        - description: 1 to 512 letters, digits and `. _ + = -`.
+          in: path
+          name: key
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/zstd:
+            schema:
+              format: binary
+              type: string
+        required: true
+      responses:
+        "200":
+          description: An entry with that key is there already; the body was not kept.
+        "201":
+          description: The entry was kept.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - cacheToken: []
+      summary: Save a cache entry
+      tags:
+        - internal
+      x-kipp-package: cachesrv
+  /health:
+    get:
+      description: |
+        Answers even when the store does not. The version and uptime are told to
+        a caller who is signed in alone: a stranger would read in them what to
+        try.
+      operationId: getHealth
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+          description: The server answers.
+      security:
+        - {}
+        - bearerToken: []
+        - sessionCookie: []
+      summary: Whether the server answers
+      tags:
+        - server
+      x-kipp-package: api
+  /hooks/github-app/{app}:
+    post:
+      description: |
+        The App's webhook: events of every repository the App is installed on,
+        answered for the owner jobs that sign in as the App. The body is "a
+        GitHub event" as GitHub sends it
+        (https://docs.github.com/en/webhooks/webhook-events-and-payloads). A
+        `ping` and an event kipp does not act on are answered 200 and ignored; an
+        installation event asks for a scan (202).
+      operationId: deliverGithubAppEvent
+      parameters:
+        - description: The App's name, as the owner job names it.
+          in: path
+          name: app
+          required: true
+          schema:
+            type: string
+        - description: The kind of event, for example `push`, `installation` or `ping`.
+          in: header
+          name: X-GitHub-Event
+          required: true
+          schema:
+            type: string
+        - description: The delivery's GUID. A delivery without one is refused.
+          in: header
+          name: X-GitHub-Delivery
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              description: A GitHub event.
+              type: object
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookIgnored"
+          description: A valid delivery that changes nothing, and why.
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookAccepted"
+          description: The builds queued, or the scans asked for.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: The signature is missing or does not match. Nothing says which, or whether the App exists.
+        "408":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: The body was not all sent in time.
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Something failed inside the server.
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      security:
+        - webhookSignature: []
+      summary: A GitHub event for a GitHub App
+      tags:
+        - webhooks
+      x-kipp-package: webhook
+  /hooks/github/{job}:
+    post:
+      description: |
+        The body is "a GitHub event" as GitHub sends it
+        (https://docs.github.com/en/webhooks/webhook-events-and-payloads); kipp
+        reads the repository and the push or pull request in it. The delivery is
+        checked with the job's secret and recorded by `X-GitHub-Delivery`, so a
+        delivery sent twice is built once.
+      operationId: deliverGithubJobEvent
+      parameters:
+        - description: The job the hook is registered for.
+          in: path
+          name: job
+          required: true
+          schema:
+            type: string
+        - description: The kind of event, for example `push`, `pull_request` or `ping`.
+          in: header
+          name: X-GitHub-Event
+          required: true
+          schema:
+            type: string
+        - description: The delivery's GUID. A delivery without one is refused.
+          in: header
+          name: X-GitHub-Delivery
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              description: A GitHub event.
+              type: object
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookIgnored"
+          description: A valid delivery that changes nothing, and why.
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookAccepted"
+          description: The build, or the builds, queued.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: The signature is missing or does not match. Nothing says which, or whether the job exists.
+        "408":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: The body was not all sent in time.
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Something failed inside the server.
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      security:
+        - webhookSignature: []
+      summary: A GitHub event for a job
+      tags:
+        - webhooks
+      x-kipp-package: webhook
+  /jobs:
+    get:
+      operationId: listJobs
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobList"
+          description: Every job the caller may see, with its last build.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: The jobs the caller may see
+      tags:
+        - jobs
+      x-kipp-package: api
+  /jobs/{name}:
+    get:
+      operationId: getJob
+      parameters:
+        - $ref: "#/components/parameters/JobName"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobDetail"
+          description: The job. A job that was removed from the job files still answers while it has builds.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: One job, with its latest builds and activity
+      tags:
+        - jobs
+      x-kipp-package: api
+  /jobs/{name}/activity:
+    get:
+      operationId: listActivity
+      parameters:
+        - $ref: "#/components/parameters/JobName"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivityList"
+          description: Up to `limit` lines, 50 by default.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: The lines of a job's activity, newest first
+      tags:
+        - jobs
+      x-kipp-package: api
+  /jobs/{name}/artifacts/latest:
+    get:
+      description: |
+        Redirects to the newest build of the job that ended with one of the given
+        statuses and whose stage kept something: to its listing, or with `path` to
+        that file of it.
+      operationId: redirectToLatestArtifacts
+      parameters:
+        - $ref: "#/components/parameters/JobName"
+        - description: The name of one of the job's stages.
+          in: query
+          name: stage
+          required: true
+          schema:
+            type: string
+        - description: A file's path inside the stage's directory.
+          in: query
+          name: path
+          schema:
+            type: string
+        - description: The statuses a build may have ended with, given once or more, each one status or several separated by commas. `success` when none is given.
+          explode: true
+          in: query
+          name: status
+          schema:
+            items:
+              $ref: "#/components/schemas/BuildStatus"
+            type: array
+          style: form
+      responses:
+        "302":
+          description: Where the artifacts are.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: Redirect to the artifacts of a job's newest good build
+      tags:
+        - jobs
+      x-kipp-package: api
+  /jobs/{name}/builds:
+    get:
+      operationId: listBuilds
+      parameters:
+        - $ref: "#/components/parameters/JobName"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BuildList"
+          description: Up to `limit` builds, 50 by default; their `stages` are empty.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: The builds of a job, newest first
+      tags:
+        - jobs
+      x-kipp-package: api
+    post:
+      description: |
+        Needs the `build` permission on the job. A job that is disabled, or that
+        drops builds while one runs, refuses.
+      operationId: triggerBuild
+      parameters:
+        - $ref: "#/components/parameters/JobName"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TriggerRequest"
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BuildSummary"
+          description: The build, queued.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      security:
+        - bearerToken: []
+        - csrfToken: []
+          sessionCookie: []
+      summary: Start a build of a job
+      tags:
+        - jobs
+      x-kipp-package: api
+  /jobs/{name}/builds/{number}:
+    get:
+      description: The same build `/builds/{id}` answers, found by its number within the job.
+      operationId: getJobBuild
+      parameters:
+        - $ref: "#/components/parameters/JobName"
+        - description: The build's number within the job (`number` in a build), not its id.
+          in: path
+          name: number
+          required: true
+          schema:
+            minimum: 1
+            type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Build"
+          description: The build.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: One build of a job by its number
+      tags:
+        - jobs
+      x-kipp-package: api
+  /jobs/{name}/children:
+    get:
+      operationId: listChildren
+      parameters:
+        - $ref: "#/components/parameters/JobName"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChildList"
+          description: The children that build, then the gone ones, then the pull requests from forks.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: The children of a multibranch job
+      tags:
+        - jobs
+      x-kipp-package: api
+  /jobs/{name}/scan:
+    post:
+      description: Needs the `build` permission on the job.
+      operationId: scanJob
+      parameters:
+        - $ref: "#/components/parameters/JobName"
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Scan"
+          description: The scan is under way, and this is how it stands.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - bearerToken: []
+        - csrfToken: []
+          sessionCookie: []
+      summary: Have a multibranch job's repo read now
+      tags:
+        - jobs
+      x-kipp-package: api
+  /metrics:
+    get:
+      operationId: listMetricStores
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetricStoreList"
+          description: Each store with the jobs that report into it and the metrics it remembers.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: The metric stores the caller may see
+      tags:
+        - metrics
+      x-kipp-package: api
+  /metrics/{store}:
+    get:
+      description: The same object the list holds, for a store the caller may see.
+      operationId: getMetricStore
+      parameters:
+        - $ref: "#/components/parameters/StoreName"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetricStore"
+          description: The store.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: One metric store
+      tags:
+        - metrics
+      x-kipp-package: api
+  /metrics/{store}/compare:
+    get:
+      description: |
+        Item by item, between what the build `from` reported into the store and
+        what the build `to` did, or what the store remembers when `to` is
+        `remembered`. The rows are sorted by the size of their change, largest
+        first, then the items on one side only, each part by item. `metric` is
+        needed.
+      operationId: compareMetric
+      parameters:
+        - $ref: "#/components/parameters/StoreName"
+        - in: query
+          name: metric
+          required: true
+          schema:
+            type: string
+        - description: A build's id.
+          in: query
+          name: from
+          schema:
+            type: string
+        - description: A build's id, or `remembered`.
+          in: query
+          name: to
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetricComparisonList"
+          description: Each item of the metric with its two values and the difference.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: One metric in two builds
+      tags:
+        - metrics
+      x-kipp-package: api
+  /metrics/{store}/history:
+    get:
+      operationId: listMetricHistory
+      parameters:
+        - $ref: "#/components/parameters/StoreName"
+        - in: query
+          name: metric
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: item
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetricHistoryList"
+          description: Up to `limit` rows, 100 by default.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: The values builds reported to a store, newest first
+      tags:
+        - metrics
+      x-kipp-package: api
+  /metrics/{store}/remembered:
+    get:
+      operationId: listRememberedValues
+      parameters:
+        - $ref: "#/components/parameters/StoreName"
+        - description: Only this metric's values.
+          in: query
+          name: metric
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RememberedValueList"
+          description: The remembered value of each item, with the build that set it.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: What a store remembers
+      tags:
+        - metrics
+      x-kipp-package: api
+  /openapi.yaml:
+    get:
+      description: |
+        The OpenAPI 3.1 description of `/api/v1`, `api/openapi.gen.yaml` as it was
+        built into this binary, so it is the description of the code that answers.
+        No login or token is needed. The `ETag` is a hash of the file, and a
+        request with a matching `If-None-Match` is answered 304 without the body.
+      operationId: getOpenapi
+      parameters:
+        - description: The `ETag` of a copy the caller already has.
+          in: header
+          name: If-None-Match
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/yaml:
+              schema:
+                type: string
+          description: The description, in YAML.
+          headers:
+            ETag:
+              description: A hash of the file, in quotes.
+              schema:
+                type: string
+        "304":
+          description: The caller's copy is the current one.
+          headers:
+            ETag:
+              description: A hash of the file, in quotes.
+              schema:
+                type: string
+      security:
+        - {}
+      summary: This description of the API
+      tags:
+        - server
+      x-kipp-package: api
+  /queue:
+    get:
+      description: Only the builds of jobs the caller may see.
+      operationId: getQueue
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Queue"
+          description: The queue.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: What runs and what waits
+      tags:
+        - queue
+      x-kipp-package: api
+  /queue/events:
+    get:
+      description: |
+        A server-sent event stream. An event called `changed`, with no data, is
+        sent each time what the caller may see of the queue changes, and the
+        client reads the queue again; a comment line `: still here` keeps a quiet
+        stream open. A change the caller may not see is not told.
+      operationId: streamQueueEvents
+      responses:
+        "200":
+          content:
+            text/event-stream:
+              schema:
+                type: string
+          description: The stream, until the client leaves or its login ends.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: Told when the queue changes
+      tags:
+        - queue
+      x-kipp-package: api
+components:
+  parameters:
+    AssignmentId:
+      description: The assignment's id, from the claim that gave the stage.
+      in: path
+      name: id
+      required: true
+      schema:
+        type: string
+    BuildId:
+      description: The build's id, as `id` in a build (not its number within the job).
+      in: path
+      name: id
+      required: true
+      schema:
+        format: int64
+        type: integer
+    CacheScope:
+      description: The cache scope; the token must name it.
+      in: path
+      name: scope
+      required: true
+      schema:
+        type: string
+    Cursor:
+      description: |
+        Where the page begins: the `next_cursor` of the page before it. Opaque. One
+        that this server did not give for this list is refused.
+      in: query
+      name: cursor
+      schema:
+        type: string
+    JobName:
+      description: The job's name.
+      in: path
+      name: name
+      required: true
+      schema:
+        type: string
+    Limit:
+      description: |
+        How many rows to return; the default is the list's own, the most 500 (a
+        larger number is read as 500). A value that is not a whole number of 1 or
+        more is refused.
+      in: query
+      name: limit
+      schema:
+        minimum: 1
+        type: integer
+    StageName:
+      description: A stage's name.
+      in: path
+      name: stage
+      required: true
+      schema:
+        type: string
+    StoreName:
+      description: A metric store's name.
+      in: path
+      name: store
+      required: true
+      schema:
+        type: string
+  responses:
+    AgentRefusal:
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Refusal"
+      description: |
+        The agent protocol's own refusal: why, and for a 409 the version the
+        server is. A 401 is an agent token that is missing or that nobody holds;
+        a 410 a stage that is not running on this agent.
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+      description: The request is not one the server can read, for example a parameter or a body that does not parse.
+    Conflict:
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+      description: The request conflicts with the state of the server, for example a delivery received before or a job that drops builds while one runs.
+    Forbidden:
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+      description: |
+        The caller may not do this: not an admin, a job without the permission,
+        a session request without its CSRF header, or a password to be asked
+        again.
+    InternalError:
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+      description: Something failed inside the server; the reason is in its log, not in the answer.
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+      description: |
+        No such thing, or a job the caller may not see: the answer is the same
+        for both.
+    PayloadTooLarge:
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+      description: The request body is over the limit, 64 KiB for the JSON API and the webhook's own cap for a delivery.
+    ServiceUnavailable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+      description: The server is quiet (it takes no new builds), or busy.
+      headers:
+        Retry-After:
+          description: Whole seconds to wait before sending the request again.
+          schema:
+            type: integer
+    TooManyRequests:
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+      description: Too many streams or waits are open for this caller, or too many wrong passwords.
+      headers:
+        Retry-After:
+          description: Whole seconds to wait before sending the request again, when the refusal is about a password.
+          schema:
+            type: integer
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+      description: A login or a token is required, or the one sent is not valid.
+    Unprocessable:
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+      description: The job files were refused; the message says why.
+  schemas:
+    Activity:
+      additionalProperties: false
+      description: One line of a job's activity, for example a reload or a scan.
+      properties:
+        at:
+          $ref: "#/components/schemas/Timestamp"
+        line:
+          type: string
+      required:
+        - at
+        - line
+      type: object
+    ActivityList:
+      additionalProperties: false
+      description: |
+        The rows of a list.
+        `next_cursor` is the `cursor` that reads the page after this one, and null
+        when this is the last (or the list is not paged).
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/Activity"
+          type: array
+        next_cursor:
+          $ref: "#/components/schemas/NextCursor"
+      required:
+        - items
+        - next_cursor
+      type: object
+    Agent:
+      additionalProperties: false
+      description: A standing agent, its record and, once it has connected, what the server sees of it now. Never its token.
+      properties:
+        arch:
+          type: string
+        busy:
+          description: How many stages it runs or has been given now.
+          type: integer
+        enabled:
+          type: boolean
+        executors:
+          description: 0 for as many at once as it is given.
+          type: integer
+        labels:
+          items:
+            type: string
+          type: array
+        last_seen_at:
+          $ref: "#/components/schemas/NullableTimestamp"
+        name:
+          type: string
+        online:
+          type: boolean
+        os:
+          type: string
+        since:
+          $ref: "#/components/schemas/NullableTimestamp"
+        stages:
+          description: What it runs or has been given.
+          items:
+            $ref: "#/components/schemas/AgentStage"
+          type: array
+        version:
+          type: string
+      required:
+        - name
+        - labels
+        - executors
+        - busy
+        - enabled
+        - online
+        - since
+        - version
+        - os
+        - arch
+        - stages
+        - last_seen_at
+      type: object
+    AgentArtifacts:
+      additionalProperties: false
+      description: A stage's artifacts key.
+      properties:
+        Max:
+          description: The most the matches may come to, in bytes.
+          format: int64
+          type: integer
+        Paths:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+      required:
+        - Paths
+        - Max
+      type: object
+    AgentCache:
+      additionalProperties: false
+      description: One declared cache of a stage, its keys already expanded.
+      properties:
+        Key:
+          type: string
+        Paths:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        RestoreKeys:
+          items:
+            type: string
+          type: array
+        Scope:
+          type: string
+      required:
+        - Key
+        - Paths
+        - Scope
+      type: object
+    AgentEnded:
+      additionalProperties: false
+      description: A build whose stages on the agent are over; its workspace there goes.
+      properties:
+        Workspace:
+          type: string
+      required:
+        - Workspace
+      type: object
+    AgentInput:
+      additionalProperties: false
+      description: One stage whose artifacts a stage is given.
+      properties:
+        Size:
+          format: int64
+          type: integer
+        Stage:
+          type: string
+      required:
+        - Stage
+        - Size
+      type: object
+    AgentList:
+      additionalProperties: false
+      description: |
+        The rows of a list.
+        `next_cursor` is the `cursor` that reads the page after this one, and null
+        when this is the last (or the list is not paged).
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/Agent"
+          type: array
+        next_cursor:
+          $ref: "#/components/schemas/NextCursor"
+      required:
+        - items
+        - next_cursor
+      type: object
+    AgentStage:
+      additionalProperties: false
+      description: A stage an agent runs or has been given.
+      properties:
+        build:
+          $ref: "#/components/schemas/BuildRef"
+        stage:
+          type: string
+      required:
+        - build
+        - stage
+      type: object
+    Artifact:
+      additionalProperties: false
+      description: One file a stage kept.
+      properties:
+        path:
+          type: string
+        sha256:
+          type: string
+        size:
+          format: int64
+          type: integer
+        url:
+          description: Where to download it.
+          type: string
+      required:
+        - path
+        - size
+        - sha256
+        - url
+      type: object
+    Assignment:
+      additionalProperties: false
+      description: One stage to run.
+      properties:
+        Artifacts:
+          $ref: "#/components/schemas/AgentArtifacts"
+        Baseline:
+          contentEncoding: base64
+          description: What the stage's store remembers; absent for a stage that declares no metrics.
+          type: string
+        Cache:
+          items:
+            $ref: "#/components/schemas/AgentCache"
+          type: array
+        Command:
+          description: Run with the agent's shell, `-c`.
+          type: string
+        Env:
+          description: The variables the server gives the stage, as `NAME=value`.
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        ID:
+          type: string
+        Inputs:
+          items:
+            $ref: "#/components/schemas/AgentInput"
+          type: array
+        Job:
+          type: string
+        Junit:
+          description: The stage's junit glob; empty is none.
+          type: string
+        Metrics:
+          description: The stage's metrics file glob.
+          type: string
+        Number:
+          type: integer
+        Retries:
+          description: How many more times the agent runs the command when it ends with a code that is neither 0 nor in UnstableExit; absent is none.
+          maximum: 10
+          minimum: 0
+          type: integer
+        Stage:
+          type: string
+        UnstableExit:
+          description: The exit codes that count as ending well besides 0, and that are not run again.
+          items:
+            type: integer
+          type: array
+        Workdir:
+          description: A path inside the workspace the stage runs in.
+          type: string
+        Workspace:
+          description: The build's directory under the agent's workdir; empty is the workdir itself.
+          type: string
+      required:
+        - ID
+        - Job
+        - Number
+        - Stage
+        - Command
+        - Env
+        - Workspace
+        - Workdir
+        - Junit
+      type: object
+    AuditList:
+      additionalProperties: false
+      description: |
+        The rows newest first.
+        `next_cursor` is the `cursor` that reads the page after this one, and null
+        when this is the last (or the list is not paged).
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/AuditRow"
+          type: array
+        next_cursor:
+          $ref: "#/components/schemas/NextCursor"
+      required:
+        - items
+        - next_cursor
+      type: object
+    AuditRow:
+      additionalProperties: false
+      description: One row of the audit.
+      properties:
+        action:
+          type: string
+        actor:
+          type: string
+        at:
+          $ref: "#/components/schemas/Timestamp"
+        detail:
+          type: string
+        id:
+          format: int64
+          type: integer
+        target:
+          type: string
+      required:
+        - id
+        - at
+        - actor
+        - action
+        - target
+        - detail
+      type: object
+    Build:
+      additionalProperties: false
+      description: |
+        One build with its stages. Only a build of a multibranch job's child has a
+        value in `parent` to `base_commit`, but `built_commit`, which a build of a
+        `source` job has too: the commit its clone checked out. Any other has
+        null.
+      properties:
+        base_branch:
+          type:
+            - string
+            - "null"
+        base_commit:
+          type:
+            - string
+            - "null"
+        branch:
+          type:
+            - string
+            - "null"
+        built_commit:
+          type:
+            - string
+            - "null"
+        complete:
+          description: True when the build has ended and nothing more will be written for it, no stage, test or line of a log.
+          type: boolean
+        finished_at:
+          $ref: "#/components/schemas/NullableTimestamp"
+        id:
+          format: int64
+          type: integer
+        job:
+          type: string
+        kept:
+          description: Who kept the build out of retention and when, null for a build under its job's rules.
+          oneOf:
+            - $ref: "#/components/schemas/Kept"
+            - type: "null"
+        number:
+          description: The build's number within its job.
+          type: integer
+        params:
+          additionalProperties:
+            type: string
+          type:
+            - object
+            - "null"
+        parent:
+          description: The multibranch job this build's job is a child of.
+          type:
+            - string
+            - "null"
+        pr:
+          type:
+            - integer
+            - "null"
+        queued_at:
+          $ref: "#/components/schemas/Timestamp"
+        stages:
+          items:
+            $ref: "#/components/schemas/Stage"
+          type: array
+        started_at:
+          $ref: "#/components/schemas/NullableTimestamp"
+        started_by:
+          type: string
+        status:
+          $ref: "#/components/schemas/BuildStatus"
+        trigger:
+          description: What started it, `cron`, `api`, `web`, `webhook` or `after`.
+          type: string
+        trigger_detail:
+          type: string
+      required:
+        - id
+        - job
+        - number
+        - status
+        - trigger
+        - trigger_detail
+        - params
+        - started_by
+        - queued_at
+        - started_at
+        - finished_at
+        - parent
+        - branch
+        - built_commit
+        - pr
+        - base_branch
+        - base_commit
+        - kept
+        - stages
+        - complete
+      type: object
+    BuildList:
+      additionalProperties: false
+      description: |
+        The rows of a list.
+        `next_cursor` is the `cursor` that reads the page after this one, and null
+        when this is the last (or the list is not paged).
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/BuildSummary"
+          type: array
+        next_cursor:
+          $ref: "#/components/schemas/NextCursor"
+      required:
+        - items
+        - next_cursor
+      type: object
+    BuildMetrics:
+      additionalProperties: false
+      description: What the stages of a build reported and what the guards made of it.
+      properties:
+        build:
+          $ref: "#/components/schemas/BuildRef"
+        stages:
+          items:
+            $ref: "#/components/schemas/StageMetrics"
+          type: array
+        store:
+          type: string
+      required:
+        - build
+        - store
+        - stages
+      type: object
+    BuildRef:
+      additionalProperties: false
+      description: |
+        A build, wherever another answer refers to one. `status` is null once
+        retention has removed the build; `id` is then whatever the answer kept of
+        it, and 0 for a guard's origin, which keeps only the job and the number.
+      properties:
+        id:
+          format: int64
+          type: integer
+        job:
+          type: string
+        number:
+          type: integer
+        status:
+          oneOf:
+            - $ref: "#/components/schemas/BuildStatus"
+            - type: "null"
+      required:
+        - id
+        - job
+        - number
+        - status
+      type: object
+    BuildStatus:
+      enum:
+        - queued
+        - running
+        - success
+        - unstable
+        - failed
+        - cancelled
+        - lost
+        - timeout
+      type: string
+    BuildSummary:
+      additionalProperties: false
+      description: |
+        One build of a job, as a list, a job's `last` and the answer to a trigger
+        show it. Only a build of a multibranch job's child has a value in the last
+        six fields, but `built_commit`, which a build of a `source` job has too:
+        the commit its clone checked out. Any other has null.
+      properties:
+        base_branch:
+          type:
+            - string
+            - "null"
+        base_commit:
+          type:
+            - string
+            - "null"
+        branch:
+          type:
+            - string
+            - "null"
+        built_commit:
+          type:
+            - string
+            - "null"
+        finished_at:
+          $ref: "#/components/schemas/NullableTimestamp"
+        id:
+          format: int64
+          type: integer
+        job:
+          type: string
+        kept:
+          description: Who kept the build out of retention and when, null for a build under its job's rules.
+          oneOf:
+            - $ref: "#/components/schemas/Kept"
+            - type: "null"
+        number:
+          description: The build's number within its job.
+          type: integer
+        params:
+          additionalProperties:
+            type: string
+          type:
+            - object
+            - "null"
+        parent:
+          description: The multibranch job this build's job is a child of.
+          type:
+            - string
+            - "null"
+        pr:
+          type:
+            - integer
+            - "null"
+        queued_at:
+          $ref: "#/components/schemas/Timestamp"
+        started_at:
+          $ref: "#/components/schemas/NullableTimestamp"
+        started_by:
+          type: string
+        status:
+          $ref: "#/components/schemas/BuildStatus"
+        trigger:
+          description: What started it, `cron`, `api`, `web`, `webhook` or `after`.
+          type: string
+        trigger_detail:
+          type: string
+      required:
+        - id
+        - job
+        - number
+        - status
+        - trigger
+        - trigger_detail
+        - params
+        - started_by
+        - queued_at
+        - started_at
+        - finished_at
+        - parent
+        - branch
+        - built_commit
+        - pr
+        - base_branch
+        - base_commit
+        - kept
+      type: object
+    CacheEntry:
+      additionalProperties: false
+      description: One entry of the keyed build cache.
+      properties:
+        id:
+          format: int64
+          type: integer
+        key:
+          type: string
+        last_restored_at:
+          $ref: "#/components/schemas/NullableTimestamp"
+        namespace:
+          type: string
+        saved_at:
+          $ref: "#/components/schemas/NullableTimestamp"
+        saved_by:
+          description: The build that saved it; null once retention has removed the build.
+          oneOf:
+            - $ref: "#/components/schemas/BuildRef"
+            - type: "null"
+        scope:
+          type: string
+        size:
+          format: int64
+          type: integer
+      required:
+        - id
+        - scope
+        - namespace
+        - key
+        - size
+        - saved_at
+        - saved_by
+        - last_restored_at
+      type: object
+    CacheEntryList:
+      additionalProperties: false
+      description: |
+        The entries by least recently restored first.
+        `next_cursor` is the `cursor` that reads the page after this one, and null
+        when this is the last (or the list is not paged).
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/CacheEntry"
+          type: array
+        next_cursor:
+          $ref: "#/components/schemas/NextCursor"
+      required:
+        - items
+        - next_cursor
+      type: object
+    CacheFound:
+      additionalProperties: false
+      description: A cache entry a lookup found.
+      properties:
+        exact:
+          description: False when it matched a restore key and not the key.
+          type: boolean
+        id:
+          format: int64
+          type: integer
+        key:
+          type: string
+        size:
+          format: int64
+          type: integer
+      required:
+        - id
+        - key
+        - exact
+        - size
+      type: object
+    Child:
+      additionalProperties: false
+      description: |
+        One child of a multibranch job: a branch or a pull request. The ones that
+        build come first, then the gone ones, then the pull requests from forks.
+      properties:
+        author:
+          description: The login that opened the pull request; null for a branch, and for a pull request seen before kipp kept it, until the next webhook or scan.
+          type:
+            - string
+            - "null"
+        base_branch:
+          type:
+            - string
+            - "null"
+        branch:
+          type: string
+        from_fork:
+          type: boolean
+        gone_at:
+          $ref: "#/components/schemas/NullableTimestamp"
+        head_commit:
+          type: string
+        job:
+          description: The child's job name; empty for a pull request from a fork, which has none.
+          type: string
+        key:
+          type: string
+        kind:
+          $ref: "#/components/schemas/ChildKind"
+        last:
+          $ref: "#/components/schemas/NullableBuild"
+        last_seen_at:
+          $ref: "#/components/schemas/Timestamp"
+        pr:
+          type:
+            - integer
+            - "null"
+        state:
+          enum:
+            - live
+            - gone
+          type: string
+        title:
+          type:
+            - string
+            - "null"
+        url:
+          description: The pull request's page on GitHub; null as author is.
+          type:
+            - string
+            - "null"
+      required:
+        - job
+        - key
+        - kind
+        - branch
+        - pr
+        - title
+        - author
+        - url
+        - head_commit
+        - base_branch
+        - from_fork
+        - state
+        - gone_at
+        - last_seen_at
+        - last
+      type: object
+    ChildKind:
+      enum:
+        - branch
+        - pr
+        - pr-head
+      type: string
+    ChildList:
+      additionalProperties: false
+      description: |
+        The rows of a list.
+        `next_cursor` is the `cursor` that reads the page after this one, and null
+        when this is the last (or the list is not paged).
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/Child"
+          type: array
+        next_cursor:
+          $ref: "#/components/schemas/NextCursor"
+      required:
+        - items
+        - next_cursor
+      type: object
+    Claim:
+      additionalProperties: false
+      description: An assignment, or none when the long-poll ran out, and the builds that ended since the last answer.
+      properties:
+        Assignment:
+          oneOf:
+            - $ref: "#/components/schemas/Assignment"
+            - type: "null"
+        Ended:
+          items:
+            $ref: "#/components/schemas/AgentEnded"
+          type:
+            - array
+            - "null"
+      required:
+        - Assignment
+        - Ended
+      type: object
+    Concurrency:
+      description: What the job does with a build triggered while another runs.
+      enum:
+        - queue
+        - drop
+        - parallel
+      type: string
+    ConnectRequest:
+      description: |
+        What an agent says of itself. It is sent when the agent starts and again
+        every heartbeat as long as it runs; three missed and the server counts it
+        offline. The field names are Go's.
+      properties:
+        Arch:
+          type: string
+        Fresh:
+          description: True on the first connect of the agent's process.
+          type: boolean
+        OS:
+          type: string
+        Running:
+          description: The assignments the agent is running now.
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        Version:
+          description: The agent's kipp version. The server refuses any but its own with a 409.
+          type: string
+      type: object
+    ConnectResponse:
+      additionalProperties: false
+      description: Who the server says the agent is. Labels and executors are the server's to set.
+      properties:
+        Executors:
+          description: 0 for as many at once as it is given.
+          type: integer
+        Heartbeat:
+          description: How often to connect again, in nanoseconds.
+          format: int64
+          type: integer
+        Kill:
+          description: Assignments the agent said it runs that the server does not know as running there.
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        Labels:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        Name:
+          type: string
+        ServerVersion:
+          type: string
+      required:
+        - Name
+        - Labels
+        - Executors
+        - ServerVersion
+        - Heartbeat
+        - Kill
+      type: object
+    Control:
+      additionalProperties: false
+      properties:
+        Action:
+          enum:
+            - none
+            - cancel
+          type: string
+      required:
+        - Action
+      type: object
+    Engine:
+      additionalProperties: false
+      description: A Docker engine, its record and what the server sees of it now.
+      properties:
+        enabled:
+          type: boolean
+        executors:
+          description: How many stages it runs at once.
+          type: integer
+        kind:
+          type: string
+        labels:
+          items:
+            type: string
+          type: array
+        last_error:
+          type: string
+        name:
+          type: string
+        reachable:
+          type: boolean
+        running:
+          description: The stages running on it, as `job#number/stage`.
+          items:
+            type: string
+          type: array
+        since:
+          $ref: "#/components/schemas/NullableTimestamp"
+        url:
+          description: The engine's address with any password removed.
+          type: string
+        version:
+          description: The Docker engine's version as it last answered a probe; empty before it has.
+          type: string
+      required:
+        - name
+        - kind
+        - url
+        - labels
+        - executors
+        - enabled
+        - reachable
+        - since
+        - version
+        - last_error
+        - running
+      type: object
+    EngineList:
+      additionalProperties: false
+      description: |
+        The rows of a list.
+        `next_cursor` is the `cursor` that reads the page after this one, and null
+        when this is the last (or the list is not paged).
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/Engine"
+          type: array
+        next_cursor:
+          $ref: "#/components/schemas/NextCursor"
+      required:
+        - items
+        - next_cursor
+      type: object
+    Guard:
+      additionalProperties: false
+      description: What a guard found of one item of a metric.
+      properties:
+        from:
+          description: The build whose value the guard compared against; null when there was none.
+          oneOf:
+            - $ref: "#/components/schemas/BuildRef"
+            - type: "null"
+        item:
+          type: string
+        line:
+          description: The guard's result as the stage's log has it.
+          type: string
+        metric:
+          type: string
+        outcome:
+          description: How the guard ends the stage, `held` being not at all.
+          enum:
+            - held
+            - failed
+            - unstable
+          type: string
+        remembered:
+          type:
+            - number
+            - "null"
+        reported:
+          type:
+            - number
+            - "null"
+        tolerance:
+          type: number
+        verdict:
+          enum:
+            - held
+            - no baseline
+            - fell
+            - missing
+            - not reported
+          type: string
+      required:
+        - metric
+        - item
+        - remembered
+        - reported
+        - tolerance
+        - verdict
+        - outcome
+        - from
+        - line
+      type: object
+    Health:
+      additionalProperties: false
+      properties:
+        ok:
+          const: true
+        uptime_seconds:
+          description: Whole seconds since the server started. Only a signed-in caller is told.
+          type: integer
+        version:
+          description: The kipp version the server runs. Only a signed-in caller is told.
+          type: string
+      required:
+        - ok
+      type: object
+    Job:
+      additionalProperties: false
+      description: One job in the list of jobs.
+      properties:
+        children_count:
+          description: A multibranch job's or an owner job's count of children that build; 0 for any other.
+          type: integer
+        cron:
+          description: The job's cron schedule; empty for none.
+          type: string
+        description:
+          type: string
+        disabled:
+          type: boolean
+        group:
+          type: string
+        last:
+          $ref: "#/components/schemas/NullableBuild"
+        name:
+          type: string
+        next:
+          $ref: "#/components/schemas/NullableTimestamp"
+        removed:
+          description: True for a job that has builds but is no longer in the job files.
+          type: boolean
+        worst:
+          description: The worst status among the children's last builds; null before any built.
+          oneOf:
+            - $ref: "#/components/schemas/BuildStatus"
+            - type: "null"
+      required:
+        - name
+        - group
+        - description
+        - cron
+        - next
+        - last
+        - removed
+        - disabled
+        - children_count
+        - worst
+      type: object
+    JobDetail:
+      additionalProperties: false
+      description: |
+        One job with its latest builds and activity. A removed job holds its name,
+        its builds and its activity; what the job file said went with the file.
+      properties:
+        activity:
+          $ref: "#/components/schemas/ActivityList"
+        builds:
+          $ref: "#/components/schemas/BuildList"
+        concurrency:
+          oneOf:
+            - $ref: "#/components/schemas/Concurrency"
+            - const: ""
+        cron:
+          type: string
+        description:
+          type: string
+        disabled:
+          type: boolean
+        folder:
+          description: The owner job a repo's job belongs to.
+          type:
+            - string
+            - "null"
+        group:
+          type: string
+        locks:
+          items:
+            type: string
+          type: array
+        multibranch:
+          description: A multibranch job's repo.
+          type:
+            - string
+            - "null"
+        name:
+          type: string
+        next:
+          $ref: "#/components/schemas/NullableTimestamp"
+        owner:
+          oneOf:
+            - $ref: "#/components/schemas/Owner"
+            - type: "null"
+        params:
+          items:
+            $ref: "#/components/schemas/Param"
+          type: array
+        parent:
+          description: The multibranch job a child belongs to.
+          type:
+            - string
+            - "null"
+        removed:
+          type: boolean
+        scan:
+          oneOf:
+            - $ref: "#/components/schemas/Scan"
+            - type: "null"
+        timezone:
+          description: The zone the cron is read in, the job's own, else the server's, else `Local`.
+          type: string
+      required:
+        - name
+        - removed
+        - disabled
+        - group
+        - description
+        - params
+        - cron
+        - next
+        - timezone
+        - concurrency
+        - locks
+        - builds
+        - activity
+        - parent
+        - multibranch
+        - scan
+        - folder
+        - owner
+      type: object
+    JobList:
+      additionalProperties: false
+      description: |
+        The rows of a list.
+        `next_cursor` is the `cursor` that reads the page after this one, and null
+        when this is the last (or the list is not paged).
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/Job"
+          type: array
+        next_cursor:
+          $ref: "#/components/schemas/NextCursor"
+      required:
+        - items
+        - next_cursor
+      type: object
+    Kept:
+      additionalProperties: false
+      description: |
+        A build kept out of retention: `keep.builds`, `keep.days`, the rule for
+        removed jobs and `--artifacts-max` leave it, with its logs, artifacts,
+        tests and metrics, until it is no longer kept.
+      properties:
+        at:
+          $ref: "#/components/schemas/Timestamp"
+        by:
+          description: The user who kept it.
+          type: string
+      required:
+        - by
+        - at
+      type: object
+    MetricComparison:
+      additionalProperties: false
+      description: One item of a metric, in two builds.
+      properties:
+        delta:
+          type:
+            - number
+            - "null"
+        from:
+          type:
+            - number
+            - "null"
+        item:
+          type: string
+        to:
+          type:
+            - number
+            - "null"
+      required:
+        - item
+        - from
+        - to
+        - delta
+      type: object
+    MetricComparisonList:
+      additionalProperties: false
+      description: |
+        The rows of a list.
+        `next_cursor` is the `cursor` that reads the page after this one, and null
+        when this is the last (or the list is not paged).
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/MetricComparison"
+          type: array
+        next_cursor:
+          $ref: "#/components/schemas/NextCursor"
+      required:
+        - items
+        - next_cursor
+      type: object
+    MetricCount:
+      additionalProperties: false
+      properties:
+        items:
+          description: How many items the store remembers for the metric.
+          type: integer
+        name:
+          type: string
+      required:
+        - name
+        - items
+      type: object
+    MetricHistoryList:
+      additionalProperties: false
+      description: |
+        The rows of a list.
+        `next_cursor` is the `cursor` that reads the page after this one, and null
+        when this is the last (or the list is not paged).
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/MetricHistoryRow"
+          type: array
+        next_cursor:
+          $ref: "#/components/schemas/NextCursor"
+      required:
+        - items
+        - next_cursor
+      type: object
+    MetricHistoryRow:
+      additionalProperties: false
+      description: One value a build reported, newest first in a list.
+      properties:
+        at:
+          $ref: "#/components/schemas/Timestamp"
+        build:
+          $ref: "#/components/schemas/BuildRef"
+        stage:
+          type: string
+        unit:
+          type: string
+        value:
+          type: number
+      required:
+        - build
+        - stage
+        - value
+        - unit
+        - at
+      type: object
+    MetricStore:
+      additionalProperties: false
+      description: A metric store, as the caller may see it.
+      properties:
+        jobs:
+          description: The loaded jobs the caller may see that report into it.
+          items:
+            type: string
+          type: array
+        metrics:
+          items:
+            $ref: "#/components/schemas/MetricCount"
+          type: array
+        orphaned:
+          description: True when no loaded job reports into it.
+          type: boolean
+        store:
+          type: string
+      required:
+        - store
+        - jobs
+        - orphaned
+        - metrics
+      type: object
+    MetricStoreList:
+      additionalProperties: false
+      description: |
+        The rows of a list.
+        `next_cursor` is the `cursor` that reads the page after this one, and null
+        when this is the last (or the list is not paged).
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/MetricStore"
+          type: array
+        next_cursor:
+          $ref: "#/components/schemas/NextCursor"
+      required:
+        - items
+        - next_cursor
+      type: object
+    NextCursor:
+      description: |
+        Opaque. Sent back as `cursor`, it reads the page after this one of the same
+        list; null when there is none. Only a cursor this server gave for the list
+        is accepted, and it holds good while rows are added to the list.
+      type:
+        - string
+        - "null"
+    NullableBuild:
+      oneOf:
+        - $ref: "#/components/schemas/BuildSummary"
+        - type: "null"
+    NullableTimestamp:
+      description: RFC 3339 in UTC, with exactly three fraction digits and a Z; null when the event has not happened.
+      format: date-time
+      pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$
+      type:
+        - string
+        - "null"
+    Ok:
+      additionalProperties: false
+      properties:
+        ok:
+          const: true
+      required:
+        - ok
+      type: object
+    Overlap:
+      additionalProperties: false
+      description: A repo that more than one job indexes, which is a mistake of the job files; each of them builds it.
+      properties:
+        jobs:
+          items:
+            type: string
+          type: array
+        repo:
+          type: string
+      required:
+        - repo
+        - jobs
+      type: object
+    Owner:
+      additionalProperties: false
+      description: An owner job's own page.
+      properties:
+        app:
+          description: The GitHub App the job signs in as; null for a token.
+          type:
+            - string
+            - "null"
+        login:
+          type: string
+        old_hooks:
+          description: Repos that carry a webhook kipp made and no longer keeps.
+          items:
+            type: string
+          type: array
+        overlaps:
+          description: The repos this job shares with another job.
+          items:
+            $ref: "#/components/schemas/Overlap"
+          type: array
+        public_only:
+          description: True when the last read could not list private repos.
+          type: boolean
+        repos:
+          items:
+            $ref: "#/components/schemas/Repo"
+          type: array
+        scan:
+          oneOf:
+            - $ref: "#/components/schemas/Scan"
+            - type: "null"
+      required:
+        - login
+        - app
+        - scan
+        - public_only
+        - repos
+        - old_hooks
+        - overlaps
+      type: object
+    Param:
+      additionalProperties: false
+      description: A parameter a build of the job may be given.
+      properties:
+        default:
+          type: string
+        description:
+          description: What the job's file says of it; null when it says nothing.
+          type:
+            - string
+            - "null"
+        name:
+          type: string
+        options:
+          items:
+            type: string
+          type: array
+        type:
+          type: string
+      required:
+        - name
+        - type
+        - options
+        - default
+        - description
+      type: object
+    Problem:
+      additionalProperties: false
+      description: |
+        What every 4xx and 5xx under `/api/v1` is, a problem document as RFC 9457
+        defines one. A client decides by `code` (the codes, with their status and
+        meaning, are in `api/problems.md`) or by the status when it knows none.
+        `detail` is for a person and may change.
+      properties:
+        code:
+          description: The stable name of the kind of problem, in snake_case.
+          examples:
+            - not_found
+          type: string
+        detail:
+          description: Why, for a person.
+          type: string
+        status:
+          description: The HTTP status, as in the response line.
+          type: integer
+        title:
+          description: The code's fixed one-line summary.
+          type: string
+        type:
+          description: A link to the code's entry in `api/problems.md`.
+          examples:
+            - https://github.com/ndthuan/kipp/blob/main/api/problems.md#not_found
+          type: string
+      required:
+        - type
+        - title
+        - status
+        - detail
+        - code
+      type: object
+    Queue:
+      additionalProperties: false
+      description: What runs and what waits, as the caller may see it.
+      properties:
+        busy:
+          description: How many are taken. Only an admin is told, anyone else gets null.
+          type:
+            - integer
+            - "null"
+        executors:
+          description: The server's executors. Only an admin is told, anyone else gets null.
+          type:
+            - integer
+            - "null"
+        queued:
+          items:
+            $ref: "#/components/schemas/QueuedBuild"
+          type: array
+        running:
+          items:
+            $ref: "#/components/schemas/RunningBuild"
+          type: array
+      required:
+        - executors
+        - busy
+        - running
+        - queued
+      type: object
+    QueuedBuild:
+      additionalProperties: false
+      properties:
+        blocker:
+          oneOf:
+            - $ref: "#/components/schemas/BuildRef"
+            - type: "null"
+        id:
+          format: int64
+          type: integer
+        job:
+          type: string
+        lock:
+          description: The lock it waits for; null unless `waiting` is `lock`.
+          type:
+            - string
+            - "null"
+        number:
+          type: integer
+        queued_at:
+          $ref: "#/components/schemas/Timestamp"
+        started_by:
+          type: string
+        trigger:
+          type: string
+        waiting:
+          $ref: "#/components/schemas/WaitReason"
+      required:
+        - id
+        - job
+        - number
+        - trigger
+        - started_by
+        - queued_at
+        - waiting
+        - lock
+        - blocker
+      type: object
+    Quiet:
+      additionalProperties: false
+      description: The server's quiet mode, in which it takes no new builds.
+      properties:
+        idle:
+          description: True when nothing runs or waits, so the server may be restarted.
+          type: boolean
+        queued:
+          description: Builds waiting to start.
+          type: integer
+        quiet:
+          type: boolean
+        running:
+          description: Builds with something running.
+          type: integer
+        since:
+          $ref: "#/components/schemas/NullableTimestamp"
+      required:
+        - quiet
+        - since
+        - running
+        - queued
+        - idle
+      type: object
+    Refusal:
+      additionalProperties: false
+      description: The body of an agent-protocol answer that is not 2xx.
+      properties:
+        Error:
+          type: string
+        ServerVersion:
+          description: For a 409, the version the server is, so that the agent can say which to run.
+          type: string
+      required:
+        - Error
+      type: object
+    RememberedValue:
+      additionalProperties: false
+      description: What a store remembers of one item of a metric, and the build that set it.
+      properties:
+        at:
+          $ref: "#/components/schemas/Timestamp"
+        build:
+          description: The build that set the value; null for a value put by hand.
+          oneOf:
+            - $ref: "#/components/schemas/BuildRef"
+            - type: "null"
+        item:
+          type: string
+        metric:
+          type: string
+        unit:
+          type: string
+        value:
+          type: number
+      required:
+        - metric
+        - item
+        - value
+        - unit
+        - build
+        - at
+      type: object
+    RememberedValueList:
+      additionalProperties: false
+      description: |
+        The rows of a list.
+        `next_cursor` is the `cursor` that reads the page after this one, and null
+        when this is the last (or the list is not paged).
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/RememberedValue"
+          type: array
+        next_cursor:
+          $ref: "#/components/schemas/NextCursor"
+      required:
+        - items
+        - next_cursor
+      type: object
+    Repo:
+      additionalProperties: false
+      description: One repo of an owner job.
+      properties:
+        children_count:
+          type: integer
+        hook:
+          description: "`ok` where kipp keeps the repo's webhook, `off` where it cannot."
+          enum:
+            - ok
+            - off
+            - null
+          type:
+            - string
+            - "null"
+        hook_note:
+          description: Why the hook is off.
+          type:
+            - string
+            - "null"
+        job:
+          type: string
+        repo:
+          type: string
+        state:
+          enum:
+            - live
+            - gone
+          type: string
+        worst:
+          oneOf:
+            - $ref: "#/components/schemas/BuildStatus"
+            - type: "null"
+      required:
+        - job
+        - repo
+        - state
+        - hook
+        - hook_note
+        - children_count
+        - worst
+      type: object
+    ReportedMetric:
+      additionalProperties: false
+      description: A metric a stage reported, with a value for each item.
+      properties:
+        name:
+          type: string
+        unit:
+          type: string
+        values:
+          additionalProperties:
+            type: number
+          type: object
+      required:
+        - name
+        - unit
+        - values
+      type: object
+    RunningBuild:
+      additionalProperties: false
+      properties:
+        id:
+          format: int64
+          type: integer
+        job:
+          type: string
+        number:
+          type: integer
+        queued_at:
+          $ref: "#/components/schemas/Timestamp"
+        stages:
+          description: The stages running now.
+          items:
+            type: string
+          type: array
+        started_at:
+          $ref: "#/components/schemas/NullableTimestamp"
+        started_by:
+          type: string
+        trigger:
+          type: string
+        waiting_stages:
+          additionalProperties:
+            type: string
+          description: By stage, what one that waits for an agent or an engine waits for.
+          type: object
+      required:
+        - id
+        - job
+        - number
+        - trigger
+        - started_by
+        - queued_at
+        - started_at
+        - stages
+        - waiting_stages
+      type: object
+    Scan:
+      additionalProperties: false
+      description: |
+        How a multibranch or owner job's scanning stands. No token is no scan,
+        and no statuses on the commits.
+      properties:
+        at:
+          $ref: "#/components/schemas/NullableTimestamp"
+        error:
+          type:
+            - string
+            - "null"
+        every_seconds:
+          description: How often it scans, in whole seconds; null when it does not scan on a clock.
+          type:
+            - integer
+            - "null"
+        result:
+          type:
+            - string
+            - "null"
+        running:
+          type: boolean
+        token:
+          type: boolean
+      required:
+        - token
+        - every_seconds
+        - running
+        - at
+        - result
+        - error
+      type: object
+    Secret:
+      additionalProperties: false
+      description: A secret by name, never its value.
+      properties:
+        jobs:
+          description: The loaded jobs that ask for it, sorted.
+          items:
+            type: string
+          type: array
+        kind:
+          description: What the secret holds, a one-line value, a file's bytes or a user with a password; empty for a name no secret holds.
+          enum:
+            - ""
+            - text
+            - file
+            - userpass
+          type: string
+        name:
+          type: string
+        narrow:
+          description: True when the secret is global and exactly one job lists it, so that it could be scoped to that job.
+          type: boolean
+        scopes:
+          description: Which jobs may list the secret, `global`, `group:<name>` or `job:<pattern>`; empty for a name no secret holds.
+          items:
+            type: string
+          type: array
+        updated_at:
+          $ref: "#/components/schemas/NullableTimestamp"
+        user:
+          description: A userpass secret's user, never its password; empty for any other.
+          type: string
+        webhook:
+          description: True when it is a name a job's webhook trigger checks its deliveries with.
+          type: boolean
+      required:
+        - name
+        - kind
+        - user
+        - scopes
+        - narrow
+        - updated_at
+        - jobs
+        - webhook
+      type: object
+    Secrets:
+      additionalProperties: false
+      properties:
+        missing:
+          description: Every name a loaded job asks for that none holds.
+          items:
+            $ref: "#/components/schemas/Secret"
+          type: array
+        out_of_scope:
+          description: Every secret that is set but whose scopes do not reach a loaded job that lists it, with those jobs in `jobs`. A build of such a job fails before it starts.
+          items:
+            $ref: "#/components/schemas/Secret"
+          type: array
+        set:
+          description: Every secret that is set.
+          items:
+            $ref: "#/components/schemas/Secret"
+          type: array
+      required:
+        - set
+        - missing
+        - out_of_scope
+      type: object
+    Server:
+      additionalProperties: false
+      description: What the server runs with.
+      properties:
+        agent_env:
+          description: The variables of the server's environment that agents' stages are given.
+          items:
+            type: string
+          type: array
+        agent_listen:
+          description: The listener of the agent protocol and the cache apart from `listen`.
+          type: string
+        agent_url:
+          description: The URL a container's agent dials.
+          type: string
+        base_url:
+          type: string
+        builds:
+          description: The builds with something running at once.
+          type: integer
+        data_dir:
+          type: string
+        db_size_bytes:
+          description: The database file's size; null when it could not be read.
+          type:
+            - integer
+            - "null"
+        default_runs_on:
+          description: The labels of a stage that names none, on a server with no executors.
+          items:
+            type: string
+          type: array
+        executors:
+          description: The server's own stages at once; 0 for none.
+          type: integer
+        free_disk_bytes:
+          description: Bytes free on the data directory's disk; null when they could not be read.
+          type:
+            - integer
+            - "null"
+        go_version:
+          type: string
+        jobs:
+          description: How many jobs are loaded.
+          type: integer
+        jobs_dir:
+          type: string
+        last_reload_at:
+          $ref: "#/components/schemas/Timestamp"
+        last_reload_error:
+          description: Why the last read of the job files was refused; empty when it was taken.
+          type: string
+        listen:
+          type: string
+        schema:
+          description: The database's schema version.
+          type: integer
+        session_ttl_seconds:
+          type: integer
+        shell:
+          type: string
+        started_at:
+          $ref: "#/components/schemas/Timestamp"
+        timezone:
+          type: string
+        version:
+          type: string
+      required:
+        - version
+        - go_version
+        - schema
+        - started_at
+        - listen
+        - base_url
+        - executors
+        - builds
+        - default_runs_on
+        - agent_env
+        - agent_url
+        - agent_listen
+        - shell
+        - session_ttl_seconds
+        - timezone
+        - data_dir
+        - jobs_dir
+        - free_disk_bytes
+        - db_size_bytes
+        - last_reload_at
+        - last_reload_error
+        - jobs
+      type: object
+    Stage:
+      additionalProperties: false
+      description: One stage of a build.
+      properties:
+        exit_code:
+          type:
+            - integer
+            - "null"
+        finished_at:
+          $ref: "#/components/schemas/NullableTimestamp"
+        name:
+          type: string
+        needs:
+          description: The stages that must end well before this one starts.
+          items:
+            type: string
+          type: array
+        ran_on:
+          description: Where it ran, `local`, an agent's name, or `engine/n` for a container; empty before it starts.
+          type: string
+        started_at:
+          $ref: "#/components/schemas/NullableTimestamp"
+        status:
+          $ref: "#/components/schemas/StageStatus"
+        tries:
+          description: How many times its command ran, which `retries` makes more than one; 1 for a stage that ran once or has not run.
+          minimum: 1
+          type: integer
+      required:
+        - name
+        - needs
+        - status
+        - exit_code
+        - started_at
+        - finished_at
+        - ran_on
+        - tries
+      type: object
+    StageArtifacts:
+      additionalProperties: false
+      description: What one stage of a build kept.
+      properties:
+        files:
+          items:
+            $ref: "#/components/schemas/Artifact"
+          type: array
+        stage:
+          type: string
+        zip:
+          description: Where to download all of them as one zip.
+          type: string
+      required:
+        - stage
+        - zip
+        - files
+      type: object
+    StageArtifactsList:
+      additionalProperties: false
+      description: |
+        The rows of a list.
+        `next_cursor` is the `cursor` that reads the page after this one, and null
+        when this is the last (or the list is not paged).
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/StageArtifacts"
+          type: array
+        next_cursor:
+          $ref: "#/components/schemas/NextCursor"
+      required:
+        - items
+        - next_cursor
+      type: object
+    StageMetrics:
+      additionalProperties: false
+      properties:
+        guards:
+          items:
+            $ref: "#/components/schemas/Guard"
+          type: array
+        metrics:
+          items:
+            $ref: "#/components/schemas/ReportedMetric"
+          type: array
+        name:
+          type: string
+      required:
+        - name
+        - metrics
+        - guards
+      type: object
+    StageStatus:
+      enum:
+        - pending
+        - running
+        - success
+        - unstable
+        - failed
+        - skipped
+        - cancelled
+      type: string
+    TestResult:
+      additionalProperties: false
+      description: One JUnit case of a build.
+      properties:
+        duration_ms:
+          type: integer
+        message:
+          type: string
+        name:
+          type: string
+        stage:
+          type: string
+        status:
+          enum:
+            - passed
+            - failed
+            - skipped
+          type: string
+        suite:
+          type: string
+      required:
+        - stage
+        - suite
+        - name
+        - status
+        - duration_ms
+        - message
+      type: object
+    TestResultList:
+      additionalProperties: false
+      description: |
+        The rows of a list.
+        `next_cursor` is the `cursor` that reads the page after this one, and null
+        when this is the last (or the list is not paged).
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/TestResult"
+          type: array
+        next_cursor:
+          $ref: "#/components/schemas/NextCursor"
+      required:
+        - items
+        - next_cursor
+      type: object
+    Timestamp:
+      description: RFC 3339 in UTC, with exactly three fraction digits and a Z, as `2026-10-30T12:00:00.123Z`.
+      format: date-time
+      pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$
+      type: string
+    Token:
+      additionalProperties: false
+      description: What is known of an API token, never the token or its hash.
+      properties:
+        created_at:
+          $ref: "#/components/schemas/Timestamp"
+        expires_at:
+          $ref: "#/components/schemas/NullableTimestamp"
+        id:
+          format: int64
+          type: integer
+        label:
+          type: string
+        last_used_at:
+          $ref: "#/components/schemas/NullableTimestamp"
+      required:
+        - id
+        - label
+        - created_at
+        - last_used_at
+        - expires_at
+      type: object
+    TriggerRequest:
+      additionalProperties: false
+      description: The body of a trigger. No body at all is no params; anything else in it is refused.
+      properties:
+        params:
+          additionalProperties:
+            type: string
+          type: object
+      type: object
+    User:
+      additionalProperties: false
+      description: What an admin sees of a user, never a password or a token.
+      properties:
+        admin:
+          type: boolean
+        gone_grants:
+          description: The jobs among `grants` that are no longer loaded, sorted.
+          items:
+            type: string
+          type: array
+        grants:
+          additionalProperties:
+            items:
+              type: string
+            type: array
+          description: The permissions on each job, including jobs no longer loaded.
+          type: object
+        last_login_at:
+          $ref: "#/components/schemas/NullableTimestamp"
+        name:
+          type: string
+        sessions:
+          description: How many live browser sessions the user has.
+          type: integer
+        tokens:
+          items:
+            $ref: "#/components/schemas/Token"
+          type: array
+      required:
+        - name
+        - admin
+        - last_login_at
+        - grants
+        - gone_grants
+        - tokens
+        - sessions
+      type: object
+    UserList:
+      additionalProperties: false
+      description: |
+        The rows of a list.
+        `next_cursor` is the `cursor` that reads the page after this one, and null
+        when this is the last (or the list is not paged).
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/User"
+          type: array
+        next_cursor:
+          $ref: "#/components/schemas/NextCursor"
+      required:
+        - items
+        - next_cursor
+      type: object
+    WaitReason:
+      description: |
+        Why a queued build has not started: its job is gone or disabled, a build
+        of the same job is ahead of it, another build holds a lock, every
+        executor is taken, or nothing holds it back and the next pass starts it.
+        Anyone but an admin is told only that it waits to start (start), since
+        what holds it back may be a job they may not view.
+      enum:
+        - gone
+        - job
+        - lock
+        - executor
+        - nothing
+        - start
+      type: string
+    WebhookAccepted:
+      oneOf:
+        - additionalProperties: false
+          description: A job's delivery queued its build.
+          properties:
+            id:
+              format: int64
+              type: integer
+            number:
+              type: integer
+          required:
+            - id
+            - number
+          type: object
+        - additionalProperties: false
+          description: A multibranch or owner job's delivery, with what became of each child build.
+          properties:
+            builds:
+              items:
+                $ref: "#/components/schemas/WebhookBuild"
+              type: array
+          required:
+            - builds
+          type: object
+        - additionalProperties: false
+          description: A GitHub App installation event asked for scans of these owner jobs.
+          properties:
+            scan:
+              items:
+                type: string
+              type: array
+          required:
+            - scan
+          type: object
+    WebhookBuild:
+      additionalProperties: false
+      description: What became of the build one child job was to get.
+      properties:
+        error:
+          description: Why no build was queued.
+          type: string
+        id:
+          format: int64
+          type: integer
+        job:
+          type: string
+        number:
+          type: integer
+        skipped:
+          description: Present when the commit has a build queued or running already.
+          type: string
+      required:
+        - job
+      type: object
+    WebhookIgnored:
+      additionalProperties: false
+      description: The delivery was valid and changes nothing; `ignored` says why.
+      properties:
+        ignored:
+          type: string
+      required:
+        - ignored
+      type: object
+  securitySchemes:
+    agentToken:
+      description: An agent's token (`kippa_` followed by the secret).
+      scheme: bearer
+      type: http
+    bearerToken:
+      description: A user's API token, made on the account page.
+      scheme: bearer
+      type: http
+    cacheToken:
+      description: The token a build's stage is given to reach its caches, valid while the build runs.
+      scheme: bearer
+      type: http
+    csrfToken:
+      description: The session's CSRF token, sent beside the session cookie on every request that changes something.
+      in: header
+      name: X-CSRF-Token
+      type: apiKey
+    sessionCookie:
+      description: |
+        The browser session. A request that is not GET or HEAD must also
+        carry the session's `X-CSRF-Token`, or it is 403.
+      in: cookie
+      name: __Host-kipp_session
+      type: apiKey
+    webhookSignature:
+      description: |
+        `sha256=` and the hex HMAC-SHA256 of the request body, keyed with the
+        secret of the job (or App) the delivery is for.
+      in: header
+      name: X-Hub-Signature-256
+      type: apiKey

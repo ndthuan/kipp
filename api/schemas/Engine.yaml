@@ -1,0 +1,35 @@
+type: object
+additionalProperties: false
+description: A Docker engine, its record and what the server sees of it now.
+required: [name, kind, url, labels, executors, enabled, reachable, since, version, last_error, running]
+properties:
+  name:
+    type: string
+  kind:
+    type: string
+  url:
+    type: string
+    description: The engine's address with any password removed.
+  labels:
+    type: array
+    items:
+      type: string
+  executors:
+    type: integer
+    description: How many stages it runs at once.
+  enabled:
+    type: boolean
+  reachable:
+    type: boolean
+  since:
+    $ref: NullableTimestamp.yaml
+  version:
+    type: string
+    description: The Docker engine's version as it last answered a probe; empty before it has.
+  last_error:
+    type: string
+  running:
+    type: array
+    items:
+      type: string
+    description: The stages running on it, as `job#number/stage`.

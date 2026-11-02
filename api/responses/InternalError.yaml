@@ -1,0 +1,5 @@
+description: Something failed inside the server; the reason is in its log, not in the answer.
+content:
+  application/problem+json:
+    schema:
+      $ref: ../schemas/Problem.yaml
