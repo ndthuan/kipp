@@ -12,6 +12,9 @@ lines and the data directory are the public surface.
   same ref (same branch, same tag, or no ref for both) that are still
   queued, and the job's activity names the build that replaced each. A
   running build is left to end.
+- The queue badge in the header shows an icon and a count for running and
+  queued builds, so it no longer wraps on a narrow screen.
+- The header stays on one row on a phone, as it does on a wider screen.
 
 ## [1.0.0] - 2026-11-02
 
