@@ -2206,7 +2206,12 @@ func TestTheQueuePageSaysWhatRunsAndWhyTheRestWaits(t *testing.T) {
 		`<span class="status queued">queued</span> <span class="sub">waiting for lock <code>k</code>, held by <a class="link" href="/jobs/hold/1">hold #1</a></span>`,
 		`action="/jobs/wait/1/cancel"`, `action="/jobs/hold/1/cancel"`,
 		`<script src="/static/queue.js?v=`)
-	contains(t, page, `id="queue-badge"`, `1 running, 1 queued</a>`)
+	contains(t, page, `id="queue-badge"`,
+		`aria-label="1 running, 1 queued" title="1 running, 1 queued"`,
+		`<span class="qb qb-running"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true">`,
+		`</svg>1</span><span class="qb qb-queued"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true">`,
+		`</svg>1</span></a>`)
+	lacks(t, page, `1 running, 1 queued</a>`)
 
 	// bob may view wait and nothing of hold: the lock is named, its holder is not.
 	ctx := context.Background()
@@ -2214,8 +2219,9 @@ func TestTheQueuePageSaysWhatRunsAndWhyTheRestWaits(t *testing.T) {
 	must(t, err)
 	must(t, e.st.Grant(ctx, bob.ID, "wait", []string{"view"}))
 	_, page = get(t, e.login(t, "bob"), e.srv.URL+"/queue")
-	contains(t, page, `waiting for lock <code>k</code>, held by another build`, `0 running, 1 queued</a>`)
-	lacks(t, page, "hold", `/cancel"`, "executors")
+	contains(t, page, `waiting for lock <code>k</code>, held by another build`,
+		`aria-label="0 running, 1 queued"`, `<span class="qb qb-queued">`)
+	lacks(t, page, `qb-running`, "hold", `/cancel"`, "executors")
 
 	must(t, e.d.Cancel(ctx, hold, "test"))
 	e.queued(t, 0, 0)

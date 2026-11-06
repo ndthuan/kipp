@@ -30,7 +30,7 @@
 </details>
 {{end}}</nav>
 {{end}}{{end}}{{end}}<div class="who">
-{{if .User}}{{with .Queue}}{{$busy := or .Running .Queued}}<a id="queue-badge" class="link-plain queue-badge{{if not $busy}} idle{{end}}" href="/queue" hx-get="/queue" hx-select="#queue-badge" hx-target="this" hx-swap="outerHTML" hx-trigger="kipp-changed from:body">{{if $busy}}{{len .Running}} running, {{len .Queued}} queued{{else}}idle{{end}}</a>
+{{if .User}}{{with .Queue}}{{$busy := or .Running .Queued}}<a id="queue-badge" class="link-plain queue-badge{{if not $busy}} idle{{end}}" href="/queue" hx-get="/queue" hx-select="#queue-badge" hx-target="this" hx-swap="outerHTML" hx-trigger="kipp-changed from:body"{{if $busy}} aria-label="{{len .Running}} running, {{len .Queued}} queued" title="{{len .Running}} running, {{len .Queued}} queued">{{if .Running}}<span class="qb qb-running"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l13 8-13 8z"/></svg>{{len .Running}}</span>{{end}}{{if .Queued}}<span class="qb qb-queued"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>{{len .Queued}}</span>{{end}}{{else}}>idle{{end}}</a>
 {{end}}{{$mine := or (eq .Here "/metrics") (eq .Here "/account") (eq .Here "/admin/users") (eq .Here "/admin/secrets") (eq .Here "/admin/apps") (eq .Here "/admin/agents") (eq .Here "/admin/cache") (eq .Here "/admin/server")}}<details class="user drop">
 <summary{{if $mine}} aria-current="true"{{end}}><span class="who-name">{{.User.Name}}</span></summary>
 <ul class="menu">

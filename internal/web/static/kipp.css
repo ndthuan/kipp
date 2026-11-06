@@ -46,6 +46,10 @@
   }
   .who { display: flex; align-items: center; gap: calc(var(--space) * 4); margin-left: auto; color: var(--fg-subtle); }
   .queue-badge { font-weight: var(--weight-medium); color: var(--on-busy-soft); white-space: nowrap; }
+  .queue-badge .qb { display: inline-flex; align-items: center; gap: calc(var(--space) * 1); font-variant-numeric: tabular-nums; }
+  .queue-badge .qb + .qb { margin-left: calc(var(--space) * 3); }
+  .queue-badge .qb-queued { color: var(--fg-muted); }
+  .queue-badge .icon { width: 14px; height: 14px; flex: none; }
   .queue-badge.idle { font-weight: var(--weight-normal); color: var(--fg-subtle); }
   .queue td:nth-child(3) { white-space: nowrap; font-variant-numeric: tabular-nums; }
   .queue form { margin: 0; }
