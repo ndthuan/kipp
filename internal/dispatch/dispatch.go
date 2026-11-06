@@ -323,8 +323,38 @@ func (d *Dispatcher) Trigger(ctx context.Context, req TriggerRequest) (*store.Bu
 	if err := d.st.CreateBuild(ctx, b); err != nil {
 		return nil, err
 	}
+	if err := d.supersede(ctx, job, b); err != nil {
+		return nil, err
+	}
 	d.kick()
 	return b, nil
+}
+
+// supersede, for a supersede job, cancels the other builds of b's job that
+// are still queued, and says on the job's activity which build took their
+// place. A running build is left to end.
+func (d *Dispatcher) supersede(ctx context.Context, job *config.Job, b *store.Build) error {
+	if job.Concurrency != config.Supersede {
+		return nil
+	}
+	queued, err := d.st.BuildsWithStatus(ctx, store.Queued)
+	if err != nil {
+		return err
+	}
+	for _, old := range queued {
+		if old.Job != b.Job || old.ID == b.ID {
+			continue
+		}
+		if err := d.st.SetBuildStatus(ctx, old.ID, store.Cancelled, time.Now()); err != nil {
+			return err
+		}
+		d.release(old.ID)
+		line := fmt.Sprintf("build #%d superseded by #%d", old.Number, b.Number)
+		if err := d.st.AddActivity(ctx, b.Job, line, time.Now()); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // dropReason is non-empty when the job's rule refuses this trigger now:

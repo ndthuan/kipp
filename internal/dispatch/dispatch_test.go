@@ -233,6 +233,38 @@ func TestDropDiscardsATriggerOnARunningBuild(t *testing.T) {
 	h.wait(t, first.ID)
 }
 
+func TestSupersedeCancelsTheQueuedBuildsOfTheJobAndSparesTheRunningOne(t *testing.T) {
+	block, open := gated(t)
+	h := newHarness(t, map[string]string{
+		"s":     "name: s\nconcurrency: supersede\nstages:\n  s: {run: '" + block + "'}\n",
+		"other": "name: other\nstages:\n  s: {run: '" + block + "'}\n",
+	})
+	ctx := context.Background()
+	running := h.trigger(t, "s")
+	h.untilRunning(t, running.ID)
+	otherRunning := h.trigger(t, "other")
+	h.untilRunning(t, otherRunning.ID)
+	otherQueued := h.trigger(t, "other")
+	first, second, third := h.trigger(t, "s"), h.trigger(t, "s"), h.trigger(t, "s")
+	for _, c := range []struct {
+		b    *store.Build
+		want store.Status
+	}{{first, store.Cancelled}, {second, store.Cancelled}, {third, store.Queued}, {running, store.Running}, {otherQueued, store.Queued}} {
+		got, err := h.st.Build(ctx, c.b.ID)
+		if err != nil || got.Status != c.want {
+			t.Fatalf("#%d of %s is %v (%v), want %v", c.b.Number, c.b.Job, got.Status, err, c.want)
+		}
+	}
+	act, _ := h.st.Activity(ctx, "s", 5)
+	if len(act) != 2 || !strings.Contains(act[0].Line, fmt.Sprintf("#%d superseded by #%d", second.Number, third.Number)) {
+		t.Fatalf("%+v", act)
+	}
+	open()
+	if b := h.wait(t, third.ID); b.Status != store.Success {
+		t.Fatalf("#%d %v", b.Number, b.Status)
+	}
+}
+
 func TestACronFireOnAQueuedBuildIsDroppedNotStacked(t *testing.T) {
 	block, open := gated(t)
 	h := newHarness(t, map[string]string{"c": "name: c\ntriggers: {cron: '* * * * *'}\nstages:\n  s: {run: '" + block + "'}\n"})

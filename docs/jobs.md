@@ -59,7 +59,7 @@ triggers:
   cron: "H 3 * * *"
   webhook: {repo: acme/site, branches: [main, "release-*"]}
   after: [site-build]         # runs when that job succeeds or ends unstable
-concurrency: queue            # queue (default), drop or parallel
+concurrency: queue            # queue (default), drop, parallel or supersede
 locks: [checkout]             # no two builds holding the same lock run together
 timeout: 2h
 keep: {builds: 50, days: 30}  # either or both; default is 100 builds
@@ -103,7 +103,7 @@ The top-level keys:
 | `params` | Build parameters ([Params](#params)). |
 | `timezone` | The IANA zone the cron is read in. |
 | `triggers` | `cron`, `webhook` and `after` ([Triggers](#triggers)). |
-| `concurrency` | `queue` (default), `drop` or `parallel`. |
+| `concurrency` | `queue` (default), `drop`, `parallel` or `supersede`. |
 | `locks` | Names of locks a build holds while it runs. |
 | `timeout` | How long a build may run, a duration like `30m` or `2h`. None is no limit. |
 | `keep` | `{builds, days}`: how many builds, and for how long, are kept. |
@@ -240,7 +240,11 @@ form for its params), with `kipp run <job>`, or with
 - `concurrency: queue` (the default) runs a job's builds one after
   another, and drops a cron trigger while one is already waiting. `drop`
   drops every trigger while the job has a build queued or running.
-  `parallel` runs them side by side.
+  `parallel` runs them side by side. `supersede` queues like `queue`, and
+  each new build cancels the job's builds still queued (never a running
+  one), saying on the job's activity which build took their place: for a
+  job whose newest trigger makes the older ones pointless, such as a tag
+  deploy that waits on a lock.
 - `locks` are names shared across jobs: no two builds holding the same
   lock run at once, whatever their jobs. A build waits for its locks
   before it starts, and holds them until its hooks have ended.

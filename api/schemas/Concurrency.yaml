@@ -1,3 +1,3 @@
 type: string
-enum: [queue, drop, parallel]
+enum: [queue, drop, parallel, supersede]
 description: What the job does with a build triggered while another runs.

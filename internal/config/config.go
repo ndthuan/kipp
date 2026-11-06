@@ -32,6 +32,9 @@ const (
 	Queue    Concurrency = "queue"
 	Drop     Concurrency = "drop"
 	Parallel Concurrency = "parallel"
+	// Supersede queues like Queue, and a new build cancels the job's builds
+	// still queued: the newest is the one worth running.
+	Supersede Concurrency = "supersede"
 )
 
 // Job is one job file, validated.
@@ -394,8 +397,8 @@ func (j *Job) checkName(filename string) error {
 }
 
 func (j *Job) checkConcurrency() error {
-	if !slices.Contains([]Concurrency{Queue, Drop, Parallel}, j.Concurrency) {
-		return fmt.Errorf("concurrency %q: queue, drop or parallel", j.Concurrency)
+	if !slices.Contains([]Concurrency{Queue, Drop, Parallel, Supersede}, j.Concurrency) {
+		return fmt.Errorf("concurrency %q: queue, drop, parallel or supersede", j.Concurrency)
 	}
 	return nil
 }

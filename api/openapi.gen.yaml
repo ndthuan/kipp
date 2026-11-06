@@ -2728,6 +2728,7 @@ components:
         - queue
         - drop
         - parallel
+        - supersede
       type: string
     ConnectRequest:
       description: |
