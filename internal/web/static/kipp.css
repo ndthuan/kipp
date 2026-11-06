@@ -151,8 +151,22 @@
   /* The name is the user menu's one label, so a narrow screen cuts it
      short rather than hiding it. */
   .who-name { max-width: calc(var(--space) * 40); overflow: hidden; text-overflow: ellipsis; }
-  @media (max-width: 26rem) {
-    .who-name { max-width: calc(var(--space) * 16); }
+  .icon-user { display: none; width: 18px; height: 18px; }
+  .menu-who { padding: calc(var(--space) * 1.5) calc(var(--space) * 3); color: var(--fg); font-weight: var(--weight-medium); overflow-wrap: anywhere; }
+  /* The header is one row on a phone as on a desktop: the user shows as a
+     person icon (the name stays its label and the menu's first line), and
+     the gaps and the brand tighten, so the brand, the Groups button, the
+     queue badge, the user and the theme picker hold at 320 px. */
+  @media (max-width: 47.99rem) {
+    .top { flex-wrap: nowrap; padding-inline: calc(var(--space) * 3); gap: calc(var(--space) * 2); }
+    .top.folding.open { flex-wrap: wrap; }
+    .brand { font-size: var(--size-md); }
+    .who { gap: calc(var(--space) * 2); }
+    .user > summary::after { display: none; }
+    .user .who-name { display: none; }
+    .icon-user { display: block; }
+    .user > summary { padding: calc(var(--space) * 1.5); }
+    .user .menu { max-width: calc(100vw - var(--space) * 6); }
   }
 
   main {

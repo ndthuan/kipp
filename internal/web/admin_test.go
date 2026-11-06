@@ -110,7 +110,8 @@ func TestTheAdminPagesAndChangesAreForAnAdminOnly(t *testing.T) {
 func TestTheUserMenuLeadsToTheAccountAndForAnAdminToTheAdminPages(t *testing.T) {
 	e := site(t)
 	_, page := get(t, e.login(t, "admin"), e.srv.URL+"/jobs/smoke")
-	contains(t, page, `<details class="user drop">`+"\n"+`<summary><span class="who-name">admin</span></summary>`,
+	contains(t, page, `<details class="user drop">`+"\n"+`<summary aria-label="admin" title="admin"><svg class="icon icon-user"`,
+		`<span class="who-name">admin</span></summary>`+"\n"+`<ul class="menu">`+"\n"+`<li class="menu-who">admin</li>`,
 		`<a href="/account">Account</a>`, `<a href="/admin/users">Users</a>`, `<a href="/admin/secrets">Secrets</a>`, `<a href="/admin/server">Server</a>`,
 		`<form method="post" action="/logout">`, `<button class="menu-button">Log out</button>`)
 	lacks(t, page, `href="/admin">`)
@@ -125,7 +126,7 @@ func TestTheUserMenuLeadsToTheAccountAndForAnAdminToTheAdminPages(t *testing.T) 
 
 	// The page the menu leads to is marked in it, and the menu with it.
 	_, page = get(t, e.login(t, "admin"), e.srv.URL+"/admin/secrets")
-	contains(t, page, `<summary aria-current="true"><span class="who-name">admin</span>`, `<a href="/admin/secrets" aria-current="page">Secrets</a>`)
+	contains(t, page, `<summary aria-current="true" aria-label="admin"`, `<a href="/admin/secrets" aria-current="page">Secrets</a>`)
 }
 
 func TestTheUsersPageListsEveryUserAndAddsOneWithAPasswordShownOnce(t *testing.T) {
