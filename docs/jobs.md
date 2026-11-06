@@ -241,10 +241,13 @@ form for its params), with `kipp run <job>`, or with
   another, and drops a cron trigger while one is already waiting. `drop`
   drops every trigger while the job has a build queued or running.
   `parallel` runs them side by side. `supersede` queues like `queue`, and
-  each new build cancels the job's builds still queued (never a running
-  one), saying on the job's activity which build took their place: for a
-  job whose newest trigger makes the older ones pointless, such as a tag
-  deploy that waits on a lock.
+  each new build cancels the queued builds of the same job and the same
+  ref (never a running one): the same branch for a branch push, the same
+  tag for a tag push, and for a build with no ref (cron, by hand, API) the
+  other no-ref builds. A push to `main` never cancels a queued tag build,
+  nor one branch's build another's. The job's activity says which build
+  took their place: for a job whose newest trigger of a ref makes the older
+  ones pointless, such as a tag deploy that waits on a lock.
 - `locks` are names shared across jobs: no two builds holding the same
   lock run at once, whatever their jobs. A build waits for its locks
   before it starts, and holds them until its hooks have ended.

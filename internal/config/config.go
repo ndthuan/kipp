@@ -32,8 +32,9 @@ const (
 	Queue    Concurrency = "queue"
 	Drop     Concurrency = "drop"
 	Parallel Concurrency = "parallel"
-	// Supersede queues like Queue, and a new build cancels the job's builds
-	// still queued: the newest is the one worth running.
+	// Supersede queues like Queue, and a new build cancels the builds of the
+	// same job and the same ref (branch or tag; none for a cron, by-hand or
+	// API build) still queued: the newest of a ref is the one worth running.
 	Supersede Concurrency = "supersede"
 )
 

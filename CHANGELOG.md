@@ -8,9 +8,10 @@ lines and the data directory are the public surface.
 
 ## Unreleased
 
-- `concurrency: supersede`: a new build of the job cancels its builds that
-  are still queued, and the job's activity names the build that replaced
-  each. A running build is left to end.
+- `concurrency: supersede`: a new build of the job cancels its builds of the
+  same ref (same branch, same tag, or no ref for both) that are still
+  queued, and the job's activity names the build that replaced each. A
+  running build is left to end.
 
 ## [1.0.0] - 2026-11-02
 

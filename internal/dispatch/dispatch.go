@@ -330,9 +330,11 @@ func (d *Dispatcher) Trigger(ctx context.Context, req TriggerRequest) (*store.Bu
 	return b, nil
 }
 
-// supersede, for a supersede job, cancels the other builds of b's job that
-// are still queued, and says on the job's activity which build took their
-// place. A running build is left to end.
+// supersede, for a supersede job, cancels the other builds of b's job and
+// of b's ref (the same branch, the same tag, or none for both) that are
+// still queued, and says on the job's activity which build took their
+// place. A running build is left to end. A job serves many branches and
+// tags, so a push to one never cancels the queued build of another.
 func (d *Dispatcher) supersede(ctx context.Context, job *config.Job, b *store.Build) error {
 	if job.Concurrency != config.Supersede {
 		return nil
@@ -342,7 +344,7 @@ func (d *Dispatcher) supersede(ctx context.Context, job *config.Job, b *store.Bu
 		return err
 	}
 	for _, old := range queued {
-		if old.Job != b.Job || old.ID == b.ID {
+		if old.Job != b.Job || old.ID == b.ID || old.TriggerBranch != b.TriggerBranch || old.TriggerTag != b.TriggerTag {
 			continue
 		}
 		if err := d.st.SetBuildStatus(ctx, old.ID, store.Cancelled, time.Now()); err != nil {

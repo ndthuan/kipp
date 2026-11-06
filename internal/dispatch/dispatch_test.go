@@ -265,6 +265,58 @@ func TestSupersedeCancelsTheQueuedBuildsOfTheJobAndSparesTheRunningOne(t *testin
 	}
 }
 
+// atRef triggers a webhook build of job for a branch or a tag ("" for none).
+func (h *harness) atRef(t *testing.T, job, branch, tag string) *store.Build {
+	t.Helper()
+	kind := "webhook"
+	if branch == "" && tag == "" {
+		kind = "cli"
+	}
+	b, err := h.d.Trigger(context.Background(), TriggerRequest{Job: job, Kind: kind, Branch: branch, Tag: tag, By: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
+func TestSupersedeCancelsOnlyQueuedBuildsOfTheSameRef(t *testing.T) {
+	cases := []struct {
+		name              string
+		oldBranch, oldTag string
+		newBranch, newTag string
+		wantOld           store.Status
+	}{
+		{"same branch is cancelled", "NDSK-1", "", "NDSK-1", "", store.Cancelled},
+		{"another branch is kept", "NDSK-1", "", "NDSK-2", "", store.Queued},
+		{"a main push keeps a queued tag build", "", "v1.0.0", "main", "", store.Queued},
+		{"a tag push keeps a queued main build", "main", "", "", "v1.0.1", store.Queued},
+		{"the same tag is cancelled", "", "v1.0.0", "", "v1.0.0", store.Cancelled},
+		{"another tag is kept", "", "v1.0.0", "", "v1.0.1", store.Queued},
+		{"a no-ref build supersedes a no-ref build", "", "", "", "", store.Cancelled},
+		{"a branch push keeps a queued no-ref build", "", "", "main", "", store.Queued},
+		{"a no-ref build keeps a queued branch build", "main", "", "", "", store.Queued},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			block, open := gated(t)
+			h := newHarness(t, map[string]string{"s": "name: s\nconcurrency: supersede\nstages:\n  s: {run: '" + block + "'}\n"})
+			running := h.trigger(t, "s")
+			h.untilRunning(t, running.ID)
+			old := h.atRef(t, "s", c.oldBranch, c.oldTag)
+			fresh := h.atRef(t, "s", c.newBranch, c.newTag)
+			got, err := h.st.Build(context.Background(), old.ID)
+			if err != nil || got.Status != c.wantOld {
+				t.Fatalf("old build is %v (%v), want %v", got.Status, err, c.wantOld)
+			}
+			if r, _ := h.st.Build(context.Background(), running.ID); r.Status != store.Running {
+				t.Fatalf("running build is %v", r.Status)
+			}
+			open()
+			h.wait(t, fresh.ID)
+		})
+	}
+}
+
 func TestACronFireOnAQueuedBuildIsDroppedNotStacked(t *testing.T) {
 	block, open := gated(t)
 	h := newHarness(t, map[string]string{"c": "name: c\ntriggers: {cron: '* * * * *'}\nstages:\n  s: {run: '" + block + "'}\n"})
