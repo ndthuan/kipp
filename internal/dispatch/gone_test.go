@@ -169,11 +169,12 @@ func TestACancelledBuildOfAGoneChildWithNoVerdictBeforeItPostsError(t *testing.T
 }
 
 // ended is a build of site.pr-7 on sha that ended in status, having
-// started its stage or not.
+// started its stage or not. It is made running, never queued, so that the
+// dispatcher does not take it and build it for real first.
 func (h *harness) ended(t *testing.T, sha string, status store.Status, stage bool) *store.Build {
 	t.Helper()
 	ctx := context.Background()
-	b := &store.Build{Job: "site.pr-7", Status: store.Queued, Trigger: "api", BuiltCommit: sha}
+	b := &store.Build{Job: "site.pr-7", Status: store.Running, Trigger: "api", BuiltCommit: sha}
 	if err := h.st.CreateBuild(ctx, b); err != nil {
 		t.Fatal(err)
 	}
@@ -192,9 +193,6 @@ func (h *harness) ended(t *testing.T, sha string, status store.Status, stage boo
 }
 
 func TestTheVerdictBeforeIsTheStateThatBuildToldGitHub(t *testing.T) {
-	h := newHarness(t, map[string]string{"site": parentFile("file:///nowhere", "")})
-	h.withChildren(t, prChild(config.KindPR, "pr-7"))
-	ctx := context.Background()
 	const sha = "0123456789abcdef0123456789abcdef01234567"
 	for _, c := range []struct {
 		name   string
@@ -208,10 +206,12 @@ func TestTheVerdictBeforeIsTheStateThatBuildToldGitHub(t *testing.T) {
 		{"it was unstable", store.Unstable, true, "success"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
+			h := newHarness(t, map[string]string{"site": parentFile("file:///nowhere", "")})
+			h.withChildren(t, prChild(config.KindPR, "pr-7"))
 			old := h.ended(t, sha, c.status, c.stage)
 			h.ended(t, sha, store.Cancelled, true) // said nothing, and is passed over
 			now := h.ended(t, sha, store.Cancelled, true)
-			got, state := h.d.verdictBefore(ctx, now)
+			got, state := h.d.verdictBefore(context.Background(), now)
 			if got == nil || got.ID != old.ID || state != c.want {
 				t.Fatalf("the verdict before is %+v, %q; want #%d, %q", got, state, old.Number, c.want)
 			}
