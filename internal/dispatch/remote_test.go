@@ -143,7 +143,10 @@ func TestAStageThatAgentsCarryButCannotTakeWaitsAndSaysWhy(t *testing.T) {
 	ag := newAgents(t, agenthub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
 	ag.runBox(t.TempDir())
 	ready := filepath.Join(t.TempDir(), "go")
-	h := newHarness(t, map[string]string{"a": "name: a\nstages:\n  one: {runs_on: linux, run: 'while [ ! -e " + ready + " ]; do sleep 0.05; done'}\n  two: {runs_on: linux, run: echo two}\n"}, ag.opts)
+	// Both stages hold the one executor until ready: either may take it
+	// first, and the other must then wait for as long as the test looks.
+	hold := "'while [ ! -e " + ready + " ]; do sleep 0.05; done'"
+	h := newHarness(t, map[string]string{"a": "name: a\nstages:\n  one: {runs_on: linux, run: " + hold + "}\n  two: {runs_on: linux, run: " + hold + "}\n"}, ag.opts)
 	b := h.trigger(t, "a")
 	eventually(t, "a stage waits for the agent", func() bool {
 		q, err := h.d.Queue(context.Background())
