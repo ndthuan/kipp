@@ -95,7 +95,7 @@ func (d *Dispatcher) runBuild(ctx context.Context, r *run) {
 	}
 	status = d.settle(ctx, r, status)
 	d.writeFinalStatus(bg, b, status)
-	d.say(bg, b, job, e, finalState(status, ranStages), status)
+	d.sayFinal(ctx, b, job, e, status, ranStages)
 	d.finish(bg, b, job, e, status)
 }
 
@@ -152,7 +152,9 @@ func stopped(ctx context.Context) (store.Status, string) {
 	if _, ok := errors.AsType[timedOut](cause); ok {
 		return store.Timeout, "kipp: " + cause.Error()
 	}
-	if _, ok := errors.AsType[cancelledBy](cause); ok {
+	_, byUser := errors.AsType[cancelledBy](cause)
+	_, gone := errors.AsType[childGone](cause)
+	if byUser || gone {
 		return store.Cancelled, "kipp: " + cause.Error()
 	}
 	return store.Lost, lostLine // the server is shutting down

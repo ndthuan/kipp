@@ -538,10 +538,11 @@ func (h *harness) assertStoppedAt(t *testing.T, b *store.Build, want store.Statu
 	}
 }
 
-func (h *harness) assertLogEnds(t *testing.T, b *store.Build, stage, want string) {
+// assertLogEnds holds that the log of b's stage s ends with want.
+func (h *harness) assertLogEnds(t *testing.T, b *store.Build, want string) {
 	t.Helper()
-	if got := h.log(t, b, stage); !strings.HasSuffix(got, want) {
-		t.Fatalf("the log of %s ends %q, want %q at its end", stage, got, want)
+	if got := h.log(t, b, "s"); !strings.HasSuffix(got, want) {
+		t.Fatalf("the log of s ends %q, want %q at its end", got, want)
 	}
 }
 
@@ -556,7 +557,7 @@ func TestCancelKillsTheStagesProcessGroup(t *testing.T) {
 	b := h.wait(t, slow.ID)
 	h.assertStoppedAt(t, b, store.Cancelled)
 	assertGone(t, pids)
-	h.assertLogEnds(t, b, "s", "kipp: cancelled by ada\n")
+	h.assertLogEnds(t, b, "kipp: cancelled by ada\n")
 	if err := h.d.Cancel(context.Background(), slow.ID, "ada"); !errors.Is(err, ErrTooLate) || !strings.Contains(err.Error(), "it is cancelled") {
 		t.Fatalf("cancelling a finished build: %v", err)
 	}
@@ -601,7 +602,7 @@ func TestTimeoutKillsTheStagesProcessGroup(t *testing.T) {
 	b := h.wait(t, h.trigger(t, "to").ID)
 	h.assertStoppedAt(t, b, store.Timeout)
 	assertGone(t, readPids(t, pidFile))
-	h.assertLogEnds(t, b, "s", "kipp: the job's timeout of 1s passed\n")
+	h.assertLogEnds(t, b, "kipp: the job's timeout of 1s passed\n")
 }
 
 func TestCancelAQueuedBuild(t *testing.T) {
@@ -694,7 +695,7 @@ func TestShutdownEndsARunningBuildAsLostAndLeavesTheQueue(t *testing.T) {
 	if b, _ := h.st.Build(ctx, first.ID); b.Status != store.Lost {
 		t.Fatalf("%v", b.Status)
 	}
-	h.assertLogEnds(t, first, "s", "kipp: the server stopped while this ran\n")
+	h.assertLogEnds(t, first, "kipp: the server stopped while this ran\n")
 	if b, _ := h.st.Build(ctx, second.ID); b.Status != store.Queued {
 		t.Fatalf("%v", b.Status)
 	}

@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -72,11 +73,19 @@ func parentFile(dir, extra string) string {
 }
 
 // withChildren gives the dispatcher the job set with these children of
-// site added, the repo's default branch being main.
+// site added, in place of any it had of the same name, the repo's default
+// branch being main.
 func (h *harness) withChildren(t *testing.T, recs ...config.ChildRecord) {
 	t.Helper()
 	snap := h.d.Snapshot()
 	parent := snap.Jobs["site"]
+	if replaced := slices.DeleteFunc(slices.Clone(snap.Names), func(name string) bool { return snap.Jobs[name].Parent == "site" }); len(replaced) < len(snap.Names) {
+		kept := &config.Snapshot{Jobs: map[string]*config.Job{}, Names: replaced, Hash: snap.Hash, Vars: snap.Vars}
+		for _, name := range replaced {
+			kept.Jobs[name] = snap.Jobs[name]
+		}
+		snap = kept
+	}
 	var kids []*config.Job
 	for _, rec := range recs {
 		rec.Parent = "site"

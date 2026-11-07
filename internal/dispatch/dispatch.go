@@ -190,6 +190,25 @@ type cancelledBy string
 
 func (c cancelledBy) Error() string { return "cancelled by " + string(c) }
 
+// childGone is why a build's context ended when its child of a multibranch
+// job went: a closed pull request or a deleted branch has nobody left to
+// read what the build would say.
+type childGone string
+
+func (c childGone) Error() string { return "cancelled: " + string(c) }
+
+// goneWhy is why the job builds no more because its child went, "" for a
+// job that is not a gone child.
+func goneWhy(job *config.Job) string {
+	switch {
+	case job == nil || job.Origin == nil || job.Origin.State != config.ChildGone:
+		return ""
+	case job.Origin.Kind == config.KindBranch:
+		return "branch " + job.Origin.Branch + " is gone"
+	}
+	return fmt.Sprintf("pull request #%d is closed", job.Origin.PR)
+}
+
 // timedOut is why a build's context ended when the job's timeout passed.
 type timedOut time.Duration
 
@@ -243,12 +262,39 @@ func (d *Dispatcher) Builds() int { return cap(d.slots) }
 // server's own, which is also the zone of what the pages show.
 func (d *Dispatcher) Zone(job *config.Job) *time.Location { return job.Zone(d.opts.TimeZone) }
 
-// SetSnapshot replaces the job set; running builds keep the job they started with.
+// SetSnapshot replaces the job set; running builds keep the job they
+// started with, but one whose child the new set says is gone is cancelled.
 func (d *Dispatcher) SetSnapshot(s *config.Snapshot) {
 	d.mu.Lock()
 	d.snap = s
+	cancelled := d.cancelGoneLocked(s)
 	d.mu.Unlock()
+	now := time.Now()
+	for _, c := range cancelled {
+		if err := d.st.AddActivity(context.Background(), c.job, c.line, now); err != nil {
+			d.log.Error("recording a cancel", "job", c.job, "err", err)
+		}
+	}
 	d.kick()
+}
+
+// activityLine is a line to add to a job's activity.
+type activityLine struct{ job, line string }
+
+// cancelGoneLocked tells every running build whose child s says is gone to
+// stop, and returns the activity line of each. One whose final status is
+// decided is left to end.
+func (d *Dispatcher) cancelGoneLocked(s *config.Snapshot) []activityLine {
+	var out []activityLine
+	for _, r := range d.running {
+		why := goneWhy(s.Jobs[r.build.Job])
+		if why == "" || r.settled {
+			continue
+		}
+		r.cancel(childGone(why))
+		out = append(out, activityLine{r.build.Job, fmt.Sprintf("#%d cancelled: %s", r.build.Number, why)})
+	}
+	return out
 }
 
 // Snapshot is the current job set.
@@ -514,6 +560,8 @@ func (d *Dispatcher) schedule(ctx context.Context) {
 		switch job := snap.Jobs[b.Job]; {
 		case job == nil:
 			d.failQueued(ctx, b, "the job no longer exists")
+		case goneWhy(job) != "":
+			d.cancelQueued(ctx, b, goneWhy(job))
 		case job.Disabled:
 			d.failQueued(ctx, b, ErrDisabled.Error())
 		default:
@@ -523,13 +571,23 @@ func (d *Dispatcher) schedule(ctx context.Context) {
 }
 
 func (d *Dispatcher) failQueued(ctx context.Context, b *store.Build, why string) {
+	d.endQueued(ctx, b, store.Failed, fmt.Sprintf("#%d failed before it started: %s", b.Number, why))
+}
+
+// cancelQueued takes off the queue a build that has no reason left to run.
+func (d *Dispatcher) cancelQueued(ctx context.Context, b *store.Build, why string) {
+	d.endQueued(ctx, b, store.Cancelled, fmt.Sprintf("#%d cancelled before it started: %s", b.Number, why))
+}
+
+// endQueued ends a queued build in status and says line on its job's activity.
+func (d *Dispatcher) endQueued(ctx context.Context, b *store.Build, status store.Status, line string) {
 	now := time.Now()
-	if err := d.st.SetBuildStatus(ctx, b.ID, store.Failed, now); err != nil {
-		d.log.Error("failing a queued build", "build", b.ID, "err", err)
+	if err := d.st.SetBuildStatus(ctx, b.ID, status, now); err != nil {
+		d.log.Error("ending a queued build", "build", b.ID, "status", status, "err", err)
 		return // still queued: the next pass tries again, and the line below is written once
 	}
-	if err := d.st.AddActivity(ctx, b.Job, fmt.Sprintf("#%d failed before it started: %s", b.Number, why), now); err != nil {
-		d.log.Error("recording a failed start", "build", b.ID, "err", err)
+	if err := d.st.AddActivity(ctx, b.Job, line, now); err != nil {
+		d.log.Error("recording a queued build's end", "build", b.ID, "err", err)
 	}
 	d.release(b.ID)
 }

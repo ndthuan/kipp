@@ -8,6 +8,13 @@ lines and the data directory are the public surface.
 
 ## Unreleased
 
+- A child that becomes gone (its pull request closed or merged, its branch
+  deleted, or the scan no longer finding it) has its queued and running
+  builds cancelled, saying why in the log and the activity. A queued build
+  of a gone child used to fail. Its commit gets back the status of the
+  child's build of it before, so a pull request merged the moment it went
+  green, whose rebuild on the moved base started before GitHub said it
+  closed, no longer ends with a red status on its head.
 - `concurrency: supersede`: a new build of the job cancels its builds of the
   same ref (same branch, same tag, or no ref for both) that are still
   queued, and the job's activity names the build that replaced each. A

@@ -80,9 +80,9 @@ every branch, with a pull request or without.
 | push to a branch with an open pull request, `branch_with_pr: skip` | nothing for the branch: the pull request's `synchronize` builds the pull request's child |
 | same, `branch_with_pr: build` | the branch's child too |
 | pull request opened, reopened, synchronized, or its base changed | the pull request's child (unless `pull_requests: off`) |
-| pull request closed or merged | its child becomes gone |
+| pull request closed or merged | its child becomes gone, and its queued and running builds are cancelled |
 | push to a base branch with open pull requests | nothing for them, unless `rebuild_on_base: true` |
-| branch deleted | its child becomes gone |
+| branch deleted | its child becomes gone, and its queued and running builds are cancelled |
 
 A multibranch job builds no tag; a release job is an ordinary job with
 `triggers.webhook.tags` ([webhook](jobs.md#webhook)).
@@ -186,7 +186,14 @@ listed on the parent's page as not built.
   configured) in its `prepare` log. A build of a pull request asked for
   by hand builds its head as GitHub has it then, `refs/pull/<n>/head`.
 - A child whose branch is deleted or whose pull request is closed is
-  gone: it builds no more and is listed apart on the parent's page. After
+  gone: it builds no more and is listed apart on the parent's page. A
+  build of it still queued or running is cancelled, its log ending `kipp:
+  cancelled: pull request #<n> is closed` (or `branch <name> is gone`) and
+  the child's activity saying the same. The commit's status then goes back
+  to the verdict of the child's build of it before, when there was one: a
+  pull request merged the moment it went green moves its base, and under
+  `rebuild_on_base` the rebuild on that base can start before GitHub says
+  the pull request closed. Without one the status is `error`. After
   `orphans.days` it leaves the job set, and its builds are then kept as a
   removed job's are (90 days). A branch pushed again, or a pull request
   reopened, is the same child again.

@@ -2,8 +2,10 @@ package dispatch
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -69,10 +71,60 @@ func (d *Dispatcher) statusCommit(b *store.Build) string {
 	return b.BuiltCommit
 }
 
+// sayFinal posts how the build ended. A build cancelled because its child
+// went said nothing of the code, so the commit gets back the state of the
+// job's build of it before, when there is one: a pull request merged the
+// moment it went green moves its base, and the rebuild on that base can
+// start before GitHub says the pull request closed.
+func (d *Dispatcher) sayFinal(ctx context.Context, b *store.Build, job *config.Job, e *buildEnv, status store.Status, ranStages bool) {
+	bg := context.WithoutCancel(ctx)
+	if _, gone := errors.AsType[childGone](context.Cause(ctx)); gone && status == store.Cancelled && d.reports(job) {
+		if old, state := d.verdictBefore(bg, b); old != nil {
+			d.post(bg, b, job, e, state, old.Number, old.Status)
+			return
+		}
+	}
+	d.say(bg, b, job, e, finalState(status, ranStages), status)
+}
+
+// verdictBefore is the job's latest build before b that ended on b's
+// commit, among its recent builds, and the state it told GitHub; nil when
+// there is none. A cancelled or lost one said nothing and is passed over.
+func (d *Dispatcher) verdictBefore(ctx context.Context, b *store.Build) (*store.Build, string) {
+	sha := d.statusCommit(b)
+	builds, err := d.st.Builds(ctx, b.Job, verdictLookback)
+	if err != nil || sha == "" {
+		return nil, ""
+	}
+	for _, old := range builds {
+		if old.ID >= b.ID || old.BuiltCommit != sha || !old.Status.Terminal() || old.Status == store.Cancelled || old.Status == store.Lost {
+			continue
+		}
+		return old, finalState(old.Status, d.ranStages(ctx, old.ID))
+	}
+	return nil, ""
+}
+
+// ranStages reports whether the build started a stage, as finalState
+// needs to know.
+func (d *Dispatcher) ranStages(ctx context.Context, id int64) bool {
+	stages, err := d.st.Stages(ctx, id)
+	return err == nil && slices.ContainsFunc(stages, func(s *store.Stage) bool { return s.StartedAt != nil })
+}
+
+// verdictLookback is how many of a job's latest builds verdictBefore reads.
+const verdictLookback = 50
+
 // say posts one state of a child's build. A status that cannot be posted
 // is a line in the build's hooks log and changes nothing else; a build
 // with no commit to say it on says nothing.
 func (d *Dispatcher) say(ctx context.Context, b *store.Build, job *config.Job, e *buildEnv, state string, how store.Status) {
+	d.post(ctx, b, job, e, state, b.Number, how)
+}
+
+// post posts state on b's commit, said to be of build number of the job,
+// which ended how.
+func (d *Dispatcher) post(ctx context.Context, b *store.Build, job *config.Job, e *buildEnv, state string, number int, how store.Status) {
 	if !d.reports(job) {
 		return
 	}
@@ -82,9 +134,9 @@ func (d *Dispatcher) say(ctx context.Context, b *store.Build, job *config.Job, e
 	}
 	s := CommitStatus{
 		SHA: sha, State: state, Context: statusContext(job),
-		Description: fmt.Sprintf("%s #%d %s", job.Name, b.Number, how),
+		Description: fmt.Sprintf("%s #%d %s", job.Name, number, how),
 	}
-	s.TargetURL = d.buildURL(job.Name, b.Number)
+	s.TargetURL = d.buildURL(job.Name, number)
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), statusTimeout)
 	defer cancel()
 	if err := d.opts.Status(ctx, job, s); err != nil {
