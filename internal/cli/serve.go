@@ -34,6 +34,7 @@ import (
 	"github.com/ndthuan/kipp/internal/enginepool"
 	"github.com/ndthuan/kipp/internal/github"
 	"github.com/ndthuan/kipp/internal/index"
+	"github.com/ndthuan/kipp/internal/overview"
 	"github.com/ndthuan/kipp/internal/problem"
 	"github.com/ndthuan/kipp/internal/retain"
 	"github.com/ndthuan/kipp/internal/runner"
@@ -121,7 +122,7 @@ func cmdServe(args []string, _ io.Reader, stdout, stderr io.Writer) int {
 
 type serveFlags struct {
 	data, jobs, listen, baseURL, shell string
-	executors, builds                  int
+	executors, builds, flakyFlips      int
 	// The agents': the labels of a stage that names none on a server
 	// that runs no stage, the variables they are given of the server's,
 	// the URL a container's agent dials, the listener of /agent/ apart
@@ -151,6 +152,7 @@ func parseServeFlags(args []string, stderr io.Writer) (*serveFlags, error) {
 	fs.StringVar(&f.data, "data", "", "`directory` for the database, the secrets' key, logs and workspaces (required)")
 	fs.StringVar(&f.jobs, "jobs", "", "`directory` of job files (required)")
 	fs.StringVar(&f.listen, "listen", "127.0.0.1:8085", "`address` to listen on, in plain HTTP")
+	fs.IntVar(&f.flakyFlips, "flaky-flips", overview.DefaultFlips, "changes of colour among a job's last 20 builds that make it flaky on the front page, at least 5 builds being needed; 0 hides the section")
 	fs.StringVar(&f.baseURL, "base-url", "", "`URL` stages see as KIPP_URL (default http://<listen>); commit statuses link to builds under it only when it is given")
 	fs.StringVar(&f.shell, "shell", "sh", "shell that runs stages, as <shell> -c <command>")
 	fs.IntVar(&f.executors, "executors", 4, "stages the server runs itself at once; 0 runs none, and every stage goes to an agent")
@@ -187,6 +189,8 @@ func parseServeFlags(args []string, stderr io.Writer) (*serveFlags, error) {
 		return nil, refused("--executors is 0 or more")
 	case f.builds < 0:
 		return nil, refused("--builds is 0, for the default, or more")
+	case f.flakyFlips < 0:
+		return nil, refused("--flaky-flips is 0, to hide the section, or more")
 	case f.sessionTTL <= 0:
 		return nil, refused("--session-ttl is a time to come")
 	}
@@ -791,7 +795,7 @@ func (s *server) deps(au *auth.Service) api.Deps {
 		Seal:       func(name string, value []byte) ([]byte, error) { return secretbox.Seal(s.key, name, value) },
 		ServerInfo: s.info, Listen: s.listenAddr,
 		Engines: s.pool.Status, Agents: s.hub.Agents, PlacesChanged: s.loadPlaces,
-		Cache: s.cache, Scanner: s.scanner, Upgrade: s.upgrades,
+		Cache: s.cache, Scanner: s.scanner, Upgrade: s.upgrades, FlakyFlips: s.f.flakyFlips,
 	}
 }
 

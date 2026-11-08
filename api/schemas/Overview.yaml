@@ -1,0 +1,37 @@
+type: object
+additionalProperties: false
+description: What the front page shows besides the queue.
+required: [failing, flaky, recent_failures, more_failures, upcoming, groups]
+properties:
+  failing:
+    type: array
+    description: Jobs whose newest red-or-green build is red, the job that has been red for the shortest time first.
+    items:
+      $ref: OverviewFailing.yaml
+  flaky:
+    type: array
+    description: |
+      Jobs that are green now and changed colour at least `--flaky-flips`
+      times in their last 20 builds, with at least 5 of them; empty when the
+      server has the section off. The most flips first, then the larger share
+      of red.
+    items:
+      $ref: OverviewFlaky.yaml
+  recent_failures:
+    type: array
+    description: At most 10 red builds that ended in the last 24 hours, newest first.
+    items:
+      $ref: OverviewRecentFailure.yaml
+  more_failures:
+    type: integer
+    description: How many more red builds of the last 24 hours `recent_failures` leaves out.
+  upcoming:
+    type: array
+    description: The next 8 builds a cron will start, soonest first.
+    items:
+      $ref: OverviewUpcoming.yaml
+  groups:
+    type: array
+    description: One entry per group, the groups by name and the jobs with no group (`name` empty) last.
+    items:
+      $ref: OverviewGroup.yaml

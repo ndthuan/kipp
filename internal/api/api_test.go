@@ -30,6 +30,7 @@ import (
 	"github.com/ndthuan/kipp/internal/config"
 	"github.com/ndthuan/kipp/internal/dispatch"
 	"github.com/ndthuan/kipp/internal/logtime"
+	"github.com/ndthuan/kipp/internal/overview"
 	"github.com/ndthuan/kipp/internal/runner"
 	"github.com/ndthuan/kipp/internal/secretbox"
 	"github.com/ndthuan/kipp/internal/store"
@@ -99,7 +100,8 @@ func newEnv(t *testing.T, tune ...func(*API)) *env {
 				Origin: "Homebrew", UpdateCheck: true, Latest: "v9.9.9", NotesURL: "https://github.com/ndthuan/kipp/releases/tag/v9.9.9",
 				Upgradable: true, CheckedAt: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)}
 		},
-		Listen: "127.0.0.1:0",
+		Listen:     "127.0.0.1:0",
+		FlakyFlips: overview.DefaultFlips,
 	})
 	for _, f := range tune {
 		f(e.api)

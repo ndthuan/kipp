@@ -33,7 +33,7 @@ func TestAParentPageListsItsChildrenApartAndAChildLinksUp(t *testing.T) {
 	}
 	e.d.SetSnapshot(e.d.Snapshot().WithJobs(kids...))
 	c := e.login(t, "admin")
-	_, page := get(t, c, e.srv.URL+"/")
+	_, page := get(t, c, e.srv.URL+"/jobs")
 	contains(t, page, "3 children, none built yet")
 	must(t, e.st.CreateBuild(ctx, &store.Build{Job: "site.pr-12", Parent: "site", Status: store.Failed, Trigger: "webhook", PR: 12}))
 	code, page := get(t, c, e.srv.URL+"/jobs/site")
@@ -45,7 +45,7 @@ func TestAParentPageListsItsChildrenApartAndAChildLinksUp(t *testing.T) {
 	eq(t, "a child's page", code, http.StatusOK)
 	contains(t, page, `multibranch job <a class="link" href="/jobs/site">site</a>`)
 	lacks(t, page, "Branches and pull requests")
-	code, page = get(t, c, e.srv.URL+"/")
+	code, page = get(t, c, e.srv.URL+"/jobs")
 	eq(t, "the jobs list", code, http.StatusOK)
 	// A parent builds nothing itself: its children's worst status stands
 	// in the Last build column, where every other job has its own.

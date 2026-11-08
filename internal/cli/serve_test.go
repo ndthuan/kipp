@@ -195,6 +195,7 @@ func TestServeSaysWhatItCannotStartWith(t *testing.T) {
 		"no jobs directory":          {[]string{"--data", data}, 2, "--data and --jobs are required"},
 		"executors below zero":       {[]string{"--data", data, "--jobs", jobs, "--executors", "-1"}, 2, "--executors is 0 or more"},
 		"builds below zero":          {[]string{"--data", data, "--jobs", jobs, "--builds", "-1"}, 2, "--builds"},
+		"flaky flips below zero":     {[]string{"--data", data, "--jobs", jobs, "--flaky-flips", "-1"}, 2, "--flaky-flips is 0"},
 		"a label that is none":       {[]string{"--data", data, "--jobs", jobs, "--default-runs-on", "Linux"}, 2, `--default-runs-on label "Linux"`},
 		"an agent-env prefix":        {[]string{"--data", data, "--jobs", jobs, "--agent-env", "LC_*"}, 2, `--agent-env "LC_*"`},
 		"an agent URL that is none":  {[]string{"--data", data, "--jobs", jobs, "--agent-url", "192.0.2.1:8087"}, 2, "--agent-url is an http:// or https:// URL"},
@@ -1525,6 +1526,7 @@ func TestTheServiceIsGivenWhatServeRunsWithAndSealsWithItsKey(t *testing.T) {
 	t.Cleanup(func() { _ = ln.Close(); s.close() })
 	d := s.deps(auth.New(s.st, time.Hour, s.deviceKey))
 	eq(t, "the address the API is told it listens on", d.Listen, ln.Addr().String())
+	eq(t, "the flips that make a job flaky, by default", d.FlakyFlips, 4)
 
 	info := d.ServerInfo()
 	abs, err := filepath.Abs(data)

@@ -60,6 +60,7 @@ directory.
 | `--listen <addr>` | `127.0.0.1:8085` | The address to listen on, in plain HTTP. |
 | `--base-url <url>` | `http://<listen>` | The URL stages see as `KIPP_URL`. Build links, commit statuses' links, webhook URLs and GitHub App manifests need it given. |
 | `--executors <n>` | 4 | Stages the server runs itself at once; 0 runs none ([Agents and engines](agents.md#the-servers-flags)). |
+| `--flaky-flips <n>` | 4 | Changes of colour among a job's last 20 finished builds (at least 5 needed) that put it in the front page's Flaky section; 0 hides the section. |
 | `--builds <n>` | `--executors`, or 4 when that is 0 | Builds with something running at once. |
 | `--shell <sh>` | `sh` | The shell that runs stages, as `<shell> -c <command>`. |
 | `--session-ttl <d>` | `720h` | How long a browser login lasts. |

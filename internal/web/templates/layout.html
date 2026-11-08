@@ -19,8 +19,9 @@
 <body{{with .HXHeaders}} hx-headers="{{.}}"{{end}}>
 <a class="skip" href="#main">Skip to content</a>
 <header class="top">
-<a class="brand" href="/"{{if and .Nav .Nav.All}} aria-current="page"{{end}}>kipp</a>
-{{if .User}}{{with .Nav}}{{if .Menus}}<button class="action action-quiet action-small menu-toggle" type="button" aria-controls="groups" aria-expanded="false" hidden>Groups</button>
+<a class="brand" href="/"{{if and .Nav .Nav.Home}} aria-current="page"{{end}}>kipp</a>
+{{if .User}}{{with .Nav}}<a class="navlink" href="/jobs"{{if .All}} aria-current="page"{{end}}>Jobs</a>
+{{if .Menus}}<button class="action action-quiet action-small menu-toggle" type="button" aria-controls="groups" aria-expanded="false" hidden>Groups</button>
 <nav class="groups" id="groups" aria-label="Groups">
 {{range .Menus}}<details class="group drop">
 <summary{{if .Here}} aria-current="true"{{end}}>{{.Label}}</summary>

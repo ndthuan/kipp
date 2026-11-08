@@ -30,6 +30,14 @@ const (
 // Terminal reports whether no further change comes.
 func (s Status) Terminal() bool { return s != Queued && s != Running }
 
+// Green and Red are the two colours a dashboard gives a finished build:
+// green is success or unstable, red is failed, timeout or lost. Any other
+// status, cancelled included, has neither.
+func (s Status) Green() bool { return s == Success || s == Unstable }
+
+// Red is failed, timeout or lost: see Green.
+func (s Status) Red() bool { return s == Failed || s == Timeout || s == Lost }
+
 // Succeeded reports whether the build ended in a way that what follows it
 // takes as a success: the on_success hook and the jobs that run after it.
 // An unstable build did.
@@ -273,6 +281,24 @@ func (s *Store) RecentFinished(ctx context.Context, n int) (map[string][]*Build,
 	builds, err := s.queryBuilds(ctx, `WHERE id IN (SELECT id FROM (
 		SELECT id, ROW_NUMBER() OVER (PARTITION BY job ORDER BY id DESC) AS rn
 		FROM builds WHERE status NOT IN (?, ?)) WHERE rn <= ?) ORDER BY id DESC`, Queued, Running, n)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string][]*Build{}
+	for _, b := range builds {
+		out[b.Job] = append(out[b.Job], b)
+	}
+	return out, nil
+}
+
+// RecentColoured is up to n of the newest builds of every job that ended
+// green or red (Status.Green, Status.Red), newest first. A job with none
+// has no entry.
+func (s *Store) RecentColoured(ctx context.Context, n int) (map[string][]*Build, error) {
+	builds, err := s.queryBuilds(ctx, `WHERE id IN (SELECT id FROM (
+		SELECT id, ROW_NUMBER() OVER (PARTITION BY job ORDER BY id DESC) AS rn
+		FROM builds WHERE status IN (?, ?, ?, ?, ?)) WHERE rn <= ?) ORDER BY id DESC`,
+		Success, Unstable, Failed, Timeout, Lost, n)
 	if err != nil {
 		return nil, err
 	}

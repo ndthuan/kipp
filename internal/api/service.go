@@ -108,6 +108,10 @@ type Deps struct {
 	// Upgrade upgrades the server; without it the routes answer that this
 	// server does not.
 	Upgrade *engine.Engine
+	// FlakyFlips is how many changes of colour in a job's last builds make
+	// it flaky on the overview: 0 for no such section. kipp serve sets it
+	// (default overview.DefaultFlips).
+	FlakyFlips int
 }
 
 // API holds the handlers and the Service.

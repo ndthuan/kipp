@@ -1,0 +1,95 @@
+{{define "dots"}}<span class="dots">{{range .}}<a class="dot {{.Status}}" href="{{buildPath .}}" title="#{{.Number}} {{.Status}}"></a>{{end}}</span>{{end}}
+{{define "content"}}
+{{$o := .Data.Overview}}
+<h1 class="sr-only">Overview</h1>
+{{template "queue" .Data.Queue}}
+<div id="overview" class="stack" hx-get="/" hx-select="#overview" hx-target="this" hx-swap="outerHTML" hx-trigger="kipp-changed from:body, every 60s">
+<section>
+<h2>Failing now</h2>
+{{with $o.Failing}}<div class="scroll">
+<table class="rows">
+<thead><tr><th>Job</th><th>Build</th><th>Red since</th><th>Recent</th></tr></thead>
+<tbody>
+{{range .}}<tr>
+<td><a class="link" href="/jobs/{{.Job}}">{{.Job}}</a>{{if .Flaky}} <span class="tag">flaky</span>{{end}}</td>
+<td><a class="link" href="{{buildPath .Build}}">#{{.Build.Number}}</a> <span class="status {{.Build.Status}}">{{.Build.Status}}</span></td>
+<td>{{template "since" (since .Since)}}</td>
+<td>{{template "dots" .Dots}}</td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>
+{{else}}<p class="sub">Nothing is failing.</p>
+{{end}}</section>
+<section>
+<h2>Flaky</h2>
+{{with $o.Flaky}}<div class="scroll">
+<table class="rows">
+<thead><tr><th>Job</th><th>Failed</th><th>Flips</th><th>Recent</th></tr></thead>
+<tbody>
+{{range .}}<tr>
+<td><a class="link" href="/jobs/{{.Job}}">{{.Job}}</a></td>
+<td>{{percent .}} failed <span class="sub">({{.Failed}}/{{.Finished}})</span></td>
+<td>{{plural .Flips "flip"}}</td>
+<td>{{template "dots" .Dots}}</td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>
+{{else}}<p class="sub">Nothing is flaky.</p>
+{{end}}</section>
+<section>
+<h2>Failed in the last 24 hours</h2>
+{{with $o.RecentFailures}}<div class="scroll">
+<table class="rows">
+<thead><tr><th>Job</th><th>Build</th><th>Ended</th><th>Now</th></tr></thead>
+<tbody>
+{{range .}}<tr>
+<td><a class="link" href="/jobs/{{.Build.Job}}">{{.Build.Job}}</a></td>
+<td><a class="link" href="{{buildPath .Build}}">#{{.Build.Number}}</a> <span class="status {{.Build.Status}}">{{.Build.Status}}</span></td>
+<td>{{template "since" (since .Build.FinishedAt)}}</td>
+<td>{{if .GreenAgain}}<span class="status success">green again</span>{{else}}<span class="sub">still red</span>{{end}}</td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>
+{{if $o.MoreFailures}}<p class="sub">And {{plural $o.MoreFailures "more failure"}} in the last 24 hours.</p>
+{{end}}{{else}}<p class="sub">Nothing failed in the last 24 hours.</p>
+{{end}}</section>
+<section>
+<h2>Coming up</h2>
+{{with $o.Upcoming}}<div class="scroll">
+<table class="rows">
+<thead><tr><th>When</th><th>Job</th><th>Schedule</th></tr></thead>
+<tbody>
+{{range .}}<tr>
+<td>{{clock .At}}</td>
+<td><a class="link" href="/jobs/{{.Job}}">{{.Job}}</a></td>
+<td><code>{{.Cron}}</code></td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>
+{{else}}<p class="sub">Nothing is scheduled.</p>
+{{end}}</section>
+<section>
+<h2>Groups</h2>
+{{with .Data.Groups}}<div class="scroll">
+<table class="rows">
+<thead><tr><th>Group</th><th>Green</th><th>Red</th><th>Never built</th><th>Running</th><th>Disabled</th></tr></thead>
+<tbody>
+{{range .}}<tr>
+<td><a class="link" href="{{.Href}}">{{.Label}}</a></td>
+<td>{{.Green}}</td>
+<td>{{.Red}}</td>
+<td>{{.NeverBuilt}}</td>
+<td>{{.Running}}</td>
+<td>{{.Disabled}}</td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>
+{{else}}<p class="sub">There is no job you may see.</p>
+{{end}}</section>
+</div>
+{{end}}

@@ -189,3 +189,29 @@ func TestAChildInheritsItsParentButCronAfterAndWebhook(t *testing.T) {
 		t.Fatalf("snapshot %v, default child %v", snap.Names, snap.DefaultChild("site"))
 	}
 }
+
+func TestOnlyAJobThatBuildsItselfIsALeaf(t *testing.T) {
+	leaf := func(file, body string) *Job {
+		t.Helper()
+		j, err := ParseJob(file, []byte(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return j
+	}
+	plain := leaf("a.yml", "name: a\nstages:\n  s: {run: 'true'}\n")
+	parent := leaf("site.yml", "name: site\nmultibranch: {repo: acme/site}\n")
+	owner := leaf("acme.yml", "name: acme\nowner: {login: acme, token: T}\n")
+	node := *parent
+	node.Folder = "acme" // a repo's node of an owner job
+	child := *parent
+	child.Parent, child.Folder = "site", "acme"
+	for name, c := range map[string]struct {
+		job  *Job
+		want bool
+	}{"plain job": {plain, true}, "multibranch job": {parent, false}, "owner job": {owner, false}, "repo node": {&node, false}, "child": {&child, true}} {
+		if got := c.job.IsLeaf(); got != c.want {
+			t.Errorf("%s: IsLeaf %v, want %v", name, got, c.want)
+		}
+	}
+}

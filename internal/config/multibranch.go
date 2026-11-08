@@ -295,6 +295,13 @@ func (j *Job) Child(rec ChildRecord) *Job {
 // builds through its children.
 func (j *Job) IsParent() bool { return j.Multibranch != nil && j.Parent == "" }
 
+// IsLeaf reports whether the job builds itself: it is neither a multibranch
+// job, an owner job nor a repo's node of one, which only build through their
+// children.
+func (j *Job) IsLeaf() bool {
+	return !j.IsParent() && !j.IsOwner() && (j.Folder == "" || j.Parent != "")
+}
+
 // OnDefaultBranch reports whether the job is the child of its repo's
 // default branch.
 func (j *Job) OnDefaultBranch() bool {

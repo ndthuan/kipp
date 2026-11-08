@@ -31,6 +31,7 @@ import (
 	"github.com/ndthuan/kipp/internal/cachesrv"
 	"github.com/ndthuan/kipp/internal/config"
 	"github.com/ndthuan/kipp/internal/dispatch"
+	"github.com/ndthuan/kipp/internal/overview"
 	"github.com/ndthuan/kipp/internal/runner"
 	"github.com/ndthuan/kipp/internal/store"
 )
@@ -117,7 +118,7 @@ func site(t *testing.T, tune ...func(*api.Deps)) *env {
 	au := auth.New(st, time.Hour, []byte("an obvious test device key 32 b."))
 	e := &env{st: st, d: d}
 	e.reloadErr.Store(new(""))
-	deps := api.Deps{Auth: au, Dispatch: d, Store: st, Version: "t", Logger: quiet, Listen: "127.0.0.1:0",
+	deps := api.Deps{Auth: au, Dispatch: d, Store: st, Version: "t", Logger: quiet, Listen: "127.0.0.1:0", FlakyFlips: overview.DefaultFlips,
 		Reload: func(context.Context) error { return nil }, ReloadError: func() string { return *e.reloadErr.Load() },
 		// What is sealed is never the value, so that a page that showed
 		// it would be caught by looking for the value.
@@ -340,7 +341,7 @@ func TestALoginLeadsBackToThePageAskedForAndThePagesShowTheBuild(t *testing.T) {
 	code, page = get(t, c, e.srv.URL+"/jobs/smoke")
 	eq(t, "job with a build", code, http.StatusOK)
 	contains(t, page, `href="/jobs/smoke/1"`, `class="status success"`)
-	code, page = get(t, c, e.srv.URL+"/")
+	code, page = get(t, c, e.srv.URL+"/jobs")
 	eq(t, "jobs with a build", code, http.StatusOK)
 	contains(t, page, `href="/jobs/smoke/1"`, `class="status success"`)
 }
@@ -591,45 +592,50 @@ func TestTheHeaderHasAMenuForEachGroupAndTheJobsPageShowsOnlyTheOnePicked(t *tes
 	e := site(t)
 	c := e.login(t, "admin")
 
-	code, page := get(t, c, e.srv.URL+"/")
+	code, page := get(t, c, e.srv.URL+"/jobs")
 	eq(t, "all", code, http.StatusOK)
-	contains(t, page, `<a class="brand" href="/" aria-current="page">kipp</a>`,
+	contains(t, page, `<a class="brand" href="/">kipp</a>`, `<a class="navlink" href="/jobs" aria-current="page">Jobs</a>`,
 		`<nav class="groups" id="groups" aria-label="Groups">`,
-		`<summary>backend</summary>`, `<a class="menu-all" href="/?group=backend">All in backend</a>`,
-		`<summary>No group</summary>`, `<a class="menu-all" href="/?only=ungrouped">All in No group</a>`,
-		`hx-get="/"`, `class="link" href="/jobs/smoke"`, `class="link" href="/jobs/slow"`)
-	lacks(t, page, `class="tabs"`, `<h1>Jobs</h1>`, `>Jobs</a>`, `>All</a>`)
+		`<summary>backend</summary>`, `<a class="menu-all" href="/jobs?group=backend">All in backend</a>`,
+		`<summary>No group</summary>`, `<a class="menu-all" href="/jobs?only=ungrouped">All in No group</a>`,
+		`hx-get="/jobs"`, `class="link" href="/jobs/smoke"`, `class="link" href="/jobs/slow"`)
+	lacks(t, page, `class="tabs"`, `<h1>Jobs</h1>`, `>All</a>`, `href="/?`)
 
-	_, page = get(t, c, e.srv.URL+"/?group=backend")
-	contains(t, page, `<a class="brand" href="/">kipp</a>`, `<summary aria-current="true">backend</summary>`,
-		`<a class="menu-all" href="/?group=backend" aria-current="page">All in backend</a>`,
-		`hx-get="/?group=backend"`, `class="link" href="/jobs/smoke"`)
+	_, page = get(t, c, e.srv.URL+"/jobs?group=backend")
+	contains(t, page, `<a class="brand" href="/">kipp</a>`, `<a class="navlink" href="/jobs">Jobs</a>`, `<summary aria-current="true">backend</summary>`,
+		`<a class="menu-all" href="/jobs?group=backend" aria-current="page">All in backend</a>`,
+		`hx-get="/jobs?group=backend"`, `class="link" href="/jobs/smoke"`)
 	lacks(t, page, `class="link" href="/jobs/slow"`)
 
-	_, page = get(t, c, e.srv.URL+"/?only=ungrouped")
-	contains(t, page, `<summary aria-current="true">No group</summary>`, `hx-get="/?only=ungrouped"`, `class="link" href="/jobs/slow"`)
+	_, page = get(t, c, e.srv.URL+"/jobs?only=ungrouped")
+	contains(t, page, `<summary aria-current="true">No group</summary>`, `hx-get="/jobs?only=ungrouped"`, `class="link" href="/jobs/slow"`)
 	lacks(t, page, `class="link" href="/jobs/smoke"`)
 
 	// A group nobody has, or one this user may not see, is the whole list.
-	_, page = get(t, c, e.srv.URL+"/?group=nowhere")
-	contains(t, page, `<a class="brand" href="/" aria-current="page">kipp</a>`, `hx-get="/"`, `class="link" href="/jobs/smoke"`, `class="link" href="/jobs/slow"`)
+	_, page = get(t, c, e.srv.URL+"/jobs?group=nowhere")
+	contains(t, page, `<a class="navlink" href="/jobs" aria-current="page">Jobs</a>`, `hx-get="/jobs"`, `class="link" href="/jobs/smoke"`, `class="link" href="/jobs/slow"`)
 
 	// A job's page and its builds' are in its group's menu, the job marked.
 	_, page = get(t, c, e.srv.URL+"/jobs/smoke")
 	contains(t, page, `<a class="brand" href="/">kipp</a>`, `<summary aria-current="true">backend</summary>`,
 		`<a href="/jobs/smoke" aria-current="page">`)
 
+	// The overview is the logo's page, and no menu is its own.
+	_, page = get(t, c, e.srv.URL+"/")
+	contains(t, page, `<a class="brand" href="/" aria-current="page">kipp</a>`, `<a class="navlink" href="/jobs">Jobs</a>`, `<a class="menu-all" href="/jobs?group=backend">All in backend</a>`)
+	lacks(t, page, `<summary aria-current="true">`)
+
 	// The removed jobs have a menu of their own, last.
 	e.wait(t, e.build(t, c, "smoke", nil))
 	e.drop("smoke")
-	_, page = get(t, c, e.srv.URL+"/?only=removed")
+	_, page = get(t, c, e.srv.URL+"/jobs?only=removed")
 	contains(t, page, `<summary aria-current="true">Removed</summary>`, `class="link" href="/jobs/smoke"`)
 	lacks(t, page, `class="link" href="/jobs/slow"`)
 	eq(t, "removed is the last menu", strings.LastIndex(page, `<details class="group drop">`), strings.Index(page, `<details class="group drop">`+"\n"+`<summary aria-current="true">Removed`))
 
 	// One group is still a menu: alice sees hers and its one job.
-	_, page = get(t, e.login(t, "alice"), e.srv.URL+"/")
-	contains(t, page, `<summary>Removed</summary>`, `<a class="menu-all" href="/?only=removed">All in Removed</a>`, `<a href="/jobs/smoke">`)
+	_, page = get(t, e.login(t, "alice"), e.srv.URL+"/jobs")
+	contains(t, page, `<summary>Removed</summary>`, `<a class="menu-all" href="/jobs?only=removed">All in Removed</a>`, `<a href="/jobs/smoke">`)
 	eq(t, "alice's menus", strings.Count(page, `<details class="group drop">`), 1)
 }
 
@@ -638,11 +644,13 @@ func TestTheHeaderHasAMenuForEachGroupAndTheJobsPageShowsOnlyTheOnePicked(t *tes
 func TestARefreshIsNotGivenTheHeadersMenus(t *testing.T) {
 	e := site(t)
 	c := e.login(t, "admin")
-	req := mustGet(t, e.srv.URL+"/")
-	req.Header.Set("HX-Request", "true")
-	_, page := do(t, c, req)
-	contains(t, page, `id="jobs"`)
-	lacks(t, page, `class="groups"`)
+	for path, id := range map[string]string{"/": `id="overview"`, "/jobs": `id="jobs"`} {
+		req := mustGet(t, e.srv.URL+path)
+		req.Header.Set("HX-Request", "true")
+		_, page := do(t, c, req)
+		contains(t, page, id)
+		lacks(t, page, `class="groups"`)
+	}
 }
 
 // Admin sits with the user's name, and only for an admin.
@@ -805,7 +813,7 @@ func TestEveryAnswerCarriesTheSecurityHeadersAndLoadsNothingFromElsewhere(t *tes
 func TestTheJobListKeepsEachJobToOneLine(t *testing.T) {
 	e := site(t)
 	c := e.login(t, "admin")
-	_, page := get(t, c, e.srv.URL+"/")
+	_, page := get(t, c, e.srv.URL+"/jobs")
 	contains(t, page, `<a class="link" href="/jobs/nightly" title="&lt;script&gt;alert(&#39;job&#39;)&lt;/script&gt;">nightly</a>`)
 	// A quote in a description cannot end the attribute it is in.
 	contains(t, page, `<a class="link" href="/jobs/quoted" title="ends &#34;the title&#34; data-x=&#34;1&#34; &amp; &lt;b&gt;bold&lt;/b&gt;">quoted</a>`)
@@ -819,7 +827,7 @@ func TestTheJobListKeepsEachJobToOneLine(t *testing.T) {
 func TestWhatARepoWritesIsEscaped(t *testing.T) {
 	e := site(t)
 	c := e.login(t, "admin")
-	for _, path := range []string{"/", "/jobs/nightly"} {
+	for _, path := range []string{"/jobs", "/jobs/nightly"} {
 		code, page := get(t, c, e.srv.URL+path)
 		eq(t, path, code, http.StatusOK)
 		contains(t, page, "&lt;script&gt;alert(&#39;job&#39;)&lt;/script&gt;")
@@ -969,7 +977,7 @@ func TestAJobWhoseTestsAllPassListsNoneOfThemUntilAsked(t *testing.T) {
 
 func TestTheJobsTableGivesItsLastThreeColumnsRoomAndKeepsThemWhole(t *testing.T) {
 	e := site(t)
-	_, page := get(t, e.login(t, "admin"), e.srv.URL+"/")
+	_, page := get(t, e.login(t, "admin"), e.srv.URL+"/jobs")
 	contains(t, page, `<table class="jobs">`)
 	css, err := staticFS.ReadFile("static/kipp.css")
 	must(t, err)
@@ -989,7 +997,7 @@ func TestTheJobListShowsADotForEachOfTheLastFiveFinishedBuilds(t *testing.T) {
 	for _, st := range statuses {
 		must(t, e.st.CreateBuild(context.Background(), &store.Build{Job: "smoke", Status: st, Trigger: "cli"}))
 	}
-	_, page := get(t, admin, e.srv.URL+"/")
+	_, page := get(t, admin, e.srv.URL+"/jobs")
 	_, row, _ := strings.Cut(page, `<a class="link" href="/jobs/smoke"`)
 	row, _, _ = strings.Cut(row, "</tr>")
 	_, cell, _ := strings.Cut(row, "</td>")
@@ -1021,7 +1029,7 @@ func TestAJobWithTwoBuildsHasTwoDotsAndOneNeverBuiltHasNone(t *testing.T) {
 	for range 2 {
 		must(t, e.st.CreateBuild(context.Background(), &store.Build{Job: "smoke", Status: store.Success, Trigger: "cli"}))
 	}
-	_, page := get(t, admin, e.srv.URL+"/")
+	_, page := get(t, admin, e.srv.URL+"/jobs")
 	eq(t, "dots", strings.Count(page, `<a class="dot `), 2)
 	contains(t, page, "never built")
 }
@@ -1152,7 +1160,7 @@ func TestTheBannerShowsWhenSet(t *testing.T) {
 func TestEveryTemplateIsAPage(t *testing.T) {
 	tested := map[string]bool{"login": true, "jobs": true, "job": true, "build": true, "error": true, "queue": true,
 		"account": true, "sudo": true, "once": true, "confirm": true, "users": true, "user": true, "secrets": true, "server": true, "agents": true,
-		"metrics": true, "metrics_store": true, "cache": true, "apps": true, "appgo": true}
+		"metrics": true, "metrics_store": true, "cache": true, "apps": true, "appgo": true, "overview": true}
 	files, err := templateFS.ReadDir("templates")
 	must(t, err)
 	e := site(t)
@@ -1615,21 +1623,21 @@ func TestAJobAndABuildSayWhereTheyAreByGroupThenJob(t *testing.T) {
 	c := e.login(t, "admin")
 	const sep = `<span aria-hidden="true">/</span>`
 	_, page := get(t, c, e.srv.URL+"/jobs/smoke")
-	contains(t, page, `<h1 class="crumbs"><a class="link-plain" href="/?group=backend">backend</a>`+sep+`<span>smoke</span></h1>`)
+	contains(t, page, `<h1 class="crumbs"><a class="link-plain" href="/jobs?group=backend">backend</a>`+sep+`<span>smoke</span></h1>`)
 	lacks(t, page, `<h1>smoke</h1>`, `aria-label="Breadcrumb"`)
 	_, page = get(t, c, e.srv.URL+"/jobs/slow")
-	contains(t, page, `<h1 class="crumbs"><a class="link-plain" href="/?only=ungrouped">No group</a>`+sep+`<span>slow</span></h1>`)
+	contains(t, page, `<h1 class="crumbs"><a class="link-plain" href="/jobs?only=ungrouped">No group</a>`+sep+`<span>slow</span></h1>`)
 
 	id := e.build(t, c, "smoke", nil)
 	e.wait(t, id)
 	_, page = get(t, c, e.srv.URL+e.at(t, id))
-	contains(t, page, `<h1 class="crumbs"><a class="link-plain" href="/?group=backend">backend</a>`+sep+`<a class="link-plain" href="/jobs/smoke">smoke</a>`+sep+`<span>#1</span> <span class="status success">success</span></h1>`)
+	contains(t, page, `<h1 class="crumbs"><a class="link-plain" href="/jobs?group=backend">backend</a>`+sep+`<a class="link-plain" href="/jobs/smoke">smoke</a>`+sep+`<span>#1</span> <span class="status success">success</span></h1>`)
 
 	e.drop("smoke")
 	_, page = get(t, c, e.srv.URL+e.at(t, id))
-	contains(t, page, `<h1 class="crumbs"><a class="link-plain" href="/?only=removed">Removed</a>`+sep+`<a class="link-plain" href="/jobs/smoke">smoke</a>`+sep+`<span>#1</span>`)
+	contains(t, page, `<h1 class="crumbs"><a class="link-plain" href="/jobs?only=removed">Removed</a>`+sep+`<a class="link-plain" href="/jobs/smoke">smoke</a>`+sep+`<span>#1</span>`)
 	_, page = get(t, c, e.srv.URL+"/jobs/smoke")
-	contains(t, page, `<h1 class="crumbs"><a class="link-plain" href="/?only=removed">Removed</a>`+sep+`<span>smoke</span></h1>`)
+	contains(t, page, `<h1 class="crumbs"><a class="link-plain" href="/jobs?only=removed">Removed</a>`+sep+`<span>smoke</span></h1>`)
 }
 
 // When a job builds by itself is said apart from the prose around it.
@@ -1736,7 +1744,7 @@ func TestARemovedJobKeepsItsHistoryOnThePagesAndNothingToBuild(t *testing.T) {
 		eq(t, name+": the removed job's page", code, http.StatusOK)
 		contains(t, page, "removed from the job files", `href="/jobs/smoke/1"`)
 		lacks(t, page, `action="/jobs/smoke/build"`, `class="facts sched"`)
-		code, page = get(t, c, e.srv.URL+"/")
+		code, page = get(t, c, e.srv.URL+"/jobs")
 		eq(t, name+": the jobs", code, http.StatusOK)
 		contains(t, page, "Removed from the job files", `href="/jobs/smoke"`)
 		lacks(t, page, `href="/jobs/ask"`)
@@ -1866,7 +1874,7 @@ func TestADisabledJobIsShownAsDisabledWithNothingToBuild(t *testing.T) {
 	eq(t, "the disabled job's page", code, http.StatusOK)
 	contains(t, page, "This job is disabled")
 	lacks(t, page, `action="/jobs/nightly/build"`, `class="facts sched"`)
-	_, page = get(t, admin, e.srv.URL+"/")
+	_, page = get(t, admin, e.srv.URL+"/jobs")
 	eq(t, "jobs marked disabled in the list", strings.Count(page, `<span class="tag">disabled</span>`), 1)
 	res, page := postBody(t, admin, e.srv.URL+"/jobs/nightly/build", url.Values{"csrf": {e.token(t, admin)}})
 	eq(t, "building a disabled job", res.StatusCode, http.StatusConflict)
@@ -1906,7 +1914,7 @@ func TestAnUnstableBuildAndStageAreShownAsUnstableOnEveryPage(t *testing.T) {
 	// (The one hx-get left is the link that loads the tests, on a click.)
 	lacks(t, page, `action="`+path+`/cancel"`, `hx-trigger="every 2s"`, `hx-select="#live"`)
 
-	_, page = get(t, c, e.srv.URL+"/")
+	_, page = get(t, c, e.srv.URL+"/jobs")
 	contains(t, page, `<a class="link" href="`+path+`">#1</a> <span class="status unstable">unstable</span>`)
 
 	_, page = get(t, c, e.srv.URL+"/jobs/shaky?results=all")
@@ -2233,7 +2241,7 @@ func TestTheJobListShowsTheQueueAboveItAndBothFollowItsEvents(t *testing.T) {
 	e := site(t)
 	e.lockJobs(t)
 	c := e.login(t, "admin")
-	_, page := get(t, c, e.srv.URL+"/")
+	_, page := get(t, c, e.srv.URL+"/jobs")
 	contains(t, page, `<section id="queue"`, `hx-trigger="kipp-changed from:body, every 60s"`)
 	lacks(t, page, `every 10s`, "Nothing runs and nothing waits.")
 	if strings.Index(page, `id="queue"`) > strings.Index(page, `id="jobs"`) {
@@ -2241,7 +2249,7 @@ func TestTheJobListShowsTheQueueAboveItAndBothFollowItsEvents(t *testing.T) {
 	}
 	hold := e.build(t, c, "hold", nil)
 	e.queued(t, 1, 0)
-	_, page = get(t, c, e.srv.URL+"/")
+	_, page = get(t, c, e.srv.URL+"/jobs")
 	contains(t, page, `hold #1`)
 	must(t, e.d.Cancel(context.Background(), hold, "test"))
 }

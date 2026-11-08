@@ -420,6 +420,36 @@ func TestRecentFinishedGivesAtMostNFinishedBuildsOfEachJobNewestFirst(t *testing
 	}
 }
 
+func TestRecentColouredSkipsCancelledRunningAndQueuedAndKeepsNBuildsNewestFirst(t *testing.T) {
+	s := open(t)
+	for _, st := range []Status{Failed, Cancelled, Success, Unstable, Lost, Timeout, Running, Queued} {
+		must(t, s.CreateBuild(ctx, &Build{Job: "a", Status: st, Trigger: "cli"}))
+	}
+	must(t, s.CreateBuild(ctx, &Build{Job: "b", Status: Cancelled, Trigger: "cli"}))
+	got, err := s.RecentColoured(ctx, 4)
+	must(t, err)
+	if len(got) != 1 || got["b"] != nil {
+		t.Fatalf("a job with no coloured build has no entry, got %+v", got)
+	}
+	var numbers []int
+	for _, b := range got["a"] {
+		numbers = append(numbers, b.Number)
+	}
+	if !slices.Equal(numbers, []int{6, 5, 4, 3}) {
+		t.Fatalf("not the four newest coloured, newest first: %v", numbers)
+	}
+}
+
+func TestGreenIsSuccessOrUnstableAndRedIsFailedTimeoutOrLost(t *testing.T) {
+	green := map[Status]bool{Success: true, Unstable: true}
+	red := map[Status]bool{Failed: true, Timeout: true, Lost: true}
+	for _, st := range []Status{Queued, Running, Success, Unstable, Failed, Cancelled, Lost, Timeout} {
+		if st.Green() != green[st] || st.Red() != red[st] {
+			t.Errorf("%s: green %v red %v", st, st.Green(), st.Red())
+		}
+	}
+}
+
 func TestMarkRunningLostNamesTheStagesThatWereRunningAndTheirProcessGroups(t *testing.T) {
 	s := open(t)
 	b := &Build{Job: "a", Status: Running, Trigger: "cli"}

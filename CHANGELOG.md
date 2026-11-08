@@ -8,6 +8,13 @@ lines and the data directory are the public surface.
 
 ## Unreleased
 
+- The front page is an overview: what is running and queued, the jobs that
+  are failing now and for how long, the flaky ones (green now, but changing
+  colour often among their last 20 builds; `kipp serve --flaky-flips`, 4 by
+  default, 0 hides them), the failures of the last 24 hours, the next
+  scheduled builds and a line per group. The full job list moved to `/jobs`,
+  linked from the header, and `/?group=` and `/?only=` lead on to it.
+  `GET /api/v1/overview` gives the same sections as JSON.
 - Admins see a banner on every page when a newer release can be installed
   ("Remind me later" puts it off for that release for 7 days, in a cookie),
   and the Server page has an Upgrade card: the running and the new version,

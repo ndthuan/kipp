@@ -90,10 +90,43 @@ Over the API:
 
 A line that kipp kept no time for has none.
 
+## The overview
+
+The front page, `/`, says what needs a look; the whole job list, grouped as
+before, is at `/jobs` (and `/jobs?group=<name>` for one group), linked from
+the header. An old link to `/?group=<name>` still works: it leads on to
+`/jobs?group=<name>`. The page shows, in order:
+
+- **Running and queued**: the queue, as below.
+- **Failing now**: every job whose newest finished build is red, with how
+  long it has been red, the run of its recent builds as dots, and a `flaky`
+  tag when it also flips as often as a flaky job does. The job that has
+  been red for the shortest time is first.
+- **Flaky**: a job that is green now but changed colour at least four times
+  between consecutive builds among its last 20 finished ones (at least 5
+  needed), with its share of red builds ("20% failed (4/20)") and its flips.
+  `kipp serve --flaky-flips <n>` sets the four; 0 hides the section.
+- **Failed in the last 24 hours**: up to 10 red builds, newest first, and
+  whether the job is green again.
+- **Coming up**: the next 8 builds a cron will start.
+- **Groups**: one line per group, linking to its list, with how many jobs
+  are green, red, never built, running and disabled.
+
+Green is a build that ended `success` or `unstable`; red is `failed`,
+`timeout` or `lost`; `cancelled`, `skipped`, queued and running builds are
+neither and are passed over. Only jobs that build themselves are counted: a
+multibranch job and an owner job (and its repos) stand for their children.
+Jobs removed from the job files and disabled jobs are in no section, and a
+disabled job is counted in its group's line. A user sees only the jobs they
+may view. `GET /api/v1/overview` gives the same sections as JSON
+([API](api.md)).
+
+![The overview: what is failing, what is flaky, what failed lately, what runs next and each group's standing](screenshots/overview.png)
+
 ## The queue
 
-What runs and what waits is at the top of the job list and on its own
-page, `/queue`, which the header links to from every page with a count
+What runs and what waits is at the top of the overview and the job list,
+and on its own page, `/queue`, which the header links to from every page with a count
 ("2 running, 1 queued", or "idle").
 
 - A running build shows the stages it runs, and for a stage that waits to

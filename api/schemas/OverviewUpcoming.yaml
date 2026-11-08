@@ -1,0 +1,10 @@
+type: object
+additionalProperties: false
+required: [job, cron, at]
+properties:
+  job:
+    type: string
+  cron:
+    type: string
+  at:
+    $ref: Timestamp.yaml

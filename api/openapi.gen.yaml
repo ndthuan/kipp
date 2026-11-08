@@ -1924,6 +1924,33 @@ paths:
       tags:
         - server
       x-kipp-package: api
+  /overview:
+    get:
+      description: |
+        The data of the front page, over the jobs the caller may view that
+        build themselves: a multibranch job is represented by its children, an
+        owner job by the children of its repos, and a job removed from the job
+        files or disabled is in no section but the counts of `groups`. A build
+        is green when it ended `success` or `unstable`, red when it ended
+        `failed`, `timeout` or `lost`; other builds are not looked at. Each
+        job is judged by its last 20 builds that ended green or red. The queue
+        is `GET /queue` and is not repeated here.
+      operationId: getOverview
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Overview"
+          description: The overview.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: What is failing, flaky, recently failed and coming up
+      tags:
+        - jobs
+      x-kipp-package: api
   /queue:
     get:
       description: Only the builds of jobs the caller may see.
@@ -3391,6 +3418,162 @@ components:
       required:
         - repo
         - jobs
+      type: object
+    Overview:
+      additionalProperties: false
+      description: What the front page shows besides the queue.
+      properties:
+        failing:
+          description: Jobs whose newest red-or-green build is red, the job that has been red for the shortest time first.
+          items:
+            $ref: "#/components/schemas/OverviewFailing"
+          type: array
+        flaky:
+          description: |
+            Jobs that are green now and changed colour at least `--flaky-flips`
+            times in their last 20 builds, with at least 5 of them; empty when the
+            server has the section off. The most flips first, then the larger share
+            of red.
+          items:
+            $ref: "#/components/schemas/OverviewFlaky"
+          type: array
+        groups:
+          description: One entry per group, the groups by name and the jobs with no group (`name` empty) last.
+          items:
+            $ref: "#/components/schemas/OverviewGroup"
+          type: array
+        more_failures:
+          description: How many more red builds of the last 24 hours `recent_failures` leaves out.
+          type: integer
+        recent_failures:
+          description: At most 10 red builds that ended in the last 24 hours, newest first.
+          items:
+            $ref: "#/components/schemas/OverviewRecentFailure"
+          type: array
+        upcoming:
+          description: The next 8 builds a cron will start, soonest first.
+          items:
+            $ref: "#/components/schemas/OverviewUpcoming"
+          type: array
+      required:
+        - failing
+        - flaky
+        - recent_failures
+        - more_failures
+        - upcoming
+        - groups
+      type: object
+    OverviewFailing:
+      additionalProperties: false
+      properties:
+        build:
+          $ref: "#/components/schemas/BuildSummary"
+          description: The job's newest red build.
+        flaky:
+          description: True when the job would be flaky were its newest build green.
+          type: boolean
+        job:
+          type: string
+        recent:
+          description: Up to 5 of the job's newest builds that ended green or red, newest first.
+          items:
+            $ref: "#/components/schemas/BuildSummary"
+          type: array
+        since:
+          $ref: "#/components/schemas/Timestamp"
+          description: When the first red build of the job's current run of red ones ended (the oldest of its last 20, if all are red).
+      required:
+        - job
+        - build
+        - since
+        - flaky
+        - recent
+      type: object
+    OverviewFlaky:
+      additionalProperties: false
+      properties:
+        failed:
+          description: How many of the `finished` builds are red.
+          type: integer
+        failed_percent:
+          description: "`failed` of `finished`, in whole percent."
+          type: integer
+        finished:
+          description: The job's builds that ended green or red, among its last 20.
+          type: integer
+        flips:
+          description: How many times the colour changed between two consecutive builds of those.
+          type: integer
+        job:
+          type: string
+        recent:
+          description: Up to 5 of the job's newest builds that ended green or red, newest first.
+          items:
+            $ref: "#/components/schemas/BuildSummary"
+          type: array
+      required:
+        - job
+        - failed
+        - finished
+        - failed_percent
+        - flips
+        - recent
+      type: object
+    OverviewGroup:
+      additionalProperties: false
+      description: |
+        How the enabled jobs of a group stand. A job that is running is counted
+        as `running` and also by the colour of its last finished build, so the
+        counts need not add up to the group's jobs; a disabled job is only
+        `disabled`.
+      properties:
+        disabled:
+          type: integer
+        green:
+          type: integer
+        name:
+          description: The group, empty for the jobs with no group.
+          type: string
+        never_built:
+          description: Jobs with no finished green or red build and none running.
+          type: integer
+        red:
+          type: integer
+        running:
+          type: integer
+      required:
+        - name
+        - green
+        - red
+        - never_built
+        - running
+        - disabled
+      type: object
+    OverviewRecentFailure:
+      additionalProperties: false
+      properties:
+        build:
+          $ref: "#/components/schemas/BuildSummary"
+        green_again:
+          description: True when the job's newest build that ended green or red is green.
+          type: boolean
+      required:
+        - build
+        - green_again
+      type: object
+    OverviewUpcoming:
+      additionalProperties: false
+      properties:
+        at:
+          $ref: "#/components/schemas/Timestamp"
+        cron:
+          type: string
+        job:
+          type: string
+      required:
+        - job
+        - cron
+        - at
       type: object
     Owner:
       additionalProperties: false

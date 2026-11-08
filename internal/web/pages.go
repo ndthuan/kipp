@@ -16,6 +16,7 @@ import (
 
 	"github.com/ndthuan/kipp/internal/api"
 	"github.com/ndthuan/kipp/internal/config"
+	"github.com/ndthuan/kipp/internal/overview"
 	"github.com/ndthuan/kipp/internal/store"
 )
 
@@ -42,11 +43,11 @@ type jobsData struct {
 func (g *group) href() string {
 	switch {
 	case g.Removed:
-		return "/?only=removed"
+		return "/jobs?only=removed"
 	case g.Name == "":
-		return "/?only=ungrouped"
+		return "/jobs?only=ungrouped"
 	}
-	return "/?group=" + url.QueryEscape(g.Name)
+	return "/jobs?group=" + url.QueryEscape(g.Name)
 }
 
 // crumb is the group a job's page and its builds' pages lead back to: the
@@ -96,7 +97,7 @@ func picked(all []*group, q url.Values) []*group {
 
 // shown is the page for a query: every group, or the one it picks.
 func shown(all []*group, q url.Values) jobsData {
-	d := jobsData{Groups: all, Self: "/", Heading: "Jobs"}
+	d := jobsData{Groups: all, Self: "/jobs", Heading: "Jobs"}
 	if one := picked(all, q); len(one) > 0 {
 		d.Groups, d.Self, d.Heading = one, one[0].href(), one[0].label()
 	}
@@ -112,18 +113,19 @@ type menu struct {
 	Jobs       []api.JobSummary
 }
 
-// navData is the header's menus. All: the page is the list of every job.
-// Job is the job the page is about, marked in its menu.
+// navData is the header's menus. Home: the page is the overview. All: the
+// page is the list of every job. Job is the job the page is about, marked in
+// its menu.
 type navData struct {
-	All   bool
-	Job   string
-	Menus []menu
+	Home, All bool
+	Job       string
+	Menus     []menu
 }
 
-// navOf is the header for a page in the group at here ("/" for all of
-// them, "" for none), about job.
+// navOf is the header for a page in the group at here ("/jobs" for all of
+// them, "/" for the overview, "" for none), about job.
 func navOf(all []*group, here, job string) *navData {
-	n := &navData{All: here == "/", Job: job}
+	n := &navData{Home: here == "/", All: here == "/jobs", Job: job}
 	seen := map[string]bool{}
 	for _, g := range all {
 		h := g.href()
@@ -134,6 +136,44 @@ func navOf(all []*group, here, job string) *navData {
 		n.Menus = append(n.Menus, menu{Label: g.label(), Href: h, Here: h == here, Page: h == here && job == "", Jobs: g.Jobs})
 	}
 	return n
+}
+
+// home is the overview. The job list used to be here, so a link to it with
+// a group or an only leads on to the list.
+func (s *Site) home(w http.ResponseWriter, r *http.Request, u *store.User) {
+	if q := r.URL.Query(); q.Has("group") || q.Has("only") {
+		redirect(w, r, "/jobs?"+r.URL.RawQuery, http.StatusSeeOther)
+		return
+	}
+	o, err := s.api.Service().Overview(r.Context(), u)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	q, err := s.api.Service().Queue(r.Context(), u)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	d := overviewData{Queue: queueData{Queue: q, CSRF: csrf(r), Full: true}, Overview: o}
+	for _, g := range o.Groups {
+		h := &group{Name: g.Name}
+		d.Groups = append(d.Groups, groupRow{Group: g, Href: h.href(), Label: h.label()})
+	}
+	s.render(w, r, "overview", http.StatusOK, page{Title: "Overview", Data: d, Here: "/", Queue: q})
+}
+
+// overviewData is the overview page: the queue, the sections, and the
+// groups with the address of their lists.
+type overviewData struct {
+	Queue    queueData
+	Overview *overview.Overview
+	Groups   []groupRow
+}
+
+type groupRow struct {
+	overview.Group
+	Href, Label string
 }
 
 func (s *Site) jobs(w http.ResponseWriter, r *http.Request, u *store.User) {
@@ -768,3 +808,6 @@ func lines(value string) bool { return strings.Contains(value, "\n") }
 func millis(ms int) string {
 	return (time.Duration(ms) * time.Millisecond).String()
 }
+
+// percent is the share of the window a flaky job failed, as the page says it.
+func percent(f overview.FlakyJob) string { return strconv.Itoa(f.Percent()) + "%" }

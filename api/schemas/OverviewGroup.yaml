@@ -1,0 +1,23 @@
+type: object
+additionalProperties: false
+description: |
+  How the enabled jobs of a group stand. A job that is running is counted
+  as `running` and also by the colour of its last finished build, so the
+  counts need not add up to the group's jobs; a disabled job is only
+  `disabled`.
+required: [name, green, red, never_built, running, disabled]
+properties:
+  name:
+    type: string
+    description: The group, empty for the jobs with no group.
+  green:
+    type: integer
+  red:
+    type: integer
+  never_built:
+    type: integer
+    description: Jobs with no finished green or red build and none running.
+  running:
+    type: integer
+  disabled:
+    type: integer

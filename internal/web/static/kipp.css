@@ -44,6 +44,15 @@
     text-decoration: none;
     border-bottom: 3px solid var(--accent);
   }
+  .navlink {
+    padding: calc(var(--space) * 1.5) calc(var(--space) * 3);
+    border-radius: var(--radius-m);
+    color: var(--fg-muted);
+    font-weight: var(--weight-medium);
+    text-decoration: none;
+  }
+  .navlink:hover { background-color: var(--bg-sunken); color: var(--fg); }
+  .navlink[aria-current] { color: var(--fg); box-shadow: inset 0 -2px 0 var(--primary); border-radius: var(--radius-m) var(--radius-m) 0 0; }
   .who { display: flex; align-items: center; gap: calc(var(--space) * 4); margin-left: auto; color: var(--fg-subtle); }
   .queue-badge { font-weight: var(--weight-medium); color: var(--on-busy-soft); white-space: nowrap; }
   .queue-badge .qb { display: inline-flex; align-items: center; gap: calc(var(--space) * 1); font-variant-numeric: tabular-nums; }
@@ -161,6 +170,7 @@
     .top { flex-wrap: nowrap; padding-inline: calc(var(--space) * 3); gap: calc(var(--space) * 2); }
     .top.folding.open { flex-wrap: wrap; }
     .brand { font-size: var(--size-md); }
+    .navlink { padding-inline: calc(var(--space) * 2); }
     .who { gap: calc(var(--space) * 2); }
     .user > summary::after { display: none; }
     .user .who-name { display: none; }
@@ -261,6 +271,10 @@
   .jobs th:nth-child(3) { width: 20%; }
   .jobs th:nth-child(4) { width: 18%; }
   .jobs td:first-child { min-width: calc(var(--space) * 56); }
+  /* The overview's tables: short rows, none broken, and the ages tick. */
+  .rows td:not(:first-child), .rows th:not(:first-child) { white-space: nowrap; }
+  .rows td:first-child { min-width: calc(var(--space) * 40); overflow-wrap: anywhere; }
+  .rows time { font-variant-numeric: tabular-nums; }
   /* The branches and pull requests: the age in the last column ticks every
      second, so the columns have fixed shares and the age its own digits'
      width, and nothing moves as it counts. */

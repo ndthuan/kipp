@@ -83,6 +83,7 @@ func (a *API) Routes() []Route {
 		row("POST", "/admin/upgrade", user(a.upgradeStart)),
 		row("DELETE", "/admin/upgrade", user(a.upgradeCancel)),
 		row("POST", "/admin/upgrade/rollback", user(a.rollbackStart)),
+		row("GET", "/overview", user(a.overview)),
 		row("GET", "/queue", user(a.queue)),
 		row("GET", "/queue/events", user(a.queueEvents)),
 		row("GET", "/admin/users", user(a.users)),

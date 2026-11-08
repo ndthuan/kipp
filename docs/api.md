@@ -140,6 +140,7 @@ an admin may read is below `/admin/`.
 | `GET /builds/<id>/metrics` | `view` | What the build reported, and its guards ([Metrics](metrics.md#api)). |
 | `GET /builds/<id>/artifacts`, `.../stages/<stage>/artifacts`, `.../artifacts/<path>`, `.../artifacts.zip` | `view` | Artifacts. |
 | `GET /metrics`, `/metrics/<store>`, `.../remembered`, `.../history`, `.../compare` | `view` on a job that names the store | Metric stores ([Metrics](metrics.md#api)). |
+| `GET /overview` | login | What is failing, flaky, recently failed and coming up, and each group's counts, over the jobs the caller may view ([The overview](builds.md#the-overview)). |
 | `GET /queue` | login | What runs and what waits ([The queue](builds.md#the-queue)). |
 | `GET /queue/events` | login | A `changed` event each time the caller's queue changes. |
 | `POST /admin/reload` | admin | Reads the job files again; a refused set is a 422 `jobs_refused` with the errors. |

@@ -108,7 +108,7 @@ func parsePages(assets map[string]asset, zone *time.Location) map[string]*templa
 		return "/static/" + name + "?v=" + a.version(), nil
 	}
 	funcs := template.FuncMap{"static": static, "dag": dagOf, "ago": ago, "clock": clockIn(zone), "zoned": zoned, "since": since, "join": join, "cancelOf": cancelOf, "took": took, "millis": millis, "lines": lines, "buildPath": buildPath, "crumb": crumb,
-		"userPath": userPath, "secretPath": secretPath, "lasts": lasts, "expired": expired, "tokenList": tokenList, "tokenForm": tokenForm, "secretName": webhook.SecretName, "placePath": placePath, "bytes": byteSize, "scopePath": scopePath, "scopeField": scopeField, "metricsPath": metricsPath}
+		"userPath": userPath, "secretPath": secretPath, "lasts": lasts, "expired": expired, "tokenList": tokenList, "tokenForm": tokenForm, "secretName": webhook.SecretName, "placePath": placePath, "bytes": byteSize, "scopePath": scopePath, "scopeField": scopeField, "metricsPath": metricsPath, "plural": plural, "percent": percent}
 	layout := template.Must(template.New("layout.html").Funcs(funcs).ParseFS(templateFS, "templates/layout.html"))
 	files, err := fs.Glob(templateFS, "templates/*.html")
 	if err != nil {
@@ -150,7 +150,8 @@ func (a asset) version() string { return strings.Trim(a.etag, `"`) }
 func (s *Site) handler() http.Handler {
 	pages := http.NewServeMux()
 	pages.HandleFunc("POST /logout", s.withUser(s.logout))
-	pages.HandleFunc("GET /{$}", s.withUser(s.jobs))
+	pages.HandleFunc("GET /{$}", s.withUser(s.home))
+	pages.HandleFunc("GET /jobs", s.withUser(s.jobs))
 	pages.HandleFunc("GET /jobs/{name}", s.withUser(s.job))
 	pages.HandleFunc("POST /jobs/{name}/build", s.withUser(s.build))
 	pages.HandleFunc("POST /jobs/{name}/scan", s.withUser(s.scan))
@@ -290,7 +291,8 @@ type page struct {
 	Upgrade *upgradeView
 	Error   string
 	Data    any
-	// Here is the href of the group the page is in, "/" for every job;
+	// Here is the href of the group the page is in, "/jobs" for every job,
+	// or "/" for the overview;
 	// Job is the job it is about. The header marks both.
 	Here, Job string
 	Nav       *navData

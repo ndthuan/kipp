@@ -96,6 +96,8 @@ paths:
     $ref: paths/metrics_store_history.yaml
   /metrics/{store}/compare:
     $ref: paths/metrics_store_compare.yaml
+  /overview:
+    $ref: paths/overview.yaml
   /queue:
     $ref: paths/queue.yaml
   /queue/events:

@@ -1,0 +1,23 @@
+type: object
+additionalProperties: false
+required: [job, failed, finished, failed_percent, flips, recent]
+properties:
+  job:
+    type: string
+  failed:
+    type: integer
+    description: How many of the `finished` builds are red.
+  finished:
+    type: integer
+    description: The job's builds that ended green or red, among its last 20.
+  failed_percent:
+    type: integer
+    description: '`failed` of `finished`, in whole percent.'
+  flips:
+    type: integer
+    description: How many times the colour changed between two consecutive builds of those.
+  recent:
+    type: array
+    description: Up to 5 of the job's newest builds that ended green or red, newest first.
+    items:
+      $ref: BuildSummary.yaml
