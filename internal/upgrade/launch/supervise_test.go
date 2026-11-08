@@ -630,7 +630,9 @@ func TestARestartCodeMakesTheLauncherReadTheNextRecord(t *testing.T) {
 	calls, exits := recorded(l)
 	done := make(chan struct{})
 	go func() { l.processPending(); close(done) }()
-	waitFor(t, "current", func() bool { c, _ := state.ReadCurrent(data); return c == "v1.0.1" })
+	// Removing pending is becomeCurrent's last step; a record written before
+	// it would be removed with it.
+	waitFor(t, "pending to be settled", func() bool { p, err := state.ReadPending(data); return err == nil && p == nil })
 	// The server writes a rollback record and exits with 75.
 	pend(t, data, state.Pending{Kind: state.KindRollback, Version: state.Bundled, From: "v1.0.1", Backup: backupName})
 	write(t, filepath.Join(data, "fake-restart"), "")
