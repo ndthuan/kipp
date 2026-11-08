@@ -7,12 +7,16 @@ import (
 	"time"
 
 	"github.com/ndthuan/kipp/internal/store"
+	"github.com/ndthuan/kipp/internal/waitfor"
 )
 
-// queueUntil reads the queue until ok holds of it.
+// queueUntil reads the queue until ok holds of it, each time the dispatcher
+// announces a change.
 func (h *harness) queueUntil(t *testing.T, what string, ok func(*Queue) bool) *Queue {
 	t.Helper()
-	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+	timeout := time.After(waitfor.Safety)
+	for {
+		changes := h.d.Changes()
 		q, err := h.d.Queue(context.Background())
 		if err != nil {
 			t.Fatal(err)
@@ -20,7 +24,9 @@ func (h *harness) queueUntil(t *testing.T, what string, ok func(*Queue) bool) *Q
 		if ok(q) {
 			return q
 		}
-		if time.Now().After(deadline) {
+		select {
+		case <-changes:
+		case <-timeout:
 			t.Fatalf("%s: never; the queue was %+v", what, q)
 		}
 	}
@@ -77,7 +83,7 @@ func changed(t *testing.T, what string, ch <-chan struct{}) {
 	t.Helper()
 	select {
 	case <-ch:
-	case <-time.After(10 * time.Second):
+	case <-time.After(waitfor.Safety):
 		t.Fatalf("%s was not announced", what)
 	}
 }

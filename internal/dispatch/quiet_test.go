@@ -79,7 +79,9 @@ func TestACronFireRefusedDuringQuietRunsOnceWhenItEnds(t *testing.T) {
 		builds, _ := h.st.BuildsWithStatus(ctx, store.Success)
 		return len(builds) == 1 && builds[0].Trigger == "cron"
 	})
-	time.Sleep(200 * time.Millisecond)
+	// A second fire would have been queued by now, and a pass over the queue
+	// begun after it would have run it.
+	h.d.schedule(ctx)
 	if builds, _ := h.st.BuildsWithStatus(ctx, store.Queued, store.Running, store.Success); len(builds) != 1 {
 		t.Fatalf("%d builds, want the one", len(builds))
 	}

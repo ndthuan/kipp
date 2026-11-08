@@ -22,6 +22,7 @@ import (
 	"github.com/ndthuan/kipp/internal/logtime"
 	"github.com/ndthuan/kipp/internal/runner"
 	"github.com/ndthuan/kipp/internal/store"
+	"github.com/ndthuan/kipp/internal/waitfor"
 )
 
 type harness struct {
@@ -121,15 +122,10 @@ func (h *harness) stages(t *testing.T, id int64) map[string]*store.Stage {
 	return byName
 }
 
-// eventually polls until ok, and fails the test after ten seconds.
+// eventually waits until ok, for a state the code does not announce.
 func eventually(t *testing.T, what string, ok func() bool) {
 	t.Helper()
-	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
-		if ok() {
-			return
-		}
-	}
-	t.Fatalf("timed out waiting until %s", what)
+	waitfor.Until(t, what, ok)
 }
 
 func (h *harness) untilRunning(t *testing.T, id int64) {
@@ -680,7 +676,7 @@ func TestRecoverMarksRunningLostAndRerunsQueued(t *testing.T) {
 	ended := make(chan struct{})
 	go func() { d.Run(runCtx); close(ended) }()
 	defer func() { stop(); <-ended }()
-	wctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	wctx, cancel := context.WithTimeout(ctx, waitfor.Safety)
 	defer cancel()
 	b, err := d.Wait(wctx, queued.ID)
 	if err != nil || b.Status != store.Success {
@@ -904,7 +900,7 @@ func TestShutdownDoesNotWaitForAHook(t *testing.T) {
 	})
 	began := time.Now()
 	h.stop()
-	if took := time.Since(began); took > 5*time.Second {
+	if took := time.Since(began); took > waitfor.Safety {
 		t.Fatalf("shutdown waited %v for the hook", took)
 	}
 	if got, _ := h.st.Build(context.Background(), b.ID); got.Status != store.Success {
@@ -1533,7 +1529,7 @@ func TestACancelledCloneTakesTheHelpersGitStartedWithIt(t *testing.T) {
 		if err == nil {
 			t.Fatal("a cancelled clone reported success")
 		}
-	case <-time.After(10 * time.Second):
+	case <-time.After(waitfor.Safety):
 		t.Fatal("a cancelled clone did not return")
 	}
 	assertGone(t, []int{helper})
@@ -1575,7 +1571,9 @@ func TestABuildWhoseHookRunsHoldsNoExecutorAndStillHoldsItsLock(t *testing.T) {
 	}
 	// What the hooked build holds besides is its until the hook is done.
 	waiting := h.trigger(t, "same")
-	time.Sleep(200 * time.Millisecond)
+	// A pass over the queue that began after the trigger would have started
+	// it, if the lock let it.
+	h.d.schedule(ctx)
 	if got, _ := h.st.Build(ctx, waiting.ID); got.Status != store.Queued {
 		t.Fatalf("a build wanting the lock of a build whose hook runs is %v, want queued", got.Status)
 	}

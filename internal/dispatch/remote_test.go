@@ -60,18 +60,27 @@ type agents struct {
 	srv  *httptest.Server
 	ids  map[string]*agenthub.Identity // by token hash
 	down atomic.Bool                   // every call is answered 503
+	// clock is the hub's time, which stands still until a test moves it: a
+	// loaded machine that delays an agent's call cannot make the hub think
+	// it silent.
+	clock atomic.Int64
 }
+
+func (a *agents) now() time.Time { return time.Unix(0, a.clock.Load()) }
+
+// advance moves the hub's time on by d.
+func (a *agents) advance(d time.Duration) { a.clock.Add(int64(d)) }
 
 func newAgents(t *testing.T, ids ...agenthub.Identity) *agents {
 	t.Helper()
 	a := &agents{t: t, ids: map[string]*agenthub.Identity{}}
+	a.clock.Store(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).UnixNano())
 	for _, id := range ids {
 		a.ids[auth.HashToken(tokenOf(id.Name))] = &id
 	}
-	// An agent is offline after three heartbeats without a call. A second
-	// leaves room for a claim that comes late on a loaded machine, where a
-	// tenth marked the agent offline between two of its claims.
-	a.hub = agenthub.New(agenthub.Options{Version: "v-test", Log: slog.New(slog.DiscardHandler), Heartbeat: time.Second, ClaimWait: 200 * time.Millisecond,
+	// An agent is offline after three heartbeats without a call, by the
+	// hub's clock, which only a test moves.
+	a.hub = agenthub.New(agenthub.Options{Version: "v-test", Log: slog.New(slog.DiscardHandler), Now: a.now, Heartbeat: time.Second, ClaimWait: 200 * time.Millisecond,
 		Standing: func(_ context.Context, hash string) (*agenthub.Identity, error) {
 			if id := a.ids[hash]; id != nil {
 				c := *id
@@ -294,6 +303,7 @@ func TestAStageOnAnAgentThatGoesOfflineFails(t *testing.T) {
 	})
 	ag.down.Store(true)
 	ag.srv.CloseClientConnections()
+	ag.advance(4 * time.Second) // past three heartbeats without a call
 	b = h.wait(t, b.ID)
 	cancel()
 	<-ended

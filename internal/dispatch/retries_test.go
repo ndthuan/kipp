@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/ndthuan/kipp/internal/agenthub"
 	"github.com/ndthuan/kipp/internal/store"
@@ -85,8 +84,8 @@ func TestACancelDuringATryStartsNoOther(t *testing.T) {
 	if err := h.d.Cancel(context.Background(), b.ID, "ada"); err != nil {
 		t.Fatal(err)
 	}
+	// The build is not busy once it ends: no try can start after Wait.
 	b = h.wait(t, b.ID)
-	time.Sleep(200 * time.Millisecond)
 	data, _ := os.ReadFile(filepath.Clean(runs))
 	if b.Status != store.Cancelled || strings.Count(string(data), "x") != 1 {
 		t.Fatalf("build %s, runs %q", b.Status, data)
@@ -141,7 +140,6 @@ func TestACancelDuringATryOnAnAgentStartsNoOther(t *testing.T) {
 		t.Fatal(err)
 	}
 	b = h.wait(t, b.ID)
-	time.Sleep(300 * time.Millisecond)
 	data, _ := os.ReadFile(filepath.Clean(runs))
 	if b.Status != store.Cancelled || strings.Count(string(data), "x") != 1 {
 		t.Fatalf("build %s, runs %q", b.Status, data)
