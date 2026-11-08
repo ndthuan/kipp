@@ -90,8 +90,11 @@ func (s *served) inBackground(args ...string) <-chan cliResult {
 		done <- cliResult{code, out, errOut}
 		close(ended)
 	}()
-	// The globals the fixture restores are not to change under a command.
+	// The globals the fixture restores are not to change under a command,
+	// and one that waits for the server (a test that failed before it ended)
+	// ends once the server has.
 	s.t.Cleanup(func() {
+		s.stop()
 		select {
 		case <-ended:
 		case <-time.After(40 * time.Second):
@@ -233,9 +236,12 @@ func TestASecondUpgradeIsRefusedAndACancelLeavesTheServerAsItWasWithQuietOff(t *
 	s := fx.serving(t, map[string]string{"slow.yml": slowJob4})
 	ok(t, "", "run", "slow", "--url", s.url, "--token", s.token)
 	first := s.inBackground("upgrade")
-	eventually(t, "the upgrade waits", func() bool { _, out, _ := s.kipp("upgrade", "status"); return strings.Contains(out, "waiting") })
-	_, out, _ := s.kipp("quiet", "status")
-	contains(t, out, "quiet on: 1 running")
+	// The status says waiting just before quiet is turned on.
+	eventually(t, "the upgrade waits with quiet on", func() bool {
+		_, status, _ := s.kipp("upgrade", "status")
+		_, quiet, _ := s.kipp("quiet", "status")
+		return strings.Contains(status, "waiting") && strings.Contains(quiet, "quiet on: 1 running")
+	})
 
 	code, _, errOut := s.kipp("upgrade")
 	eq(t, "a second upgrade", code, 1)
@@ -244,7 +250,7 @@ func TestASecondUpgradeIsRefusedAndACancelLeavesTheServerAsItWasWithQuietOff(t *
 	eq(t, "a second upgrade, unsafe", code, 1)
 	contains(t, errOut, "already running")
 
-	code, out, _ = s.kipp("upgrade", "--cancel")
+	code, out, _ := s.kipp("upgrade", "--cancel")
 	eq(t, "cancel", code, 0)
 	contains(t, out, "upgrade: cancelled")
 	r := result(t, first)

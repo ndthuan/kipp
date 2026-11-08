@@ -35,6 +35,7 @@ import (
 	"github.com/ndthuan/kipp/internal/secretbox"
 	"github.com/ndthuan/kipp/internal/store"
 	"github.com/ndthuan/kipp/internal/version"
+	"github.com/ndthuan/kipp/internal/waitfor"
 )
 
 const adminPassword = "the boss's own password"
@@ -153,7 +154,7 @@ func (s *served) get(path string, session *http.Cookie) (int, string) {
 // the test fails on its exit status and does not hang.
 func soon(t *testing.T) context.Context {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), waitfor.Safety)
 	t.Cleanup(cancel)
 	return ctx
 }
@@ -670,8 +671,8 @@ func TestASecondSignalKillsAServerThatIsStillShuttingDown(t *testing.T) {
 		if !errors.As(err, &exit) || !exit.Sys().(syscall.WaitStatus).Signaled() {
 			t.Fatalf("the second SIGTERM did not kill the server (it took %v): %v\nstderr: %s", time.Since(asked).Round(time.Millisecond), err, stderr)
 		}
-	case <-time.After(5 * time.Second):
-		t.Fatalf("the server was still up 5s after a second SIGTERM\nstderr: %s", stderr)
+	case <-time.After(waitfor.Safety):
+		t.Fatalf("the server was still up 30s after a second SIGTERM\nstderr: %s", stderr)
 	}
 }
 

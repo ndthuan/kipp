@@ -14,6 +14,7 @@ import (
 	"github.com/ndthuan/kipp/internal/config"
 	"github.com/ndthuan/kipp/internal/secretbox"
 	"github.com/ndthuan/kipp/internal/store"
+	"github.com/ndthuan/kipp/internal/waitfor"
 )
 
 // asKipp makes the test binary behave as kipp itself, for the tests that
@@ -104,11 +105,7 @@ func lacks(t *testing.T, s string, subs ...string) {
 
 func eventually(t *testing.T, what string, ok func() bool) {
 	t.Helper()
-	for deadline := time.Now().Add(15 * time.Second); !ok(); time.Sleep(10 * time.Millisecond) {
-		if time.Now().After(deadline) {
-			t.Fatalf("never happened: %s", what)
-		}
-	}
+	waitfor.Until(t, what, ok)
 }
 
 func write(t *testing.T, path, content string, mode os.FileMode) {

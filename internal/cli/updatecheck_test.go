@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/ndthuan/kipp/internal/update"
 	"github.com/ndthuan/kipp/internal/version"
@@ -71,7 +70,8 @@ func TestNoUpdateCheckMakesNoRequestAndSaysTheCheckIsOff(t *testing.T) {
 	if got["update_check"] != false || got["latest"] != "" || got["checked_at"] != nil {
 		t.Fatalf("%v", got)
 	}
-	time.Sleep(200 * time.Millisecond)
+	// Nothing can ask once the server has ended.
+	s.stop()
 	eq(t, "requests", hits.Load(), int32(0))
 }
 
@@ -80,7 +80,7 @@ func TestTheEnvironmentTurnsTheUpdateCheckOffAsTheFlagDoes(t *testing.T) {
 	t.Setenv("KIPP_NO_UPDATE_CHECK", "1")
 	s := start(t, map[string]string{"hello.yml": helloJob})
 	eq(t, "check", serverJSON(t, s)["update_check"], false)
-	time.Sleep(200 * time.Millisecond)
+	s.stop()
 	eq(t, "requests", hits.Load(), int32(0))
 
 	t.Setenv("KIPP_NO_UPDATE_CHECK", "maybe")
@@ -97,7 +97,7 @@ func TestADevBuildMakesNoUpdateRequest(t *testing.T) {
 	if got["latest"] != "" || got["checked_at"] != nil {
 		t.Fatalf("%v", got)
 	}
-	time.Sleep(200 * time.Millisecond)
+	s.stop()
 	eq(t, "requests", hits.Load(), int32(0))
 }
 
