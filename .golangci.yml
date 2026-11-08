@@ -35,6 +35,9 @@ linters:
       # the file an upgrade put there, checked by version before it is run.
       - path: ^internal/upgrade/launch/(launch|supervise)\.go$
         text: "G204"
+      # A restore into a directory the process cannot write is the subject.
+      - path: ^internal/upgrade/backup/backup_test\.go$
+        text: "G302"
       # The state files are read at fixed names under the data directory.
       - path: ^internal/upgrade/state/state\.go$
         text: "G304"

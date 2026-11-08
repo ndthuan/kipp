@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -552,5 +553,145 @@ func TestAnAddressThatIsNotKnownIsJudgedByTheProcessStayingUp(t *testing.T) {
 	write(t, filepath.Join(data, "fake-restart"), "")
 	if res := <-done; !res.restart {
 		t.Fatalf("%+v", res)
+	}
+}
+
+type execCall struct {
+	path string
+	argv []string
+	env  []string
+}
+
+// recorded is a launcher whose exit and exec are noted, not done.
+func recorded(l *launcher) (calls *[]execCall, exits *[]int) {
+	calls, exits = &[]execCall{}, &[]int{}
+	l.exec = func(path string, argv, env []string) error {
+		*calls = append(*calls, execCall{path, argv, env})
+		return nil
+	}
+	l.exit = func(c int) { *exits = append(*exits, c) }
+	return calls, exits
+}
+
+func hasEnv(env []string, kv string) bool { return slices.Contains(env, kv) }
+
+func TestAnUnhealthyPendingVersionHandsOverToTheBundledExecutable(t *testing.T) {
+	l, _, data := inPackage(t, "exit", newClock(time.Second, nil))
+	calls, exits := recorded(l)
+	l.processPending()
+	if len(*exits) != 0 || len(*calls) != 1 {
+		t.Fatalf("exits %v calls %v", *exits, *calls)
+	}
+	exe, _ := os.Executable()
+	c := (*calls)[0]
+	if c.path != exe || len(c.argv) < 2 || c.argv[1] != "serve" || hasEnv(c.env, EnvLaunched+"=1") {
+		t.Fatalf("%+v", c)
+	}
+	if got := read(t, filepath.Join(data, backup.DBFile)); got != "old database" {
+		t.Fatalf("database %q", got)
+	}
+}
+
+func TestARolledBackDataDirectoryVersionIsStartedMarkedAsLaunched(t *testing.T) {
+	l, _, data := inPackage(t, "exit", newClock(time.Second, nil))
+	install(t, data, "v1.0.0", "v1.0.0")
+	pend(t, data, state.Pending{Kind: state.KindUpgrade, Version: "v1.0.1", From: "v1.0.0", Backup: backupName})
+	t.Setenv(EnvLaunched, "1")
+	t.Setenv(EnvBundledVersion, "v0.9.0")
+	t.Setenv(EnvBundledExe, "/opt/kipp")
+	calls, _ := recorded(l)
+	l.processPending()
+	c := (*calls)[0]
+	if c.path != state.BinaryPath(data, "v1.0.0") || !hasEnv(c.env, EnvLaunched+"=1") ||
+		!hasEnv(c.env, EnvBundledExe+"=/opt/kipp") || !hasEnv(c.env, EnvBundledVersion+"=v0.9.0") {
+		t.Fatalf("%+v", c)
+	}
+}
+
+func TestAHealthyChildEndsTheLauncherWithTheChildsCode(t *testing.T) {
+	l, _, data := inPackage(t, "ok", newClock(time.Second, nil))
+	t.Setenv("FAKE_EXIT", "9")
+	_, exits := recorded(l)
+	done := make(chan struct{})
+	go func() { l.processPending(); close(done) }()
+	waitFor(t, "current", func() bool { c, _ := state.ReadCurrent(data); return c == "v1.0.1" })
+	time.Sleep(50 * time.Millisecond)
+	if err := syscall.Kill(os.Getpid(), syscall.SIGHUP); err != nil {
+		t.Fatal(err)
+	}
+	<-done
+	if len(*exits) != 1 || (*exits)[0] != 9 {
+		t.Fatalf("exits %v", *exits)
+	}
+}
+
+func TestARestartCodeMakesTheLauncherReadTheNextRecord(t *testing.T) {
+	l, _, data := inPackage(t, "ok", newClock(time.Second, nil))
+	calls, exits := recorded(l)
+	done := make(chan struct{})
+	go func() { l.processPending(); close(done) }()
+	waitFor(t, "current", func() bool { c, _ := state.ReadCurrent(data); return c == "v1.0.1" })
+	// The server writes a rollback record and exits with 75.
+	pend(t, data, state.Pending{Kind: state.KindRollback, Version: state.Bundled, From: "v1.0.1", Backup: backupName})
+	write(t, filepath.Join(data, "fake-restart"), "")
+	<-done
+	if len(*exits) != 0 || len(*calls) != 1 {
+		t.Fatalf("exits %v calls %v", *exits, *calls)
+	}
+	if cur, _ := state.ReadCurrent(data); cur != "" {
+		t.Fatalf("current %q after a rollback to bundled", cur)
+	}
+}
+
+func TestARollbackRecordWithoutABackupNameIsRefused(t *testing.T) {
+	l, _, data := inPackage(t, "ok", newClock(time.Second, nil))
+	pend(t, data, state.Pending{Kind: state.KindRollback, Version: state.Bundled, From: "v1.0.1"})
+	calls, _ := recorded(l)
+	l.processPending()
+	if len(*calls) != 0 || fileExists(filepath.Join(state.BinDir(data), "pending")) {
+		t.Fatalf("calls %v", *calls)
+	}
+	if !fileExists(filepath.Join(state.BinDir(data), "pending.refused")) {
+		t.Fatal("not set aside")
+	}
+}
+
+func TestARollbackToAnEarlierVersionExecsItAndForgetsItsRejection(t *testing.T) {
+	l, _, data := inPackage(t, "ok", newClock(time.Second, nil))
+	if err := state.Reject(data, "v1.0.1"); err != nil {
+		t.Fatal(err)
+	}
+	pend(t, data, state.Pending{Kind: state.KindRollback, Version: "v1.0.1", From: "v1.0.2", Backup: backupName})
+	calls, _ := recorded(l)
+	l.processPending()
+	if len(*calls) != 1 || (*calls)[0].path != state.BinaryPath(data, "v1.0.1") {
+		t.Fatalf("%v", *calls)
+	}
+	if rej, _ := state.ReadRejected(data); len(rej) != 1 || rej[0] != "v1.0.2" {
+		t.Fatalf("rejected %v", rej)
+	}
+}
+
+func TestAnExecThatFailsLeavesTheLauncherToCarryOn(t *testing.T) {
+	l, _, _ := inPackage(t, "exit", newClock(time.Second, nil))
+	l.exec = func(string, []string, []string) error { return errors.New("no such file") }
+	l.exit = func(int) { t.Fatal("exited") }
+	l.processPending()
+}
+
+func TestExitCodeIsTheChildsOr128PlusTheSignal(t *testing.T) {
+	if exitCode(nil) != 0 || exitCode(errors.New("x")) != 1 {
+		t.Fatal("plain codes")
+	}
+	err := exec.Command("sh", "-c", "exit 4").Run()
+	if exitCode(err) != 4 {
+		t.Fatal(exitCode(err))
+	}
+	cmd := exec.Command("sleep", "30")
+	_ = cmd.Start()
+	_ = cmd.Process.Kill()
+	err = cmd.Wait()
+	if exitCode(err) != 128+int(syscall.SIGKILL) || !strings.Contains(describeExit(err), "signal 9") {
+		t.Fatal(exitCode(err), describeExit(err))
 	}
 }

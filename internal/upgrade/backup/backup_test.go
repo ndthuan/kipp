@@ -336,3 +336,77 @@ func TestCleanIgnoresOtherFilesAndAMissingDirectory(t *testing.T) {
 		t.Fatal("status.json was removed")
 	}
 }
+
+func TestMarkSucceededWritesTheTimeAndRefusesANameThatIsNotABackup(t *testing.T) {
+	data := t.TempDir()
+	name := fake(t, data, t0, time.Time{})
+	if err := MarkSucceeded(data, name, t0.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if got := readIn(t, filepath.Join(Dir(data), name), markerFile); !strings.HasPrefix(got, "2026-11-03T11:15:00Z") {
+		t.Fatalf("marker %q", got)
+	}
+	if err := MarkSucceeded(data, "../x", t0); err == nil {
+		t.Fatal("a name outside the upgrade directory was marked")
+	}
+	if err := MarkSucceeded(data, Name("v9.9.9", t0), t0); err == nil {
+		t.Fatal("a backup that is not there was marked")
+	}
+}
+
+func TestBackupOfADataDirectoryWithoutADatabaseFailsAndLeavesNothing(t *testing.T) {
+	data := t.TempDir()
+	if _, err := Take(context.Background(), data, "v1.0.0", t0); err == nil {
+		t.Fatal("a backup of nothing succeeded")
+	}
+	if des, _ := os.ReadDir(Dir(data)); len(des) != 0 {
+		t.Fatalf("left %v", des)
+	}
+}
+
+func TestRestoreDoesNotFollowALinkOutOfTheBackupAndKeepsTheLiveFiles(t *testing.T) {
+	data, db := seed(t, 3)
+	name, err := Take(context.Background(), data, "v1.0.0", t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = db.Close()
+	outside := filepath.Join(t.TempDir(), "elsewhere")
+	if err := os.WriteFile(outside, []byte("not a key"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	key := filepath.Join(Dir(data), name, KeyFile)
+	if err := os.Remove(key); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, key); err != nil {
+		t.Fatal(err)
+	}
+	liveKey := readIn(t, data, KeyFile)
+	if err := Restore(data, name); err == nil {
+		t.Fatal("restored through a link that leaves the backup")
+	}
+	if got := readIn(t, data, KeyFile); got != liveKey {
+		t.Fatal("the live key changed")
+	}
+}
+
+func TestRestoreIntoADirectoryItCannotWriteFailsAndSaysWhichFile(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root writes anywhere")
+	}
+	data, db := seed(t, 2)
+	name, err := Take(context.Background(), data, "v1.0.0", t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = db.Close()
+	if err := os.Chmod(data, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chmod(data, 0o700) }()
+	err = Restore(data, name)
+	if err == nil || !strings.Contains(err.Error(), "restoring the") {
+		t.Fatalf("%v", err)
+	}
+}

@@ -91,11 +91,15 @@ type launcher struct {
 	sleep func(time.Duration)
 	// probe asks the child at addr whether it is healthy.
 	probe func(addr string) bool
+	// exit ends the process with a child's code; exec replaces it.
+	exit func(int)
+	exec func(path string, argv, env []string) error
 }
 
 func newLauncher(log *slog.Logger, data, version string, args []string) *launcher {
 	return &launcher{log: log, data: data, version: version, args: args, t: timingFromEnv(log),
-		stdout: os.Stdout, stderr: os.Stderr, now: time.Now, sleep: time.Sleep, probe: probeHealth}
+		stdout: os.Stdout, stderr: os.Stderr, now: time.Now, sleep: time.Sleep, probe: probeHealth,
+		exit: os.Exit, exec: syscall.Exec}
 }
 
 // launched reports whether this process was itself started from the data
@@ -150,7 +154,8 @@ func (l *launcher) processPending() {
 		case res.restart:
 			continue
 		case res.ended:
-			os.Exit(res.code)
+			l.exit(res.code)
+			return
 		default:
 			l.execPrevious(res.target)
 			return
@@ -442,7 +447,7 @@ func (l *launcher) execPrevious(target string) {
 
 func (l *launcher) execve(path, name string, env []string) {
 	argv := append([]string{path, "serve"}, l.args...)
-	err := syscall.Exec(path, argv, env)
+	err := l.exec(path, argv, env)
 	l.log.Error("not starting the earlier version; running this executable's own", "version", name, "err", err)
 }
 
