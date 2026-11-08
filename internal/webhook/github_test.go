@@ -26,6 +26,7 @@ import (
 	"github.com/ndthuan/kipp/internal/dispatch"
 	"github.com/ndthuan/kipp/internal/runner"
 	"github.com/ndthuan/kipp/internal/store"
+	"github.com/ndthuan/kipp/internal/waitfor"
 )
 
 const (
@@ -484,11 +485,10 @@ func TestAtMostTwoBodiesAreReadAtOnceAndAThirdIs503WithRetryAfter(t *testing.T) 
 	// Taking up a delivery and holding its reader are two steps; a bad
 	// signature probes for the second without building or recording anything.
 	url := srv.URL + "/api/v1/hooks/github/smoke"
-	var code int
-	for end := time.Now().Add(30 * time.Second); time.Now().Before(end) && code != http.StatusServiceUnavailable; time.Sleep(5 * time.Millisecond) {
-		code, _, _ = send(t, url, "push", sign("nope", push), newDelivery(), push)
-	}
-	eq(t, "probe", code, http.StatusServiceUnavailable)
+	waitfor.Until(t, "both readers are held", func() bool {
+		code, _, _ := send(t, url, "push", sign("nope", push), newDelivery(), push)
+		return code == http.StatusServiceUnavailable
+	})
 	code, _, hdr := send(t, url, "push", sig, newDelivery(), push)
 	eq(t, "third delivery", code, http.StatusServiceUnavailable)
 	eq(t, "Retry-After", hdr.Get("Retry-After"), "10")

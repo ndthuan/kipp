@@ -19,6 +19,7 @@ import (
 	"github.com/ndthuan/kipp/internal/engine/docker/dockertest"
 	"github.com/ndthuan/kipp/internal/placement"
 	"github.com/ndthuan/kipp/internal/store"
+	"github.com/ndthuan/kipp/internal/waitfor"
 )
 
 var quiet = slog.New(slog.DiscardHandler)
@@ -50,7 +51,7 @@ func newFixture(t *testing.T, max int, opts ...func(*Options)) *fixture {
 	t.Cleanup(func() { cancel(); f.agents.Wait() })
 	go f.hub.Run(ctx)
 	f.engine.OnStart = func(c *dockertest.Container) { f.runAgentOf(ctx, c, srv.URL) }
-	o := Options{Hub: f.hub, AgentURL: srv.URL, ServerID: "http://kipp.test", Log: quiet, Probe: time.Hour, ConnectWait: 5 * time.Second,
+	o := Options{Hub: f.hub, AgentURL: srv.URL, ServerID: "http://kipp.test", Log: quiet, Probe: time.Hour, ConnectWait: waitfor.Safety,
 		Binary: func(goos, goarch string) ([]byte, error) { return []byte("agent for " + goos + "/" + goarch), nil }}
 	for _, fn := range opts {
 		fn(&o)
@@ -107,12 +108,7 @@ func (f *fixture) reachable() {
 
 func eventually(t *testing.T, what string, ok func() bool) {
 	t.Helper()
-	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
-		if ok() {
-			return
-		}
-	}
-	t.Fatalf("timed out waiting until %s", what)
+	waitfor.Until(t, what, ok)
 }
 
 func build(id int64) *store.Build { return &store.Build{ID: id, Job: "linux-tests", Number: int(id)} }

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ndthuan/kipp/internal/problem"
+	"github.com/ndthuan/kipp/internal/waitfor"
 )
 
 const v1Smoke = "/api/v1/hooks/github/smoke"
@@ -102,12 +103,10 @@ func TestUnderV1BusyReadersAreABusyProblemWithRetryAfter(t *testing.T) {
 		body string
 		h    http.Header
 	)
-	for end := time.Now().Add(5 * time.Second); time.Now().Before(end); time.Sleep(10 * time.Millisecond) {
+	waitfor.Until(t, "both readers are held", func() bool {
 		code, body, h = send(t, srv.URL+v1Smoke, "push", sig, newDelivery(), push)
-		if code == http.StatusServiceUnavailable {
-			break
-		}
-	}
+		return code == http.StatusServiceUnavailable
+	})
 	asProblem(t, code, body, h, 503, "busy")
 	eq(t, "Retry-After", h.Get("Retry-After"), "10")
 }

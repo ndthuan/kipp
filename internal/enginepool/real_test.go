@@ -21,6 +21,7 @@ import (
 	"github.com/ndthuan/kipp/internal/runner"
 	"github.com/ndthuan/kipp/internal/store"
 	"github.com/ndthuan/kipp/internal/version"
+	"github.com/ndthuan/kipp/internal/waitfor"
 )
 
 // TestARealContainerRunsAStageThroughItsAgent is the whole path on the
@@ -191,7 +192,7 @@ func realEngine(t *testing.T) *onEngine {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := &http.Server{Handler: hub.Handler(), ReadHeaderTimeout: 5 * time.Second}
+	srv := &http.Server{Handler: hub.Handler(), ReadHeaderTimeout: waitfor.Safety}
 	go func() { _ = srv.Serve(ln) }()
 	t.Cleanup(func() { _ = srv.Close() })
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)

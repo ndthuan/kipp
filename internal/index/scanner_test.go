@@ -13,6 +13,7 @@ import (
 
 	"github.com/ndthuan/kipp/internal/dispatch"
 	"github.com/ndthuan/kipp/internal/store"
+	"github.com/ndthuan/kipp/internal/waitfor"
 )
 
 const scanned = "name: site\nmultibranch: {repo: acme/site, token: GH_TOKEN, scan: 10m}\n"
@@ -192,11 +193,10 @@ func TestAtMostTwoScansRunAtOnce(t *testing.T) {
 	t.Cleanup(blocked.Close)
 	f.s.api = blocked.URL
 	f.s.Reload()
-	deadline := time.Now().Add(5 * time.Second)
-	for now.Load() < 2 && time.Now().Before(deadline) {
-		time.Sleep(time.Millisecond)
-	}
-	time.Sleep(50 * time.Millisecond) // a third has had its chance to start
+	waitfor.Until(t, "two scans are at the server", func() bool { return now.Load() >= 2 })
+	// What a limit that failed would show is a third scan at the server, and
+	// the absence of one cannot be announced: it has this long to start.
+	time.Sleep(50 * time.Millisecond)
 	if got := now.Load(); got != 2 {
 		t.Fatalf("%d scans at once, want 2", got)
 	}

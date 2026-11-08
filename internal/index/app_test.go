@@ -14,6 +14,7 @@ import (
 	"github.com/ndthuan/kipp/internal/dispatch"
 	"github.com/ndthuan/kipp/internal/github"
 	"github.com/ndthuan/kipp/internal/store"
+	"github.com/ndthuan/kipp/internal/waitfor"
 )
 
 const appOwnerJob = `name: acme
@@ -105,6 +106,7 @@ func TestARescanAskedWhileAScanRunsRunsAnotherAfterIt(t *testing.T) {
 	t.Cleanup(release)
 	var mu sync.Mutex
 	calls := 0
+	held := make(chan struct{}) // closed once the first scan holds
 	trigger := f.s.opts.Trigger
 	f.s.opts.Trigger = func(c context.Context, req dispatch.TriggerRequest) (*store.Build, error) {
 		mu.Lock()
@@ -112,14 +114,16 @@ func TestARescanAskedWhileAScanRunsRunsAnotherAfterIt(t *testing.T) {
 		first := calls == 1
 		mu.Unlock()
 		if first {
+			close(held)
 			<-gate // the first scan holds here, running
 		}
 		return trigger(c, req)
 	}
 	must(t, f.s.Start("acme"))
-	deadline := time.Now().Add(5 * time.Second)
-	for !f.s.Status("acme").Running && time.Now().Before(deadline) {
-		time.Sleep(time.Millisecond)
+	select {
+	case <-held:
+	case <-time.After(waitfor.Safety):
+		t.Fatal("the first scan never began")
 	}
 	must(t, f.s.Rescan("acme"))
 	must(t, f.s.Rescan("acme")) // asked twice, run once

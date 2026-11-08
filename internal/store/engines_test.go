@@ -5,6 +5,8 @@ import (
 	"slices"
 	"testing"
 	"time"
+
+	"github.com/ndthuan/kipp/internal/waitfor"
 )
 
 func TestAnEngineIsKeptByNameAndReplacedKeepingWhenItWasAdded(t *testing.T) {
@@ -18,7 +20,8 @@ func TestAnEngineIsKeptByNameAndReplacedKeepingWhenItWasAdded(t *testing.T) {
 		t.Fatalf("%+v", got)
 	}
 	added := got.CreatedAt
-	time.Sleep(2 * time.Millisecond)
+	// The next write is stamped later than the first, to the millisecond.
+	waitfor.Until(t, "the clock moves on a millisecond", func() bool { return time.Now().After(added.Add(time.Millisecond)) })
 	e.Max, e.Enabled = 3, false
 	must(t, s.PutEngine(ctx, e))
 	got, err = s.Engine(ctx, "mac")
