@@ -6,9 +6,12 @@
 package mcp
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -19,6 +22,7 @@ import (
 
 	"github.com/ndthuan/kipp/internal/api"
 	kauth "github.com/ndthuan/kipp/internal/auth"
+	"github.com/ndthuan/kipp/internal/oauth"
 	"github.com/ndthuan/kipp/internal/store"
 )
 
@@ -81,6 +85,28 @@ func APITokens(a *kauth.Service) Verifier {
 	}
 }
 
+// OAuthTokens adds the access tokens of an authorization server to a
+// Verifier: a token it issued is the user of its grant, under a ceiling of
+// what the grant's scopes allow (kipp:build is what lets a build be started
+// or cancelled, and reading is always granted), and any other token is
+// left to next. The user's grants still apply beneath the ceiling.
+func OAuthTokens(o *oauth.Server, next Verifier) Verifier {
+	return func(ctx context.Context, token string) (*Caller, error) {
+		if !strings.HasPrefix(token, oauth.AccessPrefix) {
+			return next(ctx, token)
+		}
+		v, err := o.Verify(ctx, token)
+		switch {
+		case errors.Is(err, oauth.ErrInvalidToken):
+			return nil, ErrInvalidToken
+		case err != nil:
+			return nil, err
+		}
+		build := v.Has(oauth.ScopeBuild)
+		return &Caller{User: v.User, Ceiling: Ceiling{View: true, Build: build, Cancel: build}}, nil
+	}
+}
+
 // Config is what the server is given.
 type Config struct {
 	Service *api.Service
@@ -88,6 +114,10 @@ type Config struct {
 	// Verify resolves a request's token; nil is APITokens(Auth).
 	Verify  Verifier
 	Version string
+	// ResourceMetadataURL is where the protected resource's metadata is
+	// when sign-in by OAuth is on, and empty when it is not. A 401 and a
+	// 403 point to it.
+	ResourceMetadataURL string
 	// BaseURL is the address of kipp's pages, empty when --base-url was not
 	// given; builds link to it only when it is.
 	BaseURL string
@@ -122,7 +152,11 @@ const callerKey = "kipp.caller"
 func (s *Server) Handler() http.Handler {
 	srv := s.newServer()
 	h := sdk.NewStreamableHTTPHandler(func(*http.Request) *sdk.Server { return srv }, &sdk.StreamableHTTPOptions{Stateless: true})
-	authed := auth.RequireBearerToken(s.verify, nil)(h)
+	var opts *auth.RequireBearerTokenOptions
+	if s.cfg.ResourceMetadataURL != "" {
+		opts = &auth.RequireBearerTokenOptions{ResourceMetadataURL: s.cfg.ResourceMetadataURL}
+	}
+	authed := auth.RequireBearerToken(s.verify, opts)(s.scopeGate(h))
 	return http.MaxBytesHandler(challenging(authed), api.MaxBody)
 }
 
@@ -149,6 +183,70 @@ func callerOf(req *sdk.CallToolRequest) (*Caller, error) {
 		}
 	}
 	return nil, errors.New("not signed in")
+}
+
+// toolActions are the tools that change something, by the action they need;
+// the others read.
+var toolActions = map[string]string{"run_build": "build", "build_again": "build", "cancel_build": "cancel"}
+
+// scopeGate answers a call of a tool the credential's ceiling does not
+// allow with 403 insufficient_scope, as the MCP authorization spec asks, so
+// that a client can ask the user for more. A tool call that gets past here
+// is still held to the ceiling by the tool.
+func (s *Server) scopeGate(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		info := auth.TokenInfoFromContext(r.Context())
+		if info == nil || r.Method != http.MethodPost {
+			next.ServeHTTP(w, r)
+			return
+		}
+		c, _ := info.Extra[callerKey].(*Caller)
+		if c == nil || c.Ceiling == AllGrants {
+			next.ServeHTTP(w, r)
+			return
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
+		r.Body = io.NopCloser(bytes.NewReader(body))
+		if missing := missingScope(body, c.Ceiling); missing != "" {
+			challenge := fmt.Sprintf("Bearer error=\"insufficient_scope\", scope=%q", missing)
+			if s.cfg.ResourceMetadataURL != "" {
+				challenge += fmt.Sprintf(", resource_metadata=%q", s.cfg.ResourceMetadataURL)
+			}
+			w.Header().Set("WWW-Authenticate", challenge)
+			http.Error(w, "insufficient scope: this needs "+missing, http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// missingScope is the scope a JSON-RPC call, or a batch of them, needs and
+// the ceiling lacks, or "".
+func missingScope(body []byte, c Ceiling) string {
+	type call struct {
+		Method string `json:"method"`
+		Params struct {
+			Name string `json:"name"`
+		} `json:"params"`
+	}
+	var calls []call
+	if err := json.Unmarshal(body, &calls); err != nil {
+		var one call
+		if json.Unmarshal(body, &one) != nil {
+			return ""
+		}
+		calls = []call{one}
+	}
+	for _, cl := range calls {
+		if action, ok := toolActions[cl.Params.Name]; ok && cl.Method == "tools/call" && !c.Allows(action) {
+			return oauth.ScopeBuild
+		}
+	}
+	return ""
 }
 
 // challenging adds the Bearer challenge to a 401 that has none, so that a

@@ -49,7 +49,10 @@ type env struct {
 	stopper string // cancel on slow
 }
 
-func newEnv(t *testing.T, verify Verifier) *env {
+func newEnv(t *testing.T, verify Verifier) *env { return newEnvAt(t, verify, "") }
+
+// newEnvAt is newEnv with the address of the resource metadata a 401 points to.
+func newEnvAt(t *testing.T, verify Verifier, metadata string) *env {
 	t.Helper()
 	dir := t.TempDir()
 	jobs := filepath.Join(dir, "jobs")
@@ -84,7 +87,7 @@ func newEnv(t *testing.T, verify Verifier) *env {
 	go func() { d.Run(ctx); close(stopped) }()
 	au := auth.New(st, time.Hour, []byte("an obvious test device key 32 b."))
 	a := api.New(api.Deps{Auth: au, Dispatch: d, Store: st, Version: "test", Logger: quiet, FlakyFlips: overview.DefaultFlips})
-	m := New(Config{Service: a.Service(), Auth: au, Verify: verify, Version: "test", BaseURL: "https://ci.example.com", Logger: quiet})
+	m := New(Config{Service: a.Service(), Auth: au, Verify: verify, ResourceMetadataURL: metadata, Version: "test", BaseURL: "https://ci.example.com", Logger: quiet})
 	mux := http.NewServeMux()
 	mux.Handle(Path, m.Handler())
 	e := &env{st: st, au: au, srv: httptest.NewServer(mux)}
@@ -419,6 +422,10 @@ func TestAViewerOfNothingSeesAnEmptyQueueAndNoJobs(t *testing.T) {
 }
 
 func TestACeilingBelowTheGrantsStopsATool(t *testing.T) {
+	// The gate in front would answer these calls first; the tool's own
+	// check is what this test is about.
+	defer func(m map[string]string) { toolActions = m }(toolActions)
+	toolActions = nil
 	var au *auth.Service
 	readOnly := func(ctx context.Context, token string) (*Caller, error) {
 		c, err := APITokens(au)(ctx, token)
@@ -668,5 +675,83 @@ func TestAServerFaultInTheVerifierIsNotTheCallersToKnow(t *testing.T) {
 	_ = res.Body.Close()
 	if res.StatusCode != http.StatusInternalServerError || strings.Contains(string(body), "disk") {
 		t.Fatalf("%d %s", res.StatusCode, body)
+	}
+}
+
+// call posts one JSON-RPC body with the bearer token.
+func (e *env) post(t *testing.T, token, body string) *http.Response {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, e.srv.URL+Path, strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	req.Header.Set("Authorization", "Bearer "+token)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	return res
+}
+
+const metadataURL = "https://ci.example.com/.well-known/oauth-protected-resource/mcp"
+
+func TestACallTheCeilingForbidsIsA403ThatNamesTheScopeNeeded(t *testing.T) {
+	var au *auth.Service
+	e := newEnvAt(t, func(ctx context.Context, token string) (*Caller, error) {
+		c, err := APITokens(au)(ctx, token)
+		if c != nil {
+			c.Ceiling = Ceiling{View: true}
+		}
+		return c, err
+	}, metadataURL)
+	au = e.au
+	call := func(name string) string {
+		return `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"` + name + `","arguments":{"job":"smoke"}}}`
+	}
+	for _, tool := range []string{"run_build", "build_again", "cancel_build"} {
+		res := e.post(t, e.admin, call(tool))
+		if res.StatusCode != http.StatusForbidden {
+			t.Errorf("%s: status %d", tool, res.StatusCode)
+		}
+		want := `Bearer error="insufficient_scope", scope="kipp:build", resource_metadata="` + metadataURL + `"`
+		if got := res.Header.Get("WWW-Authenticate"); got != want {
+			t.Errorf("%s: WWW-Authenticate %q", tool, got)
+		}
+	}
+	// In a batch too.
+	res := e.post(t, e.admin, "["+call("overview")+","+call("run_build")+"]")
+	if res.StatusCode != http.StatusForbidden {
+		t.Errorf("a batch: status %d", res.StatusCode)
+	}
+	// What the ceiling allows goes through, and so does a tool of the same name in another method.
+	for _, body := range []string{call("get_job"), `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`, `{"jsonrpc":"2.0","id":1,"method":"prompts/get","params":{"name":"run_build"}}`} {
+		if res := e.post(t, e.admin, body); res.StatusCode == http.StatusForbidden {
+			t.Errorf("%s was forbidden", body)
+		}
+	}
+}
+
+func TestAnAPITokenIsNeverStoppedByTheScopeGate(t *testing.T) {
+	e := newEnv(t, nil)
+	res := e.post(t, e.admin, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"run_build","arguments":{"job":"smoke"}}}`)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status %d", res.StatusCode)
+	}
+}
+
+func TestA401PointsToTheResourceMetadataOnlyWhenOAuthIsOn(t *testing.T) {
+	for metadata, want := range map[string]string{"": "Bearer", metadataURL: `Bearer resource_metadata="` + metadataURL + `"`} {
+		e := newEnvAt(t, nil, metadata)
+		res := e.rawCall(t, "", "")
+		if res.StatusCode != http.StatusUnauthorized || res.Header.Get("WWW-Authenticate") != want {
+			t.Errorf("with %q: %d, %q", metadata, res.StatusCode, res.Header.Get("WWW-Authenticate"))
+		}
+		res = e.rawCall(t, "Bearer kipp_garbage", "")
+		if res.StatusCode != http.StatusUnauthorized || res.Header.Get("WWW-Authenticate") != want {
+			t.Errorf("a bad token with %q: %d, %q", metadata, res.StatusCode, res.Header.Get("WWW-Authenticate"))
+		}
 	}
 }

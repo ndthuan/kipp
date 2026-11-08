@@ -35,6 +35,7 @@ import (
 	"github.com/ndthuan/kipp/internal/github"
 	"github.com/ndthuan/kipp/internal/index"
 	"github.com/ndthuan/kipp/internal/mcp"
+	"github.com/ndthuan/kipp/internal/oauth"
 	"github.com/ndthuan/kipp/internal/overview"
 	"github.com/ndthuan/kipp/internal/problem"
 	"github.com/ndthuan/kipp/internal/retain"
@@ -103,6 +104,9 @@ the user, token and secret commands work on one a server has made.
 --mcp serves an MCP endpoint at /mcp, on --listen only, for Claude and other
 MCP clients. It takes the Authorization: Bearer header of an API token and
 lets the token's user do what their grants allow; see docs/mcp.md.
+--mcp-oauth also lets an MCP client sign in by OAuth, which kipp serves itself
+(a Claude custom connector); it needs --mcp and --base-url, an https:// URL
+(http:// only for localhost).
 `
 
 const (
@@ -151,6 +155,11 @@ type serveFlags struct {
 	noUpdateCheck bool
 	// mcp is --mcp: the MCP endpoint at /mcp is served.
 	mcp bool
+	// mcpOAuth is --mcp-oauth: /mcp also takes the access tokens of the
+	// OAuth sign-in, which kipp serves itself.
+	mcpOAuth bool
+	// oauthBase is --base-url as the OAuth issuer is written.
+	oauthBase string
 }
 
 func parseServeFlags(args []string, stderr io.Writer) (*serveFlags, error) {
@@ -182,6 +191,7 @@ func parseServeFlags(args []string, stderr io.Writer) (*serveFlags, error) {
 	}
 	fs.BoolVar(&f.noUpdateCheck, "no-update-check", noUpdate, "do not ask GitHub for the latest release (also KIPP_NO_UPDATE_CHECK=1)")
 	fs.BoolVar(&f.mcp, "mcp", false, "serve an MCP endpoint at /mcp for Claude and other MCP clients, authenticated by API tokens and limited to their users' grants (docs/mcp.md)")
+	fs.BoolVar(&f.mcpOAuth, "mcp-oauth", false, "let /mcp clients such as Claude sign in with OAuth, served by kipp itself; needs --mcp and an https --base-url (docs/mcp.md)")
 	var zone string
 	fs.StringVar(&zone, "timezone", "", "IANA `zone` a cron is read in when its job names none, like Europe/Paris (default the host's)")
 	positional, err := parseArgs(fs, args)
@@ -211,6 +221,9 @@ func parseServeFlags(args []string, stderr io.Writer) (*serveFlags, error) {
 	if err := f.parseAgentFlags(*defaultRunsOn, *agentEnv); err != nil {
 		return nil, err
 	}
+	if err := f.parseOAuthFlags(); err != nil {
+		return nil, err
+	}
 	switch {
 	case !headerName(f.clientIP.Header):
 		return nil, refused("--client-ip-header is a header's name, like X-Forwarded-For")
@@ -238,6 +251,27 @@ func envBool(name string) (bool, error) {
 		return false, fmt.Errorf("%s is true or false, not %q", name, v)
 	}
 	return b, nil
+}
+
+// parseOAuthFlags checks --mcp-oauth: it is the MCP endpoint's sign-in, and
+// its issuer is --base-url, which must be an https origin (or one on this
+// machine).
+func (f *serveFlags) parseOAuthFlags() error {
+	if !f.mcpOAuth {
+		return nil
+	}
+	if !f.mcp {
+		return refused("--mcp-oauth needs --mcp")
+	}
+	if f.baseURL == "" {
+		return refused("--mcp-oauth needs --base-url: it is the address the sign-in is served at")
+	}
+	base, err := oauth.ParseBaseURL(f.baseURL)
+	if err != nil {
+		return refused("--base-url with --mcp-oauth " + err.Error())
+	}
+	f.oauthBase = base
+	return nil
 }
 
 // parseAgentFlags reads the flags of where the server's stages run.
@@ -779,8 +813,16 @@ func (s *server) handler() http.Handler {
 		},
 	})
 	mux.Handle(webhook.Prefix, hooks.Handler())
+	var oauthServer *oauth.Server
 	if s.f.mcp {
-		mux.Handle(mcp.Path, mcp.New(mcp.Config{Service: a.Service(), Auth: au, Version: version.Version, BaseURL: s.f.baseURL, Logger: s.log}).Handler())
+		cfg := mcp.Config{Service: a.Service(), Auth: au, Version: version.Version, BaseURL: s.f.baseURL, Logger: s.log}
+		if s.f.mcpOAuth {
+			oauthServer = s.oauthServer(a)
+			oauthServer.Register(mux)
+			cfg.Verify = mcp.OAuthTokens(oauthServer, mcp.APITokens(au))
+			cfg.ResourceMetadataURL = oauthServer.ResourceMetadataURL()
+		}
+		mux.Handle(mcp.Path, mcp.New(cfg).Handler())
 	}
 	// With a listener of their own, the agents' calls are not on this one.
 	agents := s.hub.Handler()
@@ -796,6 +838,24 @@ func (s *server) handler() http.Handler {
 	mux.Handle("/", web.New(a, au, s.st, version.Version,
 		web.WithApps(web.AppFlow{DataDir: data, BaseURL: s.f.baseURL, API: s.f.githubAPI}))) // the pages and /static/
 	return mux
+}
+
+// oauthServer is the sign-in for MCP clients. Its issuer is --base-url,
+// which the flags check is an origin of the right kind.
+func (s *server) oauthServer(a *api.API) *oauth.Server {
+	return oauth.New(oauth.Config{
+		Store: s.st, BaseURL: s.f.oauthBase, ResourcePath: mcp.Path, Logger: s.log,
+		Client: func(r *http.Request) string {
+			at := a.Attempt(r)
+			if at.Client != "" {
+				return at.Client
+			}
+			if host, _, err := net.SplitHostPort(at.Peer); err == nil {
+				return host
+			}
+			return at.Peer
+		},
+	})
 }
 
 // deps are what the API is given of this server.
