@@ -28,6 +28,7 @@ import (
 	"github.com/ndthuan/kipp/internal/cache"
 	"github.com/ndthuan/kipp/internal/cachesrv"
 	"github.com/ndthuan/kipp/internal/config"
+	"github.com/ndthuan/kipp/internal/diskfree"
 	"github.com/ndthuan/kipp/internal/dispatch"
 	"github.com/ndthuan/kipp/internal/enginepool"
 	"github.com/ndthuan/kipp/internal/github"
@@ -722,7 +723,7 @@ func (s *server) info() api.ServerInfo {
 	s.mu.Lock()
 	reloadAt, reloadErr := s.reloadAt, s.reloadErr
 	s.mu.Unlock()
-	free, known := freeDisk(s.f.data)
+	free, known := diskfree.Free(s.f.data)
 	dbSize := int64(-1)
 	if fi, err := os.Stat(filepath.Join(s.f.data, dbFile)); err == nil {
 		dbSize = fi.Size()
