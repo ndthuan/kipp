@@ -59,6 +59,12 @@ func serverOpts(t *testing.T, o Options) (*httptest.Server, *store.Store) {
 // serverDispatch is serverOpts that also gives the dispatcher behind it.
 func serverDispatch(t *testing.T, o Options) (*httptest.Server, *store.Store, *dispatch.Dispatcher) {
 	t.Helper()
+	return serverWrapped(t, o, func(h http.Handler) http.Handler { return h })
+}
+
+// serverWrapped is serverDispatch with the webhook handler wrapped by wrap.
+func serverWrapped(t *testing.T, o Options, wrap func(http.Handler) http.Handler) (*httptest.Server, *store.Store, *dispatch.Dispatcher) {
+	t.Helper()
 	dir := t.TempDir()
 	jobs := filepath.Join(dir, "jobs")
 	must(t, os.MkdirAll(jobs, 0o750))
@@ -79,7 +85,7 @@ func serverDispatch(t *testing.T, o Options) (*httptest.Server, *store.Store, *d
 	}
 	h := GitHub(d, o)
 	mux := http.NewServeMux()
-	mux.Handle("POST /api/v1/hooks/github/{job}", h)
+	mux.Handle("POST /api/v1/hooks/github/{job}", wrap(h))
 	srv := httptest.NewServer(apispectest.Wrap(t, mux))
 	t.Cleanup(func() { srv.Close(); _ = st.Close() })
 	return srv, st, d
@@ -451,22 +457,42 @@ func TestABodyThatDoesNotArriveInTheReadTimeoutIs408(t *testing.T) {
 }
 
 func TestAtMostTwoBodiesAreReadAtOnceAndAThirdIs503WithRetryAfter(t *testing.T) {
-	srv, st := server(t)
+	entered := make(chan struct{}, 2)
+	srv, st, _ := serverWrapped(t, Options{Secret: func(context.Context, string) (string, error) { return "topsecret", nil }},
+		func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				select {
+				case entered <- struct{}{}:
+				default:
+				}
+				next.ServeHTTP(w, r)
+			})
+		})
 	sig := sign("topsecret", push)
 	// Two deliveries whose bodies never come hold both readers.
 	head(t, srv.URL, sig, len(push))
 	head(t, srv.URL, sig, len(push))
-	var code int
-	var hdr http.Header
-	for end := time.Now().Add(5 * time.Second); time.Now().Before(end); time.Sleep(10 * time.Millisecond) {
-		code, _, hdr = send(t, srv.URL+"/api/v1/hooks/github/smoke", "push", sig, newDelivery(), push)
-		if code == http.StatusServiceUnavailable {
-			break
+	// No third is sent until the server has taken up both: a third that
+	// came first would be built, and the next one then be 409.
+	for i := range 2 {
+		select {
+		case <-entered:
+		case <-time.After(30 * time.Second):
+			t.Fatalf("the server never took up held delivery %d", i+1)
 		}
 	}
+	// Taking up a delivery and holding its reader are two steps; a bad
+	// signature probes for the second without building or recording anything.
+	url := srv.URL + "/api/v1/hooks/github/smoke"
+	var code int
+	for end := time.Now().Add(30 * time.Second); time.Now().Before(end) && code != http.StatusServiceUnavailable; time.Sleep(5 * time.Millisecond) {
+		code, _, _ = send(t, url, "push", sign("nope", push), newDelivery(), push)
+	}
+	eq(t, "probe", code, http.StatusServiceUnavailable)
+	code, _, hdr := send(t, url, "push", sig, newDelivery(), push)
 	eq(t, "third delivery", code, http.StatusServiceUnavailable)
 	eq(t, "Retry-After", hdr.Get("Retry-After"), "10")
-	if bs, err := st.Builds(context.Background(), "smoke", 5); err != nil || len(bs) > 1 {
+	if bs, err := st.Builds(context.Background(), "smoke", 5); err != nil || len(bs) != 0 {
 		t.Fatalf("%+v %v", bs, err)
 	}
 }
