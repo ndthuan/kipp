@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ndthuan/kipp/internal/store"
+	"github.com/ndthuan/kipp/internal/waitfor"
 )
 
 // openStream opens path as an event stream with hdr and returns its status
@@ -34,7 +35,7 @@ func endsSoon(t *testing.T, what string, ended <-chan struct{}) {
 	t.Helper()
 	select {
 	case <-ended:
-	case <-time.After(10 * time.Second):
+	case <-time.After(waitfor.Safety):
 		t.Fatalf("%s: the stream did not end", what)
 	}
 }
@@ -140,14 +141,25 @@ func TestALongPollEndsWith401OnceItsTokenIsRevoked(t *testing.T) {
 	id := e.started(t, "slow")
 	toks, err := e.st.Tokens(context.Background(), e.user(t, "poller").ID)
 	must(t, err)
+	var (
+		code int
+		text string
+	)
+	answered := make(chan struct{})
 	go func() {
-		time.Sleep(200 * time.Millisecond)
-		_ = e.st.DeleteToken(context.Background(), toks[0].ID)
+		defer close(answered)
+		code, text, _ = e.raw(t, tok, "GET", "/api/v1/builds/"+id+"?wait=true", "")
 	}()
-	began := time.Now()
-	text, _ := e.call(t, http.StatusUnauthorized, tok, "GET", "/api/v1/builds/"+id+"?wait=true", "")
-	if took := time.Since(began); took > 10*time.Second {
-		t.Fatalf("the long-poll took %v: %s", took, text)
+	// Revoked while it waits: the build's own poll is the one handler open.
+	eventually(t, func() bool { return e.active.Load() == 1 })
+	must(t, e.st.DeleteToken(context.Background(), toks[0].ID))
+	select {
+	case <-answered:
+	case <-time.After(waitfor.Safety):
+		t.Fatal("the long-poll did not end")
+	}
+	if code != http.StatusUnauthorized {
+		t.Fatalf("the long-poll ended %d: %s", code, text)
 	}
 	e.call(t, 202, e.admin, "POST", "/api/v1/builds/"+id+"/cancel", "")
 }

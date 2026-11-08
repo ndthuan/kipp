@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/ndthuan/kipp/internal/store"
+	"github.com/ndthuan/kipp/internal/waitfor"
 )
 
 // kept gives the job a build that ended with status, whose stage kept
@@ -101,7 +102,7 @@ func TestLatestRedirectsToTheNewestSuccessfulBuild(t *testing.T) {
 	second := e.kept(t, "smoke", store.Success, "s", map[string]string{"other.txt": "2"})
 	failed := e.kept(t, "smoke", store.Failed, "s", map[string]string{"r.txt": "3"})
 	e.kept(t, "smoke", store.Success, "t", map[string]string{"r.txt": "4"})
-	noFollow := &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	noFollow := &http.Client{Timeout: waitfor.Safety, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	where := func(query string) (int, string) {
 		t.Helper()
 		res, err := noFollow.Do(e.request(context.Background(), t, e.viewer, "GET", "/api/v1/jobs/smoke/artifacts/latest?"+query, nil))
@@ -194,7 +195,7 @@ func TestV1ArtifactsOfAHiddenJobNeedView(t *testing.T) {
 func TestV1LatestRedirectsToTheStage(t *testing.T) {
 	e := newEnv(t)
 	id := itoa64(e.kept(t, "smoke", store.Success, "s", map[string]string{"r.txt": "1"}))
-	noFollow := &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	noFollow := &http.Client{Timeout: waitfor.Safety, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	for query, want := range map[string]string{
 		"stage=s":            "/api/v1/builds/" + id + "/stages/s/artifacts",
 		"stage=s&path=r.txt": "/api/v1/builds/" + id + "/stages/s/artifacts/r.txt",

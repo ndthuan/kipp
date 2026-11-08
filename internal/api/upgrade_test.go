@@ -11,6 +11,7 @@ import (
 	et "github.com/ndthuan/kipp/internal/upgrade/engine/enginetest"
 	"github.com/ndthuan/kipp/internal/upgrade/launch"
 	"github.com/ndthuan/kipp/internal/upgrade/state"
+	"github.com/ndthuan/kipp/internal/waitfor"
 )
 
 // withUpgrades gives the test's server an engine on a fake GitHub release
@@ -25,16 +26,18 @@ func (e *env) withUpgrades(t *testing.T, tweak func(*engine.Options)) (*et.Serve
 
 func (e *env) untilUpgrade(t *testing.T, want string) map[string]any {
 	t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
+	timeout := time.After(waitfor.Safety)
 	for {
+		changes := e.api.deps.Upgrade.Changes()
 		got := e.object(t, 200, e.admin, "GET", "/api/v1/admin/upgrade", "")
 		if got["state"] == want {
 			return got
 		}
-		if time.Now().After(deadline) {
+		select {
+		case <-changes:
+		case <-timeout:
 			t.Fatalf("the upgrade is %v, not %s", got["state"], want)
 		}
-		time.Sleep(5 * time.Millisecond)
 	}
 }
 

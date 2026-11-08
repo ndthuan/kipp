@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ndthuan/kipp/internal/dispatch"
+	"github.com/ndthuan/kipp/internal/waitfor"
 )
 
 type queueAnswer struct {
@@ -173,18 +174,18 @@ func TestTheQueuesEventsTellEachUserOfChangesToWhatTheyMaySee(t *testing.T) {
 	e := newEnv(t)
 	admin, viewer := e.events(t, e.admin), e.events(t, e.viewer)
 	id := e.trigger(t, "slow", "")
-	if !announced(admin, 5*time.Second) {
+	if !announced(admin, waitfor.Safety) {
 		t.Fatal("the admin was not told of a build of slow")
 	}
 	if announced(viewer, time.Second) {
 		t.Fatal("the viewer was told of a build of a job it may not see")
 	}
 	e.call(t, 202, e.admin, "POST", "/api/v1/builds/"+id+"/cancel", "")
-	if !announced(admin, 5*time.Second) {
+	if !announced(admin, waitfor.Safety) {
 		t.Fatal("the admin was not told the build was cancelled")
 	}
 	e.finished(t, e.trigger(t, "smoke", `{"params":{"TIER":"quick"}}`))
-	if !announced(viewer, 5*time.Second) {
+	if !announced(viewer, waitfor.Safety) {
 		t.Fatal("the viewer was not told of a build of smoke")
 	}
 }
@@ -197,7 +198,7 @@ func TestTheQueuesEventStreamKeepsItselfAlive(t *testing.T) {
 		if !strings.HasPrefix(l, ":") {
 			t.Fatalf("the first line of a quiet stream is %q", l)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(waitfor.Safety):
 		t.Fatal("a quiet stream said nothing")
 	}
 }

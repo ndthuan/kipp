@@ -34,6 +34,8 @@ import (
 	"github.com/ndthuan/kipp/internal/runner"
 	"github.com/ndthuan/kipp/internal/secretbox"
 	"github.com/ndthuan/kipp/internal/store"
+
+	"github.com/ndthuan/kipp/internal/waitfor"
 )
 
 const (
@@ -86,7 +88,7 @@ func newEnv(t *testing.T, tune ...func(*API)) *env {
 	stopped := make(chan struct{})
 	go func() { d.Run(ctx); close(stopped) }()
 	// The timeout turns a stream or a long-poll that never ends into a failure.
-	e := &env{st: st, dir: dir, client: &http.Client{Timeout: 20 * time.Second, Transport: &http.Transport{DisableKeepAlives: true}}}
+	e := &env{st: st, dir: dir, client: &http.Client{Timeout: waitfor.Safety, Transport: &http.Transport{DisableKeepAlives: true}}}
 	e.api = New(Deps{Auth: auth.New(st, time.Hour, []byte("an obvious test device key 32 b.")), Dispatch: d, Store: st, Version: "test", Logger: quiet,
 		Reload: func(context.Context) error {
 			if err := e.reloadErr.Load(); err != nil {
@@ -244,22 +246,16 @@ func (e *env) started(t *testing.T, job string) string {
 
 func eventually(t *testing.T, ok func() bool) {
 	t.Helper()
-	for deadline := time.Now().Add(10 * time.Second); !ok(); time.Sleep(10 * time.Millisecond) {
-		if time.Now().After(deadline) {
-			t.Fatal("the condition never held")
-		}
-	}
+	waitfor.Until(t, "the condition holds", ok)
 }
 
 // settles fails unless every handler returns and no goroutine outlives them.
 func (e *env) settles(t *testing.T, baseline int) {
 	t.Helper()
 	busy := func() bool { return e.active.Load() != 0 || runtime.NumGoroutine() > baseline }
-	for deadline := time.Now().Add(10 * time.Second); busy(); time.Sleep(10 * time.Millisecond) {
-		if time.Now().After(deadline) {
-			buf := make([]byte, 1<<20)
-			t.Fatalf("handlers in flight: %d, goroutines: %d, baseline %d\n%s", e.active.Load(), runtime.NumGoroutine(), baseline, buf[:runtime.Stack(buf, true)])
-		}
+	if !waitfor.Within(waitfor.Safety, func() bool { return !busy() }) {
+		buf := make([]byte, 1<<20)
+		t.Fatalf("handlers in flight: %d, goroutines: %d, baseline %d\n%s", e.active.Load(), runtime.NumGoroutine(), baseline, buf[:runtime.Stack(buf, true)])
 	}
 }
 
