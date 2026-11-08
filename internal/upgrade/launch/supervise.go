@@ -77,7 +77,7 @@ func timingFromEnv(log *slog.Logger) timing {
 	return t
 }
 
-// launcher carries out a pending record. The clock, the sleep and the
+// launcher carries out a pending record. The clock, the pause and the
 // probe are fields so that a test can drive the deadlines.
 type launcher struct {
 	log           *slog.Logger
@@ -87,8 +87,10 @@ type launcher struct {
 	stdout        io.Writer
 	stderr        io.Writer
 
-	now   func() time.Time
-	sleep func(time.Duration)
+	now func() time.Time
+	// pause waits d for the child c to change, and returns early when it
+	// ends.
+	pause func(c *child, d time.Duration)
 	// probe asks the child at addr whether it is healthy.
 	probe func(addr string) bool
 	// exit ends the process with a child's code; exec replaces it.
@@ -98,8 +100,17 @@ type launcher struct {
 
 func newLauncher(log *slog.Logger, data, version string, args []string) *launcher {
 	return &launcher{log: log, data: data, version: version, args: args, t: timingFromEnv(log),
-		stdout: os.Stdout, stderr: os.Stderr, now: time.Now, sleep: time.Sleep, probe: probeHealth,
+		stdout: os.Stdout, stderr: os.Stderr, now: time.Now, pause: pauseFor, probe: probeHealth,
 		exit: os.Exit, exec: syscall.Exec}
+}
+
+func pauseFor(c *child, d time.Duration) {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-c.done:
+	case <-t.C:
+	}
 }
 
 // launched reports whether this process was itself started from the data
@@ -297,7 +308,7 @@ func (l *launcher) waitHealthy(c *child) (bool, string) {
 		case !migrating && now.Sub(base) >= l.t.window:
 			return false, fmt.Sprintf("it did not answer its health check within %s", l.t.window)
 		}
-		l.sleep(l.t.poll)
+		l.pause(c, l.t.poll)
 	}
 }
 

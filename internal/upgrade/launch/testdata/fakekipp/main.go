@@ -69,6 +69,10 @@ func supervised(data string) {
 }
 
 func serveHealth(data string) {
+	// Before the address is open: a launcher that sees the child healthy may
+	// signal it at once.
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
 	ln, err := net.Listen("tcp", listenArg())
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "fakekipp:", err)
@@ -79,8 +83,7 @@ func serveHealth(data string) {
 		_, _ = w.Write([]byte(`{"ok":true}`))
 	})
 	go func() { _ = http.Serve(ln, mux) }()
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
+	fmt.Println("LISTENING", ver)
 	for {
 		select {
 		case <-sig:

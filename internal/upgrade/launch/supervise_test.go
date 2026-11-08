@@ -17,6 +17,7 @@ import (
 
 	"github.com/ndthuan/kipp/internal/upgrade/backup"
 	"github.com/ndthuan/kipp/internal/upgrade/state"
+	"github.com/ndthuan/kipp/internal/waitfor"
 )
 
 const backupName = "backup-v1.0.0-20261103T101500Z"
@@ -91,7 +92,9 @@ func runServe(t *testing.T, exe, data string, env []string, args ...string) ende
 	return ended{o.String(), e.String(), code}
 }
 
-const fast = EnvTiming + "=window=400ms,cap=20s,grace=300ms,poll=10ms,settle=300ms"
+// The window is long enough for a child to start on a loaded machine; only
+// the child that never answers uses all of it.
+const fast = EnvTiming + "=window=3s,cap=20s,grace=300ms,poll=10ms,settle=300ms"
 
 // upgradeSetup is a first upgrade: the executable v1.0.0, no bin/ state,
 // and a pending record for v1.0.1.
@@ -158,7 +161,7 @@ func TestAChildThatNeverAnswersIsKilledAtTheDeadlineAndRolledBack(t *testing.T) 
 	if !strings.Contains(e.stdout, "RAN v1.0.0") {
 		t.Fatalf("not rolled back:\n%s%s", e.stdout, e.stderr)
 	}
-	if time.Since(start) < 400*time.Millisecond {
+	if time.Since(start) < 3*time.Second {
 		t.Fatal("it did not wait for the deadline")
 	}
 	checkRolledBack(t, data)
@@ -221,12 +224,28 @@ func (s *syncBuf) String() string {
 
 func waitFor(t *testing.T, what string, ok func() bool) {
 	t.Helper()
-	for end := time.Now().Add(15 * time.Second); time.Now().Before(end); time.Sleep(10 * time.Millisecond) {
-		if ok() {
-			return
-		}
+	waitfor.Until(t, what, ok)
+}
+
+// watch is a log that closes seen once want has been written to it.
+type watch struct {
+	mu   sync.Mutex
+	b    bytes.Buffer
+	want string
+	seen chan struct{}
+	once sync.Once
+}
+
+func newWatch(want string) *watch { return &watch{want: want, seen: make(chan struct{})} }
+
+func (w *watch) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	n, err := w.b.Write(p)
+	if strings.Contains(w.b.String(), w.want) {
+		w.once.Do(func() { close(w.seen) })
 	}
-	t.Fatal("timed out waiting for", what)
+	return n, err
 }
 
 func TestAHealthyPendingVersionBecomesCurrentAndSIGTERMReachesIt(t *testing.T) {
@@ -366,13 +385,17 @@ func TestEveryStartCleansTheBackupsThatExpired(t *testing.T) {
 	}
 }
 
-// clock is a fake time: sleeping moves it, and a hook sees every step.
+// clock is a fake time: a pause moves it, and a hook sees every step. Before
+// each step the pause waits for the real child to have done what its mode
+// makes it do, so that the fake time never runs ahead of it.
 type clock struct {
 	mu   sync.Mutex
 	t    time.Time
 	step time.Duration
 	hook func(elapsed time.Duration)
 	t0   time.Time
+	// settled waits for the child; nil for a child that does nothing.
+	settled func(c *child)
 }
 
 func newClock(step time.Duration, hook func(time.Duration)) *clock {
@@ -382,8 +405,10 @@ func newClock(step time.Duration, hook func(time.Duration)) *clock {
 
 func (c *clock) now() time.Time { c.mu.Lock(); defer c.mu.Unlock(); return c.t }
 
-func (c *clock) sleep(time.Duration) {
-	time.Sleep(5 * time.Millisecond)
+func (c *clock) pause(ch *child, _ time.Duration) {
+	if c.settled != nil {
+		c.settled(ch)
+	}
 	c.mu.Lock()
 	c.t = c.t.Add(c.step)
 	el := c.t.Sub(c.t0)
@@ -409,8 +434,37 @@ func inPackage(t *testing.T, mode string, clk *clock) (*launcher, *state.Pending
 	l.t = timing{window: 90 * time.Second, cap: 30 * time.Minute, grace: 300 * time.Millisecond,
 		poll: time.Second, settle: 10 * time.Second}
 	l.stdout, l.stderr = &bytes.Buffer{}, &bytes.Buffer{}
-	l.now, l.sleep = clk.now, clk.sleep
+	l.now, l.pause = clk.now, clk.pause
+	// What each mode of the fake child comes to, for the pause to wait for.
+	switch mode {
+	case "exit":
+		clk.settled = func(c *child) { waitDone(t, c) }
+	case "ok", "migrate":
+		listening := newWatch("LISTENING")
+		l.stdout = listening
+		clk.settled = func(c *child) {
+			// A migrating child has nothing to wait for until it is let go.
+			if mode == "migrate" && !fileExists(filepath.Join(data, "fake-proceed")) {
+				return
+			}
+			select {
+			case <-listening.seen:
+			case <-c.done:
+			case <-time.After(waitfor.Safety):
+				t.Error("the child never listened")
+			}
+		}
+	}
 	return l, p, data
+}
+
+func waitDone(t *testing.T, c *child) {
+	t.Helper()
+	select {
+	case <-c.done:
+	case <-time.After(waitfor.Safety):
+		t.Error("the child never ended")
+	}
 }
 
 func waitMigrating(t *testing.T, data string) {
@@ -615,7 +669,6 @@ func TestAHealthyChildEndsTheLauncherWithTheChildsCode(t *testing.T) {
 	done := make(chan struct{})
 	go func() { l.processPending(); close(done) }()
 	waitFor(t, "current", func() bool { c, _ := state.ReadCurrent(data); return c == "v1.0.1" })
-	time.Sleep(50 * time.Millisecond)
 	if err := syscall.Kill(os.Getpid(), syscall.SIGHUP); err != nil {
 		t.Fatal(err)
 	}
