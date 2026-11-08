@@ -8,6 +8,10 @@ lines and the data directory are the public surface.
 
 ## Unreleased
 
+- The release signing key is in place: `internal/update/release.pub` holds
+  the public half of the key that signs each release's `SHA256SUMS`
+  (`minisign` key id `7BD1AD4FDBC773E5`), replacing the test-only
+  placeholder, so the release workflow can now publish a release.
 - `kipp serve --mcp` serves an MCP endpoint at `/mcp` (streamable HTTP, on
   `--listen` only), so that Claude and other MCP clients can read the
   overview, jobs, builds, logs, test results and the queue, and run,
