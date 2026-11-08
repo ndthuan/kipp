@@ -444,3 +444,35 @@ func TestRunIgnoresADevBuildAndTheForcedOwnBinary(t *testing.T) {
 		t.Fatal(log.String())
 	}
 }
+
+func TestTheExecutableThatCaughtUpForgetsThePreviousVersion(t *testing.T) {
+	// Homebrew after `brew upgrade`: its executable is as high as the data
+	// directory's binary, takes over, and nothing is left to roll back to.
+	for name, own := range map[string]string{"equal": "v1.0.1", "higher": "v1.0.2"} {
+		t.Run(name, func(t *testing.T) {
+			exe, data := setup(t, own, "v1.0.1")
+			if err := state.WritePrevious(data, state.Bundled); err != nil {
+				t.Fatal(err)
+			}
+			if o := serve(t, exe, data); o.ran != own || o.launched != "" {
+				t.Fatalf("%+v", o)
+			}
+			if prev, _ := state.ReadPrevious(data); prev != "" {
+				t.Fatalf("previous is still %q", prev)
+			}
+		})
+	}
+}
+
+func TestThePreviousVersionStaysWhileTheDataDirectoryBinaryRuns(t *testing.T) {
+	exe, data := setup(t, "v1.0.0", "v1.0.1")
+	if err := state.WritePrevious(data, state.Bundled); err != nil {
+		t.Fatal(err)
+	}
+	if o := serve(t, exe, data); o.ran != "v1.0.1" {
+		t.Fatalf("%+v", o)
+	}
+	if prev, _ := state.ReadPrevious(data); prev != state.Bundled {
+		t.Fatalf("previous is %q", prev)
+	}
+}

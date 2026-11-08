@@ -217,6 +217,12 @@ func (e *Engine) rollbackTarget() (to, bk string) {
 	if err != nil || prev == "" || e.o.InstallType() == update.Dev || pinned() {
 		return "", ""
 	}
+	// A target no lower than what runs (a brew upgrade or a newer image
+	// made the bundled executable as high as the data directory's) would
+	// restore an old database under the same binary: data lost for nothing.
+	if r := e.resolve(prev); update.Release(r) && !update.Newer(e.o.Version, r) {
+		return "", ""
+	}
 	name, ok := backup.LastSucceeded(e.o.Data)
 	if !ok {
 		return "", ""
@@ -234,7 +240,7 @@ func (e *Engine) Resume() {
 	}
 	switch st.State {
 	case state.StateSwitching:
-		if st.Version != e.o.Version {
+		if e.resolve(st.Version) != e.o.Version {
 			return // the launcher's to settle: it writes failed on a rollback
 		}
 		st.State = state.StateDone
@@ -429,12 +435,17 @@ func (e *Engine) rollbackLocked(ctx context.Context, req Request) error {
 }
 
 // resolve is the version a server started from v says it is: bundled is
-// the executable the launcher replaced.
+// the executable the launcher replaced, or this very process when it was
+// not launched from the data directory.
 func (e *Engine) resolve(v string) string {
-	if v == state.Bundled {
-		if b := os.Getenv(launch.EnvBundledVersion); update.Release(b) {
-			return b
-		}
+	if v != state.Bundled {
+		return v
+	}
+	if b := os.Getenv(launch.EnvBundledVersion); update.Release(b) {
+		return b
+	}
+	if os.Getenv(launch.EnvLaunched) != "1" {
+		return e.o.Version
 	}
 	return v
 }

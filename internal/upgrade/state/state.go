@@ -146,6 +146,12 @@ func WritePrevious(data, v string) error {
 	return writeVersion(filepath.Join(BinDir(data), previousFile), v, true)
 }
 
+// ClearPrevious forgets the version before the current one; none is not an
+// error.
+func ClearPrevious(data string) error {
+	return removeIfThere(filepath.Join(BinDir(data), previousFile))
+}
+
 func readVersion(path string, allowBundled bool) (string, error) {
 	b, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {

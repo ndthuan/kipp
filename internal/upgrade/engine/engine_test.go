@@ -452,7 +452,7 @@ func TestARollbackToTheBundledExecutableNamesItsVersionInTheStatus(t *testing.T)
 }
 
 func TestARollbackNeedsAnEarlierVersionABackupAndAConfirmationWithoutAWait(t *testing.T) {
-	r := newRig(t, et.NewRelease(t, et.GoodBinary(et.Newer)), nil)
+	r := newRig(t, et.NewRelease(t, et.GoodBinary(et.Newer)), func(o *engine.Options) { o.Version = "v1.1.0" })
 	if _, err := r.e.Rollback(context.Background(), engine.Request{Safe: true}); !errors.Is(err, engine.ErrConflict) {
 		t.Fatalf("with nothing to go back to: %v", err)
 	}
@@ -547,7 +547,7 @@ func TestWhatKeepsAnUpgradeFromStartingIsSaidInInfo(t *testing.T) {
 }
 
 func TestARollbackThatIsCancelledWhileItWaitsLeavesQuietOffAndWritesNothing(t *testing.T) {
-	r := newRig(t, et.NewRelease(t, et.GoodBinary(et.Newer)), nil)
+	r := newRig(t, et.NewRelease(t, et.GoodBinary(et.Newer)), func(o *engine.Options) { o.Version = "v1.1.0" })
 	r.afterAnUpgrade(t, et.Running)
 	r.f.SetBusy(1)
 	if _, err := r.e.Rollback(context.Background(), engine.Request{Safe: true}); err != nil {
@@ -587,7 +587,7 @@ func TestAServerPinnedToItsOwnExecutableRefusesAnUpgradeBeforeDownloading(t *tes
 }
 
 func TestAServerPinnedToItsOwnExecutableRefusesARollbackAndOffersNone(t *testing.T) {
-	r := newRig(t, et.NewRelease(t, et.GoodBinary(et.Newer)), nil)
+	r := newRig(t, et.NewRelease(t, et.GoodBinary(et.Newer)), func(o *engine.Options) { o.Version = "v1.1.0" })
 	r.afterAnUpgrade(t, et.Running)
 	if in, _ := r.e.Info(context.Background()); in.RollbackTo == "" {
 		t.Fatal("no rollback to refuse")
@@ -599,5 +599,53 @@ func TestAServerPinnedToItsOwnExecutableRefusesARollbackAndOffersNone(t *testing
 	}
 	if in, _ := r.e.Info(context.Background()); in.RollbackTo != "" || in.RollbackBackup != "" {
 		t.Fatalf("%+v", in)
+	}
+}
+
+func TestARollbackToABundledExecutableAsHighAsTheRunningOneIsNotOffered(t *testing.T) {
+	// Homebrew after a brew upgrade, or a container recreated from a newer
+	// image: the executable's own version is the running one.
+	for name, env := range map[string]string{
+		"the process is the bundled executable": "",
+		"the bundled version is the running":    "v1.1.0",
+		"the bundled version is higher":         "v1.2.0",
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv(launch.EnvBundledVersion, env)
+			r := newRig(t, et.NewRelease(t, et.GoodBinary(et.Newer)), func(o *engine.Options) { o.Version = "v1.1.0" })
+			r.afterAnUpgrade(t, state.Bundled)
+			if in, _ := r.e.Info(context.Background()); in.RollbackTo != "" || in.RollbackBackup != "" {
+				t.Fatalf("offered: %+v", in)
+			}
+			_, err := r.e.Rollback(context.Background(), engine.Request{Safe: true})
+			if !errors.Is(err, engine.ErrConflict) {
+				t.Fatalf("%v", err)
+			}
+			if p, _ := state.ReadPending(r.data); p != nil || len(r.f.QuietCalls()) != 0 {
+				t.Fatalf("touched: %+v", p)
+			}
+		})
+	}
+}
+
+func TestARollbackToAnOlderBundledExecutableIsStillOffered(t *testing.T) {
+	t.Setenv(launch.EnvBundledVersion, "v1.0.0")
+	r := newRig(t, et.NewRelease(t, et.GoodBinary(et.Newer)), func(o *engine.Options) { o.Version = "v1.1.0" })
+	r.afterAnUpgrade(t, state.Bundled)
+	if in, _ := r.e.Info(context.Background()); in.RollbackTo != state.Bundled {
+		t.Fatalf("%+v", in)
+	}
+}
+
+func TestAServerThatStartsAfterARollbackToItsOwnExecutableSettlesTheRecord(t *testing.T) {
+	// A record an earlier version wrote, naming bundled when bundled was
+	// the running executable: the restart ends and the status says done.
+	r := newRig(t, et.NewRelease(t, et.GoodBinary(et.Newer)), func(o *engine.Options) { o.Version = "v1.1.1" })
+	if err := state.WriteStatus(r.data, state.Status{State: state.StateSwitching, Version: state.Bundled, From: "v1.1.1"}); err != nil {
+		t.Fatal(err)
+	}
+	r.e.Resume()
+	if st, _ := state.ReadStatus(r.data); st.State != state.StateDone {
+		t.Fatalf("%+v", st)
 	}
 }

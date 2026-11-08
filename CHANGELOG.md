@@ -6,6 +6,17 @@ versions follow Semantic Versioning (https://semver.org/): the job file,
 the HTTP API under `/api/v1`, the command line, the server's reload log
 lines and the data directory are the public surface.
 
+## Unreleased
+
+- A rollback after `brew upgrade`, or after a container was recreated from
+  a newer image, no longer restores the old database and then hangs at
+  "switching": the executable's own version is then as high as the running
+  one, so there is nothing to go back to, and no rollback is offered (the
+  API answers 409 before anything is touched). When the executable takes
+  over like that, the data directory forgets its previous version. A
+  server that still holds such an unfinished rollback record settles it as
+  done when it starts.
+
 ## [1.1.1] - 2026-11-08
 
 - A second SIGTERM or SIGINT sent as soon as the server had logged that it

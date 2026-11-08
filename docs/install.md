@@ -368,6 +368,14 @@ came up, the backup is removed the next time the server starts, and the
 card stops offering it. After that, going back is what the next section
 does by hand.
 
+A rollback is not offered either when the version it would go back to is
+not lower than the one running, which is what happens after `brew upgrade`
+or a container recreated from a newer image: the executable that started
+kipp is then as new as the data directory's binary, takes over, and the
+data directory forgets the version before. The API answers 409 and nothing
+is touched, since restoring the old database under the same version would
+only lose data.
+
 By hand, when the server will not start or the backup is older: stop it,
 put the files of the backup (`db.sqlite` and `secret.key` in
 `<data>/upgrade/backup-<version>-<time>/`) in the data directory over the

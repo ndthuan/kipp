@@ -82,7 +82,15 @@ func switchTo(log *slog.Logger, data, version string, args []string) {
 		log.Warn("not reading the data directory's binary", "err", err)
 		return
 	}
-	if cur == "" || !update.Newer(cur, version) {
+	if cur == "" {
+		return
+	}
+	if !update.Newer(cur, version) {
+		// The executable caught up (a brew upgrade, a newer image) and
+		// takes over; the version it replaced is no rollback target now.
+		if err := state.ClearPrevious(data); err != nil {
+			log.Warn("not clearing the previous version", "err", err)
+		}
 		return
 	}
 	if rejected, err := state.ReadRejected(data); err != nil {

@@ -208,7 +208,7 @@ a rename, so a reader sees the old file or the new, never half of either.
 | File | Holds |
 |---|---|
 | `bin/current` | The version run by default, such as `v1.1.0`. Absent: none, the executable's own runs. |
-| `bin/previous` | The version before it, or `bundled` when that was the executable that started kipp (the image's, Homebrew's or the archive's). A rollback goes there. |
+| `bin/previous` | The version before it, or `bundled` when that was the executable that started kipp (the image's, Homebrew's or the archive's). A rollback goes there. Removed when the executable that started kipp is as high as `bin/current` and takes over. |
 | `bin/pending` | JSON for the next start to carry out: `{"kind":"upgrade","version":"v1.1.0","backup":"backup-v1.0.0-20261103T101500Z","from":"v1.0.0"}`. `kind` is `upgrade` or `rollback`; a rollback names the version to return to in `version`, `bundled` allowed. Gone once carried out. `pending.refused` is one that could not be, because its backup is missing. |
 | `bin/rejected` | One version per line that the start must never pick by the higher-wins rule below: a version that did not come up, or that was rolled back from. |
 
