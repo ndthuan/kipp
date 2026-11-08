@@ -99,29 +99,44 @@ func setPassword(ctx context.Context, tx *sql.Tx, id int64, hash string) error {
 	return requireChange(tx.ExecContext(ctx, `UPDATE users SET hash = ?, device_epoch = device_epoch + 1 WHERE id = ?`, hash, id))
 }
 
-// ResetPassword gives a user a new password and ends every session of
-// theirs, in one transaction: somebody who had the old one may hold one.
+// ResetPassword gives a user a new password and ends every session and
+// app grant of theirs, in one transaction: somebody who had the old one
+// may hold one.
 func (s *Store) ResetPassword(ctx context.Context, id int64, hash string) error {
 	return s.inTx(ctx, func(tx *sql.Tx) error {
 		if err := setPassword(ctx, tx, id, hash); err != nil {
 			return err
 		}
-		_, err := tx.ExecContext(ctx, `DELETE FROM sessions WHERE user_id = ?`, id)
-		return err
+		if _, err := tx.ExecContext(ctx, `DELETE FROM sessions WHERE user_id = ?`, id); err != nil {
+			return err
+		}
+		return endOAuthGrants(ctx, tx, id)
 	})
+}
+
+// endOAuthGrants ends the apps a user let in: a new password is what a
+// user does when somebody else may hold access, and an app's token is
+// access too.
+func endOAuthGrants(ctx context.Context, tx *sql.Tx, id int64) error {
+	_, err := tx.ExecContext(ctx, `DELETE FROM oauth_grants WHERE user_id = ?`, id)
+	return err
 }
 
 // ChangePassword gives a user the new password they chose in the live
 // session sessID, ends their other sessions and puts next in sessID's
-// place, sudo kept, in one transaction: a session that ended meanwhile, or
-// is not the user's, is ErrNotFound and changes nothing, so the password
-// never changes without the session that asked for it being renewed.
+// place, sudo kept, and ends their app grants, in one transaction: a
+// session that ended meanwhile, or is not the user's, is ErrNotFound and
+// changes nothing, so the password never changes without the session that
+// asked for it being renewed.
 func (s *Store) ChangePassword(ctx context.Context, id int64, hash, sessID string, next *Session) error {
 	return s.inTx(ctx, func(tx *sql.Tx) error {
 		if err := setPassword(ctx, tx, id, hash); err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, `DELETE FROM sessions WHERE user_id = ? AND hash != ?`, id, sessionKey(sessID)); err != nil {
+			return err
+		}
+		if err := endOAuthGrants(ctx, tx, id); err != nil {
 			return err
 		}
 		return replaceSession(ctx, tx, sessID, id, next)
@@ -159,9 +174,9 @@ func (s *Store) SetAdmin(ctx context.Context, id int64, admin bool) error {
 	})
 }
 
-// DeleteUser removes a user and, by cascade, their permissions, tokens and
-// sessions. Deleting the last admin is ErrLastAdmin, and an unknown user
-// ErrNotFound.
+// DeleteUser removes a user and, by cascade, their permissions, tokens,
+// sessions and app grants. Deleting the last admin is ErrLastAdmin, and an
+// unknown user ErrNotFound.
 func (s *Store) DeleteUser(ctx context.Context, id int64) error {
 	return s.inTx(ctx, func(tx *sql.Tx) error {
 		res, err := tx.ExecContext(ctx, `DELETE FROM users WHERE id = ? AND `+leavesAnAdmin, id)

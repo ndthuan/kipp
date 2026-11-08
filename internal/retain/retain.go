@@ -25,6 +25,9 @@ const (
 	// DeliveryDays is how long a webhook delivery's id is remembered, so
 	// that the same delivery sent again in that time is refused.
 	DeliveryDays = 30
+	// OAuthClientDays is how long an app that registered itself and was
+	// never used is kept.
+	OAuthClientDays = 30
 )
 
 // Job removes the job's builds beyond its keep rule, with their log folders.
@@ -113,7 +116,8 @@ func Sweep(ctx context.Context, st *store.Store, snap *config.Snapshot, logsDir 
 		errs = append(errs, err)
 	}
 	errs = append(errs, st.DeleteExpiredSessions(ctx, now), st.PruneAudit(ctx, AuditRows),
-		st.PruneDeliveries(ctx, now.AddDate(0, 0, -DeliveryDays)))
+		st.PruneDeliveries(ctx, now.AddDate(0, 0, -DeliveryDays)),
+		st.DeleteExpiredOAuth(ctx, now, now.AddDate(0, 0, -OAuthClientDays)))
 	return total, errors.Join(errs...)
 }
 
