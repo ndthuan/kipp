@@ -2,6 +2,8 @@
 package scripts
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -160,5 +162,128 @@ func TestTheKeyInTheRepositoryIsCheckedByDefault(t *testing.T) {
 	err = exec.Command("sh", "./check-release-key.sh").Run()
 	if placeholder == (err == nil) {
 		t.Errorf("placeholder=%v but the script said %v", placeholder, err)
+	}
+}
+
+// The dry run of the release's signing: a test keypair stands in for the
+// secret and for the key in the repository, and the script is the one the
+// workflow runs.
+func signingDir(t *testing.T) (dir, pub, secret string) {
+	t.Helper()
+	root := t.TempDir()
+	dir = filepath.Join(root, "dist")
+	if err := os.Mkdir(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	archive := filepath.Join(dir, "kipp_1.0.0_linux_amd64.tar.gz")
+	if err := os.WriteFile(archive, []byte("an archive"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256([]byte("an archive"))
+	line := hex.EncodeToString(sum[:]) + "  kipp_1.0.0_linux_amd64.tar.gz\n"
+	if err := os.WriteFile(filepath.Join(dir, "SHA256SUMS"), []byte(line), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	pub, secret = filepath.Join(root, "test.pub"), filepath.Join(root, "test.key")
+	keygen := exec.Command("go", "run", "../cmd/kipp-release", "keygen", "-secret", secret, "-pub", pub)
+	if out, err := keygen.CombinedOutput(); err != nil {
+		t.Fatalf("keygen: %v\n%s", err, out)
+	}
+	return dir, pub, secret
+}
+
+func mustRead(t *testing.T, path string) []byte {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Clean(path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
+func signRelease(t *testing.T, key string, args ...string) (string, error) {
+	t.Helper()
+	cmd := exec.Command("sh", append([]string{"./sign-release.sh"}, args...)...)
+	cmd.Env = append(os.Environ(), "RELEASE_SIGNING_KEY="+key)
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
+func TestTheReleaseIsSignedAndItsSignatureVerifiedBeforeAnythingIsPublished(t *testing.T) {
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("no go")
+	}
+	dir, pub, secret := signingDir(t)
+	key := string(mustRead(t, secret))
+	if out, err := signRelease(t, key, "sign", dir, pub); err != nil {
+		t.Fatalf("signing: %v\n%s", err, out)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "SHA256SUMS.sig")); err != nil {
+		t.Fatal("no signature written")
+	}
+	if out, err := signRelease(t, "", "verify", dir, pub); err != nil {
+		t.Errorf("a good release refused: %v\n%s", err, out)
+	}
+
+	// The key in the repository is another one: the placeholder or a stale key.
+	_, otherPub, _ := signingDir(t)
+	if out, err := signRelease(t, key, "sign", dir, otherPub); err == nil {
+		t.Errorf("a secret that does not match the public key was accepted:\n%s", out)
+	}
+	if out, err := signRelease(t, "", "verify", dir, otherPub); err == nil {
+		t.Errorf("a signature by another key verified:\n%s", out)
+	}
+
+	// A changed archive list no longer matches its signature.
+	if err := os.WriteFile(filepath.Join(dir, "SHA256SUMS"), []byte("changed\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := signRelease(t, "", "verify", dir, pub); err == nil {
+		t.Errorf("a changed SHA256SUMS verified:\n%s", out)
+	}
+}
+
+func TestTheReleaseIsNotSignedWithoutTheSecretAndNeverEchoesIt(t *testing.T) {
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("no go")
+	}
+	dir, pub, _ := signingDir(t)
+	if out, err := signRelease(t, "", "sign", dir, pub); err == nil {
+		t.Errorf("signed without a key:\n%s", out)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "SHA256SUMS.sig")); err == nil {
+		t.Error("a signature written without a key")
+	}
+	const junk = "SECRET-NOT-A-KEY-1234"
+	out, err := signRelease(t, junk, "sign", dir, pub)
+	if err == nil {
+		t.Error("a malformed key signed")
+	}
+	if strings.Contains(out, junk) {
+		t.Errorf("the key was echoed:\n%s", out)
+	}
+}
+
+// The workflow runs the placeholder check in its first job, signs before
+// it uploads, and uploads the signature beside SHA256SUMS.
+func TestTheReleaseWorkflowChecksTheKeySignsAndPublishesTheSignature(t *testing.T) {
+	data, err := os.ReadFile("../.github/workflows/release.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := string(data)
+	check, tag, quality := strings.Index(w, "check-release-key.sh"), strings.Index(w, "\n  tag:"), strings.Index(w, "\n  quality:")
+	if check < tag || check > quality {
+		t.Error("check-release-key.sh is not in the first job")
+	}
+	sign, upload := strings.Index(w, "sign-release.sh sign"), strings.Index(w, "gh release upload")
+	if sign < 0 || upload < 0 || sign > upload {
+		t.Error("the release is not signed before its files are uploaded")
+	}
+	if !strings.Contains(w, "dist/SHA256SUMS dist/SHA256SUMS.sig") || !strings.Contains(w, "sign-release.sh verify") {
+		t.Error("the signature is not uploaded and verified after publishing")
+	}
+	if strings.Count(w, "secrets.RELEASE_SIGNING_KEY") != 1 {
+		t.Error("the signing key is not in exactly one step's environment")
 	}
 }

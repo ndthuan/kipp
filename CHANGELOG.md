@@ -8,6 +8,11 @@ lines and the data directory are the public surface.
 
 ## Unreleased
 
+- The release workflow signs `SHA256SUMS` with the release key, checks the
+  signature against the public key in the repository before anything is
+  public, publishes it as `SHA256SUMS.sig`, and verifies the downloaded
+  files again afterwards. It refuses a tag while the key in the repository
+  is the placeholder.
 - Groundwork for verified upgrades, with no change to what kipp does yet:
   `internal/update` checks that a release's `SHA256SUMS` is signed by the
   release key compiled into kipp (an ed25519 signature in the minisign file

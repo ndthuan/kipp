@@ -61,7 +61,8 @@ docker run -d --name kipp -p 8085:8085 \
 `/var/lib/kipp` is the data directory and `/etc/kipp` the job files.
 
 Release archives for Linux and macOS on amd64 and arm64, with
-`SHA256SUMS` and a build provenance attestation, are on the
+`SHA256SUMS` with its signature `SHA256SUMS.sig`, and a build provenance
+attestation, are on the
 [releases page](https://github.com/ndthuan/kipp/releases). To build from
 source, `make build` (Go 1.27.3 or newer) gives `bin/kipp`.
 

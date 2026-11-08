@@ -114,12 +114,19 @@ Others read these, so a change to one is a decision, not a refactor:
    (`scripts/check-version.sh --release`), is not on `main` or has no
    changelog section; runs the gate; builds the archives (`make dist`) and
    smoke-runs each on a runner of its own platform, and the container image
-   on each architecture (`scripts/smoke.sh`); then attaches the archives,
-   `SHA256SUMS` and their build provenance to the release, pushes the image
+   on each architecture (`scripts/smoke.sh`); then signs `SHA256SUMS` with
+   the secret `RELEASE_SIGNING_KEY` and checks the signature against
+   `internal/update/release.pub` (`scripts/sign-release.sh`), attaches the
+   archives, `SHA256SUMS`, `SHA256SUMS.sig` and their build provenance to
+   the release, pushes the image
    to `ghcr.io/ndthuan/kipp` (with its provenance), writes the Homebrew
    formula into `ndthuan/homebrew-tap` (`scripts/brew-formula.sh`), and
    installs and smoke-runs what it published, from the tap on macOS and
-   from the registry on Linux.
+   from the registry on Linux, and verifies the downloaded `SHA256SUMS`,
+   its signature and an archive. The first job refuses a tag while
+   `internal/update/release.pub` is still the placeholder
+   (`scripts/check-release-key.sh`), and the release is signed by the
+   secret alone, so the secret must hold the key that file belongs to.
 4. Start a new `## Unreleased` section for what comes next.
 
 `make dist` builds the same archives locally, in `dist/`, named by

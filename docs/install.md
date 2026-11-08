@@ -97,9 +97,12 @@ Each release on the
 `amd64` and `arm64`. Each holds the `kipp` binary, which needs nothing
 else, with the licence, the README, the changelog and THIRD_PARTY.md.
 
-Check an archive against the release's `SHA256SUMS`, and against the
-build provenance GitHub keeps for it, which says that the archive was
-built by the repository's release workflow from the tagged commit:
+Each release also has `SHA256SUMS.sig`, a signature of `SHA256SUMS` by the
+release key (the minisign file format; the public key is
+`internal/update/release.pub`). Check an archive against the release's
+`SHA256SUMS`, and against the build provenance GitHub keeps for it, which
+says that the archive was built by the repository's release workflow from
+the tagged commit:
 
 ```sh
 shasum -a 256 -c SHA256SUMS --ignore-missing
