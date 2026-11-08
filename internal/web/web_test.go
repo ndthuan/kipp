@@ -1819,7 +1819,11 @@ func TestTheBrowserThatLoggedInBeforeStillLogsInWhenTheNameIsThrottled(t *testin
 	}
 	res := post(t, stranger, e.srv.URL+"/login", url.Values{"name": {"admin"}, "password": {"pw"}})
 	eq(t, "the right password from a stranger, throttled", res.StatusCode, http.StatusTooManyRequests)
-	eq(t, "Retry-After", res.Header.Get("Retry-After"), "2")
+	// The name's wait is two seconds from the last wrong password, and the
+	// hashing of the five before it can take one of them on a loaded machine.
+	if got := res.Header.Get("Retry-After"); got != "2" && got != "1" {
+		t.Fatalf("Retry-After %q, want 2 or 1", got)
+	}
 	// A device cookie made for another user lets nobody past.
 	bob := e.login(t, "bob")
 	eq(t, "bob's browser, as admin", post(t, bob, e.srv.URL+"/login", url.Values{"name": {"admin"}, "password": {"pw"}}).StatusCode, http.StatusTooManyRequests)
