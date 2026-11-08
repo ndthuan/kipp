@@ -88,6 +88,19 @@ func untilWaiting(t *testing.T, r *rig, n int) {
 	}
 }
 
+// untilQuiet waits until the server was asked to be quiet. The status says
+// waiting just before that call is made.
+func untilQuiet(t *testing.T, r *rig) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for len(r.f.QuietCalls()) == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("the server was never asked to be quiet")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
 func TestASafeUpgradeGoesThroughTheStepsWithQuietOnWhileItWaitsAndHandsOver(t *testing.T) {
 	r := newRig(t, et.NewRelease(t, et.GoodBinary(et.Newer)), nil)
 	r.f.SetBusy(2)
@@ -97,6 +110,7 @@ func TestASafeUpgradeGoesThroughTheStepsWithQuietOnWhileItWaitsAndHandsOver(t *t
 	}
 	// It waits, quiet, while two builds run, and says how many.
 	untilWaiting(t, r, 2)
+	untilQuiet(t, r)
 	if got := r.f.QuietCalls(); len(got) != 1 || !got[0] {
 		t.Fatalf("quiet was not turned on for the wait: %v", got)
 	}
