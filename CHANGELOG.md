@@ -31,6 +31,31 @@ lines and the data directory are the public surface.
   log. Where the data directory cannot be written, and in a dev build, it
   refuses and prints the lines that upgrade by hand. A rollback loses
   everything written since the upgrade.
+- An upgrade backs up `db.sqlite` (through SQLite, so it is whole while the
+  server runs, and checked) and `secret.key` into
+  `<data>/upgrade/backup-<version>-<time>/`, after the builds have ended and
+  just before the restart, having checked that the disk has room. When the
+  new version has come up the backup is kept 7 days, and is what a rollback
+  puts back; the backup of an upgrade that failed goes once a later one
+  succeeds. `kipp serve` runs a version an upgrade left in
+  `<data>/bin/pending` as a child, forwarding `SIGTERM`, `SIGINT` and
+  `SIGHUP`, and counts it healthy when `/api/v1/health` answers, 90 seconds
+  after the database migration ends (30 minutes at most). If it does not
+  come up, the backup is put back, the version goes in `bin/rejected`, the
+  reason and the end of its output in `<data>/upgrade/last-failure.json`,
+  and the version before starts. The state is in `bin/current`,
+  `bin/previous`, `bin/pending`, `bin/rejected` and
+  `upgrade/status.json`. [Upgrading](docs/install.md#upgrading) and
+  [Operations](docs/operations.md#upgrading) describe them.
+- The Docker image sets `KIPP_INSTALL_SOURCE=docker`, so that the Server page
+  and `kipp version` say it is a Docker image; the upgrade keeps its binary in
+  the data volume. `KIPP_USE_BUNDLED_BINARY=1` pins the image's own kipp.
+  `scripts/smoke-upgrade.sh` upgrades real containers end to end.
+- Docs: Upgrading in `docs/install.md` (from the app, `kipp upgrade`, by hand
+  for Homebrew, Docker and an archive, a pinned image, rollback, a failed
+  upgrade, installs from before this), Verifying a release by hand, the update
+  check, and `kipp upgrade` and the upgrade routes in `docs/cli.md` and
+  `docs/api.md`.
 - A release build of `kipp serve` runs the higher release of its own
   executable and the binary `<data>/bin/kipp-<version>` that
   `<data>/bin/current` names, by `exec` (the process ID stays). A dev build,
@@ -38,7 +63,6 @@ lines and the data directory are the public surface.
   `KIPP_USE_BUNDLED_BINARY=1` keep the executable's own. `origin` in
   `GET /api/v1/admin/server` then reads "data directory (the executable's
   own is vA.B.C)". Old lower binaries in `bin/` are removed after 7 days.
-  Nothing writes `bin/current` yet.
 - The server asks GitHub for the latest release at start and about every 12
   hours (one unauthenticated request carrying only a `User-Agent` of
   `kipp/<version>`; a dev build never asks) and the Server page and
@@ -52,8 +76,7 @@ lines and the data directory are the public surface.
   public, publishes it as `SHA256SUMS.sig`, and verifies the downloaded
   files again afterwards. It refuses a tag while the key in the repository
   is the placeholder.
-- Groundwork for verified upgrades, with no change to what kipp does yet:
-  `internal/update` checks that a release's `SHA256SUMS` is signed by the
+- Verified upgrades rest on this: `internal/update` checks that a release's `SHA256SUMS` is signed by the
   release key compiled into kipp (an ed25519 signature in the minisign file
   format) and that an archive is listed there, and `go run ./cmd/kipp-release`
   makes the key (`keygen`), signs a release (`sign`) and checks one

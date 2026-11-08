@@ -89,7 +89,8 @@ The same is `POST /api/v1/admin/quiet` (on), `DELETE /api/v1/admin/quiet`
 `running`, `queued` and `idle` (true when nothing runs or waits); an
 admin's token or session only, and each change is in the audit. The
 Server page has the same switch, and every page says so while the server
-is quiet.
+is quiet. An upgrade does this, and the restart, for you
+([Upgrading](install.md#upgrading)).
 
 ## Reload lines
 
@@ -115,11 +116,16 @@ db.sqlite      builds, users, token hashes, sealed secrets (mode 600)
 db.sqlite-wal, db.sqlite-shm
                SQLite's write-ahead log, there while the server runs
 db.schema-N.sqlite
-               the database as it was before the last upgrade, at schema N
-               (mode 600); see Upgrading
-bin/           kipp-<version> binaries and the files that choose among them
-               (`current`, `previous`, `pending`, `rejected`); see Upgrading
-upgrade/       progress of an upgrade in the making
+               the database as it was before the last schema upgrade, at
+               schema N (mode 600); see Upgrading
+bin/           kipp-<version> binaries an upgrade downloaded and the files
+               that choose among them (`current`, `previous`, `pending`,
+               `rejected`); see Upgrading
+upgrade/       the backups of upgrades, their progress (`status.json`) and
+               the last version put back (`last-failure.json`); see
+               Upgrading
+update-check.json
+               the newest release the update check found, and when
 secret.key     the key the secrets are sealed with (mode 600)
 device.key     the key the device cookies are signed with (mode 600)
 lock           held by the running server; one server per directory
@@ -160,22 +166,61 @@ In Docker, back up the volume mounted at `/var/lib/kipp` with the
 container stopped, or run the `sqlite3` line above from a container or
 host that has `sqlite3` and the volume mounted.
 
+An upgrade takes a backup of its own, of the database and the key, just
+before it restarts ([The backup an upgrade makes](#the-backup-an-upgrade-makes)).
+
 ## Upgrading
 
-Stop the server, put the new `kipp` in place of the old one, and start
-`kipp serve` again:
+How to upgrade, from the app, with `kipp upgrade` or by hand, and how to
+roll back, is in [Install](install.md#upgrading). This section is what an
+upgrade does in the data directory and how the next start chooses what to
+run.
 
-- Homebrew: `brew upgrade kipp`, then `brew services restart kipp`.
-- Docker: `docker pull ghcr.io/ndthuan/kipp`, then remove the container
-  and run it again with the same volumes.
-- An archive: replace the binary and restart the service.
+### The backup an upgrade makes
 
-Use [quiet mode](#restarting-without-losing-builds) first so that no
-build is lost. Standing agents run the server's own version: drain each
-(`kipp agent set <name> --disable`), upgrade the server, upgrade and
-restart the agents, then enable them again.
+Once the server is quiet and no build runs (a safe restart) and just
+before it restarts, an upgrade takes a backup in
+`<data>/upgrade/backup-<version>-<time>/`, named for the version that was
+running and the UTC time (`backup-v1.0.1-20261103T101500Z`). It holds
+`db.sqlite`, copied through SQLite so that it is whole while the server is
+running and checked with `PRAGMA integrity_check`, and `secret.key`, both
+for their owner alone. Logs, artifacts, caches and `device.key` are not in
+it. The backup is taken last so that what a rollback loses is only what was
+written after the restart.
 
-### A newer binary in the data directory
+Before it starts, an upgrade checks that the disk of the data directory has
+room for the backup (the database, its write-ahead log and the key) and
+128 MiB more for the download, and says how much is missing when it has
+not. A disk whose free space cannot be read does not stop it.
+
+When the new version has come up, the backup is marked with a `succeeded`
+file, and is kept 7 days from then: the next start of the server removes it
+after that. A backup of an upgrade that failed is removed once a later
+upgrade has succeeded. The backup a pending record names is never removed.
+A rollback puts back the newest backup that has the mark.
+
+### The files in bin/ and upgrade/
+
+`<data>/bin/` holds the binaries an upgrade downloaded, `kipp-<version>`
+(mode 755), and four small files that choose among them. Each is written by
+a rename, so a reader sees the old file or the new, never half of either.
+
+| File | Holds |
+|---|---|
+| `bin/current` | The version run by default, such as `v1.1.0`. Absent: none, the executable's own runs. |
+| `bin/previous` | The version before it, or `bundled` when that was the executable that started kipp (the image's, Homebrew's or the archive's). A rollback goes there. |
+| `bin/pending` | JSON for the next start to carry out: `{"kind":"upgrade","version":"v1.1.0","backup":"backup-v1.0.0-20261103T101500Z","from":"v1.0.0"}`. `kind` is `upgrade` or `rollback`; a rollback names the version to return to in `version`, `bundled` allowed. Gone once carried out. `pending.refused` is one that could not be, because its backup is missing. |
+| `bin/rejected` | One version per line that the start must never pick by the higher-wins rule below: a version that did not come up, or that was rolled back from. |
+
+`<data>/upgrade/` holds the backups, and:
+
+| File | Holds |
+|---|---|
+| `upgrade/status.json` | Where the upgrade is: `state` (`preflight`, `downloading`, `verifying`, `waiting`, `backup`, `switching`, `done`, `failed`, `cancelled`), `version`, `from`, `backup`, `running`, `queued`, `updated_at`. It survives the restart, which is how the Server page and `kipp upgrade` follow a run through it. |
+| `upgrade/last-failure.json` | Why the last version that did not come up was put back: `version`, `from`, `reason`, `log_tail` (the end of what it printed), `at`. |
+| `upgrade/migrating` | There while the server migrates its database; the launcher counts the wait for it separately. |
+
+### How the next start picks a binary
 
 A release build of `kipp serve` looks, before anything else, at
 `<data>/bin/current` and the binary `<data>/bin/kipp-<version>` it names.
@@ -183,15 +228,28 @@ When that is a higher release than the executable's own, the process
 becomes it (`exec`: same arguments, environment and process ID, so a
 service manager sees one process) with `KIPP_LAUNCHED_FROM_DATADIR=1`,
 `KIPP_BUNDLED_EXE` and `KIPP_BUNDLED_VERSION` set to the executable it
-replaced; the Server page then shows "data directory (the executable's
-own is vA.B.C)". Equal or lower versions, a version listed in
-`<data>/bin/rejected`, a file that is missing, not executable or that does
-not answer `version` with its own version: the executable's own runs, and
-a broken file is logged once. Only plain releases (`vX.Y.Z`) take part; a
-dev build, or any other version, ignores `bin/` completely.
-`KIPP_USE_BUNDLED_BINARY=1` keeps the executable's own, for a pinned image.
-At start, `kipp-<version>` files lower than the running version and older
-than 7 days are removed, except the one `previous` names.
+replaced. Higher wins, so a `brew upgrade` or a new image that is at least
+as high as the data directory's binary runs itself.
+
+The executable's own runs instead when the versions are equal or lower, the
+version is listed in `bin/rejected`, the file is missing, is not
+executable or does not answer `version` with its own version (a broken
+file is logged once), or `KIPP_USE_BUNDLED_BINARY=1` is set, which is what
+[a pinned image](install.md#a-pinned-image) uses. Only plain releases
+(`vX.Y.Z`) take part; a dev build, or any other version, ignores `bin/`
+completely.
+
+At each start, `kipp-<version>` files lower than the running version and
+older than 7 days are removed, except the one `previous` names and the one
+a pending record names; so is a backup past its 7 days.
+
+The Server page and `GET /api/v1/admin/server` say, as `origin`, where the
+running kipp comes from: `Homebrew`, `Docker image`, or `release archive or
+build`, or, when a binary of the data directory runs, `data directory (the
+executable's own is vA.B.C)`. Homebrew is told by a `Cellar` directory in
+the executable's path, and Docker by the image's `KIPP_INSTALL_SOURCE=docker`.
+`kipp version` prints it too, on its second line, but cannot see the data
+directory's.
 
 ### A pending version is tried, and undone if it does not come up
 
@@ -211,7 +269,11 @@ launcher. Nothing is tried again until an upgrade is started again. A
 `rollback` record is carried out before anything starts: its backup goes
 back, and the target starts. One whose backup is missing is set aside as
 `pending.refused`. A supervised server that exits with code 75 has written
-a new record, which the launcher reads next.
+a new record, which the launcher reads next. The new version starts not
+quiet, so a build may start before the check passes; what it writes is
+lost with the rest if the version is put back.
+
+### A release with a newer schema
 
 A release whose database schema is newer upgrades the database when it
 starts, before it listens, and logs it:

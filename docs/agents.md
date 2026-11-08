@@ -107,9 +107,10 @@ agent with its labels, whether it is online or reachable, its version
 and what it runs now. `GET /api/v1/admin/engines` and
 `GET /api/v1/admin/agents` answer the same for an admin's token.
 
-To upgrade: drain each standing agent, upgrade the server, upgrade and
-restart the agents, then enable them again. Containers take the server's
-own agent at their next start.
+To upgrade: drain each standing agent, upgrade the server
+([Upgrading](install.md#upgrading); an upgrade of the server does not touch
+the agents), upgrade and restart the agents, then enable them again.
+Containers take the server's own agent at their next start.
 
 ## Placement
 

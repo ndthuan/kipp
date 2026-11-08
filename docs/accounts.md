@@ -224,7 +224,7 @@ neither. An API token never makes these changes.
 
 Every change to a user, a grant, a token, a secret, an engine, an agent,
 a cache entry or metrics, in the browser or with the `kipp` command, and
-every reload and quiet switch, is a row of the audit: who (a user's name,
+every reload, quiet switch and upgrade, is a row of the audit: who (a user's name,
 `cli` for the command line, `kipp` for the server's own removals), what,
 on whom, and when. No row holds a password, a token or a secret's value.
 The audit is on the Server page and at `GET /api/v1/admin/audit`; the

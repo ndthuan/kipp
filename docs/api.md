@@ -144,6 +144,7 @@ an admin may read is below `/admin/`.
 | `GET /queue/events` | login | A `changed` event each time the caller's queue changes. |
 | `POST /admin/reload` | admin | Reads the job files again; a refused set is a 422 `jobs_refused` with the errors. |
 | `GET`, `POST`, `DELETE /admin/quiet` | admin | Quiet mode ([Restarting without losing builds](operations.md#restarting-without-losing-builds)). |
+| `GET`, `POST`, `DELETE /admin/upgrade`, `POST /admin/upgrade/rollback` | admin | Upgrading the server ([Upgrade](#upgrade)). |
 | `GET /admin/users`, `/admin/users/<name>`, `/admin/secrets`, `/admin/server`, `/admin/engines`, `/admin/agents`, `/admin/cache`, `/admin/audit` | admin | [Admin reads](#admin-reads). |
 | `POST /hooks/github/<job>` | a signature | A GitHub delivery for a job ([webhook](jobs.md#webhook)). |
 | `POST /hooks/github-app/<app>` | a signature | A GitHub App's delivery ([GitHub App](organization-folders.md#github-app)). |
@@ -202,6 +203,61 @@ and none answers a password, a token, a hash or a secret's value.
   `actor` (a user's name, `cli` or `kipp`), `action`, `target`, `detail`.
 - `GET /api/v1/admin/quiet`: `quiet`, `since`, `running`, `queued` and
   `idle`.
+
+## Upgrade
+
+An admin's token, or an admin's browser session, upgrades the server to the
+latest release or returns it to the version before, as the Upgrade card on
+the Server page and `kipp upgrade` do ([Upgrading](install.md#upgrading)).
+Each start or cancel is a row of the audit (`upgrade`, `upgrade.rollback`,
+`upgrade.cancel`). Only one upgrade runs at a time.
+
+| Route | Does |
+|---|---|
+| `GET /api/v1/admin/upgrade` | Where the upgrade is, the last failure, and what can be done now. |
+| `POST /api/v1/admin/upgrade` | Starts an upgrade to the latest release. 202 with the first status; poll `GET` for the rest. |
+| `DELETE /api/v1/admin/upgrade` | Cancels it, until its backup begins. 200 with the status. |
+| `POST /api/v1/admin/upgrade/rollback` | Starts the return to the version before the last upgrade. 202 with the first status. |
+
+The body of a `POST` is optional; none is a safe restart with the default
+wait. Its keys are `safe_restart` (default true: quiet mode, wait until no
+build runs or waits, then restart), `confirm_lost` (needed when
+`safe_restart` is false: the builds that run end as `lost`), `version`
+(must be the latest release; an upgrade only) and `wait_timeout` (a
+duration such as `90m`, default `2h`). Any other key is a 400.
+
+The status, from `GET` and every `POST`, has:
+
+- `state`: `idle` before any upgrade, then `preflight`, `downloading`,
+  `verifying`, `waiting`, `backup`, `switching`, and the ends `done`,
+  `failed` and `cancelled`. It is kept in the data directory, so a server
+  that has just restarted answers with it; while the server restarts, the
+  route does not answer at all.
+- `version` (the release being upgraded or returned to) and `from` (the
+  version that ran when it began), `backup` (the name of the backup, once
+  there is one), `running` and `queued` (the builds the wait is for) and
+  `updated_at`; all empty or zero when idle.
+- `error`: why the last run of this process ended without switching.
+- `latest` and `upgradable`: the newer release the update check knows and
+  whether it can be upgraded to.
+- `unavailable`: why an upgrade cannot start now (a dev build, the update
+  check off, one already running, nothing newer, a release with no
+  signature file); empty when it can.
+- `rollback_to`: the version a rollback goes to (`bundled` is the
+  executable the server was installed as); empty when there is none, which
+  is when there is no earlier version or no backup of an upgrade that came
+  up.
+- `last_failure`: null, or `version`, `from`, `reason`, `log_tail` (the end
+  of what that version printed) and `at` of the last version the launcher
+  put back.
+
+A start answers 409 when it cannot happen: an upgrade already running, a dev
+build, the update check off, nothing newer, a release with no signature
+file, a record from an earlier switch still pending, nothing to roll back
+to, or a data directory the server cannot write (the detail then has the
+lines that upgrade this kind of install by hand). A body without
+`confirm_lost` and with `safe_restart` false is a 400, as is a `version`
+that is not the latest.
 
 ## Examples
 

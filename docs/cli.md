@@ -9,6 +9,7 @@ or `--name`.
 | [`kipp check`](#kipp-check) | Checks a jobs directory. | nothing |
 | [`kipp reload`](#kipp-reload) | Has a running server read its jobs directory again. | the server |
 | [`kipp quiet`](#kipp-quiet) | Stops a running server taking builds, before a restart. | the server |
+| [`kipp upgrade`](#kipp-upgrade) | Upgrades a running server to the latest release, or back to the version before. | the server |
 | [`kipp run`](#kipp-run) | Starts a build, and optionally waits for it. | the server |
 | [`kipp user`](#kipp-user) | Adds, changes and lists users and their grants. | the data directory |
 | [`kipp token`](#kipp-token) | Makes, revokes and lists API tokens. | the data directory |
@@ -17,9 +18,9 @@ or `--name`.
 | [`kipp agent`](#kipp-agent) | Runs a standing agent, or registers them. | the server, or the data directory |
 | [`kipp metrics`](#kipp-metrics) | Checks a stage's guards; reads and changes what metric stores remember. | the stage, or the data directory |
 | [`kipp cache`](#kipp-cache) | A stage's keyed cache; lists and removes entries. | the server, or the data directory |
-| `kipp version` | Prints the version and where the binary was installed from. | nothing |
+| `kipp version` | Prints the version, and on a second line where the binary was installed from. | nothing |
 
-**Talking to a server.** `reload`, `quiet` and `run` take `--url` (else
+**Talking to a server.** `reload`, `quiet`, `upgrade` and `run` take `--url` (else
 `$KIPP_URL`, else `http://127.0.0.1:8085`) and `--token` (else
 `$KIPP_TOKEN`, else the file `$XDG_CONFIG_HOME/kipp/token`, mode 600). An
 argument shows in the process list, so prefer either of the others.
@@ -74,13 +75,20 @@ directory.
 | `--ssh-key <file>` | the user's own under `~/.ssh` | The private key for `ssh://` engines that name none. |
 | `--artifacts-max <size>` | `50GB` | The most every build's artifacts come to; past it the oldest builds' are removed. |
 | `--cache-max <size>` | `20GB` | The most every cache entry comes to; past it the least recently restored are removed. |
-| `--no-update-check` | off (also `KIPP_NO_UPDATE_CHECK=1`) | Do not ask GitHub for the latest release ([Update check](install.md#the-update-check)). |
+| `--no-update-check` | off (also `KIPP_NO_UPDATE_CHECK=1` or `true`) | Do not ask GitHub for the latest release ([The update check](install.md#the-update-check)). Without it the server knows of no release to upgrade to. |
 
 Once it listens, it prints one line on stdout:
 
 ```
 kipp v1.0.0 listening on http://127.0.0.1:8085, 3 jobs from /etc/kipp, data in /var/lib/kipp
 ```
+
+A release build first looks in `<data>/bin/`: it runs the binary an upgrade
+left there when that is a higher release than the executable's own, and
+carries out an upgrade or a rollback the server asked for before it
+restarted. `KIPP_USE_BUNDLED_BINARY=1` in the environment keeps the
+executable's own and skips both. A dev build ignores `bin/`. See
+[Upgrading](operations.md#upgrading) in Operations.
 
 ## kipp check
 
@@ -115,6 +123,39 @@ once no build runs or waits, and at `--timeout` (default `2h`) it turns
 quiet off again and exits 1. `off` takes builds again; `status` says
 whether the server is quiet and how many builds run and wait. See
 [Restarting without losing builds](operations.md#restarting-without-losing-builds).
+
+## kipp upgrade
+
+```
+kipp upgrade [status] [--check] [--cancel] [--rollback] [--no-safe [--yes]] [--wait-timeout <duration>] [--url <url>] [--token <token>]
+```
+
+With an admin's token, upgrades the running server to the latest release,
+as the Upgrade card on the Server page does ([Upgrading](install.md#upgrading)).
+With no flag it makes the server quiet, waits for the builds to end, backs
+up the data directory, restarts into the new version, and prints each step
+until the version runs; the launcher puts the old version back if the new
+one does not come up. The release is downloaded from the repository's
+releases and its signature and checksum are checked first.
+
+| Flag | Does |
+|---|---|
+| `--check` | Says whether a newer release can be upgraded to, and does nothing. |
+| `status` | Says where an upgrade is: `upgrade: idle`, or the step, the two versions and, while it waits, how many builds run and queue. |
+| `--cancel` | Cancels an upgrade that has not reached its backup; quiet is turned off again. |
+| `--rollback` | Returns to the version before the last upgrade, with the data as the backup of that upgrade had it. Everything written since is lost. |
+| `--no-safe` | Does not wait for the builds: it restarts at once, and the builds that run end as `lost`. Needs `--yes`. |
+| `--yes` | With `--no-safe`, confirms that the running builds end as lost. |
+| `--wait-timeout <d>` | How long the safe restart waits for the builds before it gives up, turns quiet off again and restarts nothing. Default `2h`. |
+
+Exits 0 when the version runs (or for `--check`, `status` and `--cancel`
+when they answered), 1 when the upgrade failed or was cancelled, 2 for a
+command line it would not take (`--yes` without `--no-safe`, or two of the
+modes), 3 for a token the server refused. It refuses with exit 1 in a dev
+build, with the update check off, when there is nothing newer or the release
+has no signature file, and where the data directory cannot be written; the
+last says the lines that upgrade that kind of install by hand. It waits up
+to 35 minutes after the restart for the server to answer.
 
 ## kipp run
 

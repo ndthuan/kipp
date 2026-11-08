@@ -10,6 +10,9 @@ clone); nothing else.
 - [Release archives](#release-archives)
 - [From source](#from-source)
 - [The first admin](#the-first-admin)
+- [Upgrading](#upgrading)
+- [Verifying a release by hand](#verifying-a-release-by-hand)
+- [The update check](#the-update-check)
 - [Limits](#limits)
 
 ## Homebrew
@@ -33,9 +36,7 @@ as your own user, and keeps it running. Job files go in
 
 After a change to the job files, `kipp reload` (with a token, see
 [Commands](cli.md#kipp-reload)) has the server read them again. To
-upgrade, `brew upgrade kipp` and then `brew services restart kipp`; a
-restart ends the builds that run then, so see
-[Restarting without losing builds](operations.md#restarting-without-losing-builds).
+upgrade, see [Upgrading](#upgrading).
 
 `brew install --HEAD ndthuan/tap/kipp` builds the `main` branch from
 source instead, with Go.
@@ -98,11 +99,10 @@ Each release on the
 else, with the licence, the README, the changelog and THIRD_PARTY.md.
 
 Each release also has `SHA256SUMS.sig`, a signature of `SHA256SUMS` by the
-release key (the minisign file format; the public key is
-`internal/update/release.pub`). Check an archive against the release's
-`SHA256SUMS`, and against the build provenance GitHub keeps for it, which
-says that the archive was built by the repository's release workflow from
-the tagged commit:
+release key; [Verifying a release by hand](#verifying-a-release-by-hand)
+checks it. Check an archive against the release's `SHA256SUMS`, and against
+the build provenance GitHub keeps for it, which says that the archive was
+built by the repository's release workflow from the tagged commit:
 
 ```sh
 shasum -a 256 -c SHA256SUMS --ignore-missing
@@ -163,24 +163,336 @@ the server runs as, while the server runs or not. Log in as `admin` with
 that password; everyone else is added on the Users page or with
 `kipp user add`.
 
+## Upgrading
+
+An admin upgrades kipp from the app, or with `kipp upgrade`, and it is the
+same for Homebrew, Docker and a release archive: kipp downloads the
+release itself, checks its signature, backs up the database, restarts into
+the new version, and puts the old version back if the new one does not
+come up. Nobody runs `brew` or `docker`. [By hand](#upgrading-by-hand) is
+for a server that is down, an install that cannot upgrade itself, and a
+server with the update check off.
+
+- [From the app](#from-the-app)
+- [With kipp upgrade](#with-kipp-upgrade)
+- [Upgrading by hand](#upgrading-by-hand)
+- [A pinned image](#a-pinned-image)
+- [Rolling back](#rolling-back)
+- [When an upgrade fails](#when-an-upgrade-fails)
+- [Installs from before this feature](#installs-from-before-this-feature)
+
+What the files of an upgrade are, and how the launcher chooses among the
+binaries, is in [Upgrading](operations.md#upgrading) in Operations.
+
+### From the app
+
+When a release newer than the running one exists and kipp can upgrade to
+it ([the update check](#the-update-check) finds it), every page shows an
+admin a banner, "kipp vX.Y.Z is available". **Remind me later** puts the
+banner off for that release for 7 days, in a cookie of that browser; the
+card below stays. **See and upgrade** goes to the **Upgrade** card on the
+Server page (`/admin/server`, in the menu under the admin's name):
+
+- It says what runs now and where it was installed from (Homebrew, a
+  Docker image, a release archive), and links the new version's release
+  notes.
+- A tick box, ticked, **Wait for builds to end, then restart (safe
+  restart)**, and the button **Upgrade to vX.Y.Z**.
+
+A safe restart makes the server quiet ([Restarting without losing
+builds](operations.md#restarting-without-losing-builds)), so that no
+build starts and the triggers are refused, and waits until the builds that
+run have ended (at most 2 hours, then it gives up, turns quiet off again
+and restarts nothing). Only then does it back up the database and the
+secrets' key, and restart. No build is lost. Unticking the box and pressing
+the button asks again on a page of its own, which says how many running
+builds will end as `lost`; the server then restarts at once.
+
+The card shows the steps of the run: checking that it can run (room on the
+disk for the backup and the download), downloading and verifying the
+release, waiting for the builds, backing up, restarting. Every page shows
+the step in a banner meanwhile. **Cancel upgrade** is there until the
+backup begins; it turns quiet off again and leaves everything as it was.
+Past that point only a [rollback](#rolling-back) undoes the upgrade.
+
+When the server restarts, the page reconnects by itself, and gives up
+with a message after 35 minutes (the 30 minutes the new version has to
+come up, and five). Afterwards the card says "kipp is now vX.Y.Z", for 7
+days, with a **Roll back** link; or it says why the upgrade did not
+happen ([When an upgrade fails](#when-an-upgrade-fails)).
+
+kipp downloads from its own repository's releases on GitHub alone (the
+archive is at most 200 MiB), and refuses a redirect to any other host. It
+checks the signature of `SHA256SUMS` with the release key compiled into
+the running kipp, then the archive against `SHA256SUMS`, unpacks the binary
+and runs it once (`kipp version`) before it changes anything.
+
+An upgrade is an admin's, by browser or token alike, and a row of the
+[audit](accounts.md#the-audit). Standing agents are not upgraded with the
+server: drain each agent, upgrade the server, then upgrade and enable the
+agents ([Agents and engines](agents.md#managing-them)).
+
+The card has no button, and gives the lines to type instead, for a release
+that has no `SHA256SUMS.sig` file (kipp does not install what is not
+signed). There is no card at all in a dev build or with the update check
+off. A server that cannot write the `bin/` and `upgrade/` directories of
+its data directory (a volume mounted read-only, or owned by another user)
+refuses when the button is pressed, and the answer has the same lines:
+nothing has been changed.
+
+### With kipp upgrade
+
+```
+kipp upgrade [status] [--check] [--cancel] [--rollback] [--no-safe [--yes]]
+             [--wait-timeout <duration>] [--url <url>] [--token <token>]
+```
+
+With an admin's token, the same as the card ([Commands](cli.md#kipp-upgrade)):
+
+```sh
+kipp upgrade --check
+# v1.1.0 is available and can be upgraded to: kipp upgrade
+kipp upgrade
+# upgrade: preflight (v1.0.1 to v1.1.0)
+# upgrade: downloading (v1.0.1 to v1.1.0)
+# upgrade: waiting (v1.0.1 to v1.1.0): 2 running, 0 queued
+# upgrade: backup (v1.0.1 to v1.1.0)
+# upgrade: switching (v1.0.1 to v1.1.0)
+# upgrade: done (v1.0.1 to v1.1.0)
+# kipp v1.1.0 is running
+```
+
+It prints a line each time the step changes (a quick one, such as
+`verifying`, may pass unseen), follows the server through its
+restart, and exits 0 when the new version runs, 1 when the upgrade failed
+or was cancelled. `--no-safe --yes` restarts at once and ends the running
+builds as `lost`; `--wait-timeout` is how long the safe restart waits
+(default 2 hours); `--rollback` is [below](#rolling-back).
+
+### Upgrading by hand
+
+For a server the app cannot upgrade, do what the app does yourself: make
+it quiet, stop it, back up, put the new program in place, start it, check.
+
+```sh
+kipp quiet on --wait --timeout 2h
+```
+
+Then, for each kind of install, stop the server and copy `db.sqlite` and
+`secret.key` out of its data directory (a stopped server has folded its
+write-ahead log into the file, so a plain copy is whole; see
+[Backups](operations.md#backups)), and put the new version in place:
+
+- **Homebrew**:
+
+  ```sh
+  brew services stop kipp
+  cp $(brew --prefix)/var/kipp/db.sqlite $(brew --prefix)/var/kipp/secret.key /backups/
+  brew upgrade kipp
+  brew services start kipp
+  ```
+
+- **Docker**: pull the new tag, and run the container again from it with
+  the same volumes and flags. The image has no `sqlite3`, so copy the two
+  files with another container:
+
+  ```sh
+  docker pull ghcr.io/ndthuan/kipp:1.1.0
+  docker stop kipp
+  docker run --rm -v kipp-data:/var/lib/kipp -v "$PWD/backup":/backup \
+    alpine cp /var/lib/kipp/db.sqlite /var/lib/kipp/secret.key /backup/
+  docker rm kipp
+  docker run -d --name kipp -p 8085:8085 \
+    -v kipp-data:/var/lib/kipp -v ./jobs:/etc/kipp ghcr.io/ndthuan/kipp:1.1.0
+  ```
+
+- **A release archive**: download and [check](#release-archives) the new
+  archive, stop the service, copy the two files, replace the `kipp` binary
+  with the one in the archive, and start the service
+  ([Running as a service](operations.md#running-as-a-service)).
+
+Then `kipp quiet status` says `quiet off` (quiet is in memory, so the
+restart ended it), and the Server page says the new version. The new
+version upgrades the database when it starts, and keeps a copy of the old
+one ([A release with a newer schema](operations.md#a-release-with-a-newer-schema)).
+
+If the data directory holds a binary from an earlier upgrade by the app
+that is higher than the one you installed, that one runs, not yours: the
+Server page says "data directory". Install a release that is at least as
+high, or see [A pinned image](#a-pinned-image).
+
+With Homebrew, the `kipp` on your `PATH` stays the version Homebrew
+installed after an upgrade by the app, so `kipp version` there prints that
+one, and the Server page prints the version that runs.
+
+### A pinned image
+
+A Docker image of a given tag is meant to run that tag. After an upgrade by
+the app the new binary is in the data volume, not in the image, and a
+container made from an older image (or the same image again) keeps running
+the higher binary in the volume. To have the image's own kipp run, whatever
+the volume holds, set `KIPP_USE_BUNDLED_BINARY=1`:
+
+```sh
+docker run -d --name kipp -e KIPP_USE_BUNDLED_BINARY=1 -p 8085:8085 \
+  -v kipp-data:/var/lib/kipp -v ./jobs:/etc/kipp ghcr.io/ndthuan/kipp:1.1.0
+```
+
+Then the tag is the version, and an upgrade is a new tag, [by
+hand](#upgrading-by-hand). A pinned server does not carry out an upgrade
+or a rollback started in the app: the launcher is the part that does, and
+the variable skips it. Leave it unset if you want the app to do it. The
+variable is read by any install, though a pinned image is where it is
+used.
+
+### Rolling back
+
+After an upgrade that came up, the server can go back to the version it ran
+before: **Roll back to vX.Y.Z** on the card, or `kipp upgrade --rollback`.
+It waits for the builds (`--no-safe --yes` does not), puts the backup of the
+upgrade back and starts the earlier version, which is the version of the
+executable that started kipp if that was what ran before.
+
+**A rollback loses everything written since the upgrade**: builds, users,
+tokens, secrets and changes made on the pages, because the database is
+the one the backup took. The logs and artifacts are files and stay, but a
+build number the restored database gives out again clears the logs an
+earlier build of that number left. The version rolled back from is not
+chosen again by itself.
+
+A rollback is possible while the backup exists: a week after an upgrade
+came up, the backup is removed the next time the server starts, and the
+card stops offering it. After that, going back is what the next section
+does by hand.
+
+By hand, when the server will not start or the backup is older: stop it,
+put the files of the backup (`db.sqlite` and `secret.key` in
+`<data>/upgrade/backup-<version>-<time>/`) in the data directory over the
+two there, remove `db.sqlite-wal` and `db.sqlite-shm`, and make the earlier
+version the one that runs: remove `<data>/bin/current` for the executable's
+own (the image, Homebrew's or the archive's), or write the version in it
+(`v1.0.1`) if its file `<data>/bin/kipp-v1.0.1` is still there. Then
+start the server.
+
+```sh
+cd /var/lib/kipp
+cp upgrade/backup-v1.0.0-20261103T101500Z/db.sqlite db.sqlite
+cp upgrade/backup-v1.0.0-20261103T101500Z/secret.key secret.key
+rm -f db.sqlite-wal db.sqlite-shm bin/current
+```
+
+### When an upgrade fails
+
+Before the restart, the upgrade fails with nothing changed: no room on the
+disk, a download or a signature that does not check, builds still running
+at the end of the wait, a backup that could not be made. The card says "The
+upgrade to vX.Y.Z did not finish, and nothing was changed" and why;
+`kipp upgrade` prints the reason and exits 1; quiet is off again.
+
+```
+upgrade: failed (v1.0.1 to v1.0.2): checksum check failed: kipp_1.0.2_linux_arm64.tar.gz does not match its sha256 in SHA256SUMS
+```
+
+After the restart, the launcher keeps the new version as a child process for
+up to 30 minutes, and counts it healthy when `/api/v1/health` answers
+`{"ok":true}` within 90 seconds of the end of the database migration. When
+it does not (it exits, or is not healthy by then) the launcher stops it,
+puts the backup back, remembers the version as rejected, and starts the
+version before. The card says "vX.Y.Z did not start; back on vY.Y.Y", the
+reason, and links **The end of its log**: the last 4 KiB the failed
+version printed. The server's own log has the line `the new version is not
+healthy; going back`, and the same record is in `GET
+/api/v1/admin/upgrade` as `last_failure`, and in
+`<data>/upgrade/last-failure.json` (`version`, `from`, `reason`, `log_tail`,
+`at`). Nothing is tried again by itself; start the upgrade again when the
+cause is gone. The data written between the restart and the check is lost
+with the rest, as in a rollback.
+
+From the restart of an upgrade until the next start, the process a
+service manager or `docker` sees (PID 1 in a container) is the launcher,
+with the server as its child: it passes `SIGTERM`, `SIGINT` and `SIGHUP`
+to the child, and its exit code on.
+
+### Installs from before this feature
+
+kipp 1.0.0 and earlier have no update check, no Upgrade card, no
+`kipp upgrade` and no launcher, so the first step is by hand, once:
+[upgrade by hand](#upgrading-by-hand) to the first release that has the
+Upgrade card ([the changelog](../CHANGELOG.md) says which). The old
+version makes no backup of its own, so take the backup that section has;
+it is also the way back, together with the old program. From then on
+the app upgrades, with Homebrew, Docker and archives alike. In Docker the
+data volume must be writable by the user the image runs as (uid 10001),
+which it has to be for the server to run at all.
+
+## Verifying a release by hand
+
+Each release has `SHA256SUMS`, the checksums of its archives, and
+`SHA256SUMS.sig`, a signature of that file made with the release key by the
+release workflow. The key's public half is `internal/update/release.pub` in
+the repository, and is compiled into every kipp, which checks the same
+signature before it installs anything. The signature is in the
+[minisign](https://jedisct1.github.io/minisign/) file format, so the
+`minisign` tool checks it with no Go; read the key from the tag of the
+release, so that the key and the release belong together:
+
+```sh
+V=v1.1.0
+curl -fsSLO https://github.com/ndthuan/kipp/releases/download/$V/SHA256SUMS
+curl -fsSLO https://github.com/ndthuan/kipp/releases/download/$V/SHA256SUMS.sig
+curl -fsSLo release.pub https://raw.githubusercontent.com/ndthuan/kipp/$V/internal/update/release.pub
+minisign -Vm SHA256SUMS -x SHA256SUMS.sig -p release.pub
+shasum -a 256 -c SHA256SUMS --ignore-missing
+```
+
+`minisign` prints `Signature and comment signature verified` and exits 0
+for a genuine file, and `Signature verification failed` and exits 1 for one
+that was changed or signed by another key. The last line checks the
+archives you downloaded against the signed list (`sha256sum -c` on Linux).
+`minisign` is in Homebrew and in most Linux distributions' packages.
+
+With Go, in a checkout of the repository at the tag, the release tool
+checks the signature against the key compiled into that checkout, and one
+archive against the list:
+
+```sh
+git clone --branch $V https://github.com/ndthuan/kipp && cd kipp
+go run ./cmd/kipp-release verify -sums ../SHA256SUMS -sig ../SHA256SUMS.sig \
+  -archive ../kipp_1.1.0_linux_amd64.tar.gz
+# ../kipp_1.1.0_linux_amd64.tar.gz: signature and checksum ok
+```
+
+`-pub <file>` checks against another key, and leaving out `-archive`
+checks the signature alone. The tool also has `keygen` and `sign` for whoever
+releases a fork (`scripts/sign-release.sh sign <dir>` is the release
+workflow's use of it); it is not part of the archives or the image.
+
+The signature covers `SHA256SUMS`, so it vouches for the archives in the
+list and for what an upgrade installs from them. It does not cover the
+Docker image.
+
 ## The update check
 
 A server of a release (not a dev build) asks GitHub whether a newer one
 exists: one unauthenticated `GET` of
 `https://api.github.com/repos/ndthuan/kipp/releases/latest` when it starts
 and about every 12 hours after. The request carries what any HTTP request
-does, including a `User-Agent` of `kipp/<version>`, and nothing about you,
-your jobs or your install. The Server page and
-`GET /api/v1/admin/server` then say which version is the newest, link its
-release notes, and whether kipp can upgrade to it (only a release with a
-signed `SHA256SUMS.sig` can). The answer is kept in `update-check.json` in
-the data directory, so a restart does not ask again inside the interval.
-A server that cannot reach GitHub, or is refused, stays silent and tries
-again later.
+does, including a `User-Agent` of `kipp/<version>`, and GitHub sees the
+server's address as it sees any client's; it carries nothing about your
+jobs, builds, users or install. A draft or a pre-release is not an answer.
+The Server page and `GET /api/v1/admin/server` then say which version is
+the newest, link its release notes, and whether kipp can upgrade to it (the
+release has a `SHA256SUMS.sig` file; its signature is checked when an admin
+starts the upgrade, not by the lookup). The answer is kept in
+`update-check.json` in the data directory, so a restart does not ask again
+inside the interval. A server that cannot reach GitHub, or is refused, says
+nothing and tries again later.
 
 It is on by default. Turn it off with `kipp serve --no-update-check`, or
-with `KIPP_NO_UPDATE_CHECK=1` in the server's environment; the server then
-makes no request at all. `kipp version` never asks.
+with `KIPP_NO_UPDATE_CHECK=1` (or `true`) in the server's environment; the server then
+makes no request at all, and knows of no release, so the banner, the card
+and `kipp upgrade` have nothing to offer: [upgrade by
+hand](#upgrading-by-hand). `kipp version` never asks.
 
 ## Limits
 

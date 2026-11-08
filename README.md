@@ -67,11 +67,11 @@ attestation, are on the
 source, `make build` (Go 1.27.3 or newer) gives `bin/kipp`.
 
 [docs/install.md](docs/install.md) has every way in detail, with how to
-check an archive and what the server needs.
+check an archive, how to upgrade and what the server needs.
 
 A running server asks GitHub for the latest release at start and about
-every 12 hours, one request that sends nothing about you or your install,
-and says on its Server page when a newer one exists. Turn it off with
+every 12 hours, one request that carries nothing about your jobs or your
+install beyond what any HTTP request does, and says on its Server page when a newer one exists. Turn it off with
 `kipp serve --no-update-check` or `KIPP_NO_UPDATE_CHECK=1`
 ([details](docs/install.md#the-update-check)).
 
@@ -147,14 +147,21 @@ installed from, the new version's release notes and one button. By default
 it makes kipp quiet, waits for the running builds to end, backs up the data
 directory and restarts into the new version, which the launcher puts back if
 it does not come up; unticking the box restarts at once after asking again.
-`kipp upgrade` does the same from the command line.
+`kipp upgrade` does the same from the command line, and `kipp upgrade
+--rollback` goes back. It works for Homebrew, Docker and a release archive
+alike, with no `brew` or `docker` to run, and the download is checked
+against a signed `SHA256SUMS` first.
+[Upgrading](docs/install.md#upgrading) has the steps, the same by hand,
+rollback and what a failed upgrade looks like; a release can be
+[checked by hand](docs/install.md#verifying-a-release-by-hand) too.
 
 ![The Server page with an upgrade banner and the Upgrade card](docs/screenshots/upgrade.png)
 
 ## Documentation
 
 - [Install](docs/install.md): Homebrew, Docker, release archives, from
-  source, and what the server needs.
+  source, upgrading and rolling back, checking a release, and what the
+  server needs.
 - [Job files](docs/jobs.md): every key of a job file, triggers, stages,
   conditions, variables and `_vars.yml`.
 - [Multibranch jobs](docs/multibranch.md): every branch and pull request
@@ -173,8 +180,8 @@ it does not come up; unticking the box restarts at once after asking again.
 - [Commands](docs/cli.md): every `kipp` command, its flags and exit
   codes.
 - [Operations](docs/operations.md): running as a service, behind a proxy,
-  restarting without losing builds, the data directory, backups and
-  upgrading.
+  restarting without losing builds, the data directory, backups and what
+  an upgrade leaves in it.
 
 [`examples/`](examples) has sample jobs, notification hooks, service
 files for systemd and launchd, and proxy configurations.
