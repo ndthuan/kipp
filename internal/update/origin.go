@@ -1,6 +1,7 @@
 package update
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -31,6 +32,17 @@ func InstallType() string {
 // executable's path alone, so that a dev build still says where it is from.
 func Origin() string {
 	return originName(originType(os.Getenv("KIPP_INSTALL_SOURCE"), executable()))
+}
+
+// ServerOrigin is Origin for the server's admin page: when the launcher
+// handed over to a binary of the data directory it says so and names the
+// version of the executable it replaced, which `kipp version` (that has no
+// data directory) does not.
+func ServerOrigin() string {
+	if v := os.Getenv("KIPP_BUNDLED_VERSION"); os.Getenv("KIPP_LAUNCHED_FROM_DATADIR") == "1" && Release(v) {
+		return fmt.Sprintf("data directory (the executable's own is %s)", v)
+	}
+	return Origin()
 }
 
 func originName(t string) string {

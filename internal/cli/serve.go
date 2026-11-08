@@ -38,6 +38,7 @@ import (
 	"github.com/ndthuan/kipp/internal/secretbox"
 	"github.com/ndthuan/kipp/internal/store"
 	"github.com/ndthuan/kipp/internal/update"
+	"github.com/ndthuan/kipp/internal/upgrade/launch"
 	"github.com/ndthuan/kipp/internal/version"
 	"github.com/ndthuan/kipp/internal/web"
 	"github.com/ndthuan/kipp/internal/webhook"
@@ -82,6 +83,12 @@ or this install but a User-Agent of kipp/<version>, and says on the Server
 page when a newer one exists. A build that is not a release (dev) never
 asks. --no-update-check, or KIPP_NO_UPDATE_CHECK=1 in the environment,
 turns it off.
+
+A release build looks at <data>/bin/ first: when the version in
+<data>/bin/current is a higher release than the executable's own and its
+binary kipp-<version> is there and answers "version", the process becomes
+that binary (same arguments, environment and process ID). KIPP_USE_BUNDLED_BINARY=1
+keeps the executable's own. A dev build ignores the directory.
 
 One server at a time uses a data directory: it holds a lock on it for as
 long as it runs. Only serve makes the directory and the database in it;
@@ -367,6 +374,8 @@ func serve(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return exitFor(err)
 	}
 	s := &server{f: f, log: slog.New(slog.NewTextHandler(stderr, nil))}
+	// Before anything is read or opened: the process may become another.
+	launch.Run(s.log, f.data, version.Version, args)
 	ln, err := s.open(ctx)
 	if err != nil {
 		return fail(stderr, "serve", err)
@@ -723,7 +732,7 @@ func (s *server) info() api.ServerInfo {
 		up = s.updates.Status()
 	}
 	return api.ServerInfo{
-		Origin: update.Origin(), Latest: up.Latest, NotesURL: up.NotesURL, Upgradable: up.Upgradable, CheckedAt: up.CheckedAt,
+		Origin: update.ServerOrigin(), Latest: up.Latest, NotesURL: up.NotesURL, Upgradable: up.Upgradable, CheckedAt: up.CheckedAt,
 		UpdateCheck: s.updates != nil,
 		Version:     version.Version, GoVersion: runtime.Version(), Schema: s.st.Upgrade().To, StartedAt: s.startedAt,
 		Listen: s.listenAddr, BaseURL: s.f.baseURL, Executors: s.f.executors, Builds: s.d.Builds(), Shell: s.f.shell, SessionTTL: s.f.sessionTTL,

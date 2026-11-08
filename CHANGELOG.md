@@ -8,6 +8,14 @@ lines and the data directory are the public surface.
 
 ## Unreleased
 
+- A release build of `kipp serve` runs the higher release of its own
+  executable and the binary `<data>/bin/kipp-<version>` that
+  `<data>/bin/current` names, by `exec` (the process ID stays). A dev build,
+  a version listed in `<data>/bin/rejected`, a missing or broken file, and
+  `KIPP_USE_BUNDLED_BINARY=1` keep the executable's own. `origin` in
+  `GET /api/v1/admin/server` then reads "data directory (the executable's
+  own is vA.B.C)". Old lower binaries in `bin/` are removed after 7 days.
+  Nothing writes `bin/current` yet.
 - The server asks GitHub for the latest release at start and about every 12
   hours (one unauthenticated request carrying only a `User-Agent` of
   `kipp/<version>`; a dev build never asks) and the Server page and

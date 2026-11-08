@@ -3770,7 +3770,7 @@ components:
           description: The page of the release in `latest`; empty when `latest` is.
           type: string
         origin:
-          description: Where the running binary came from, such as Homebrew, Docker image, or release archive or build.
+          description: Where the running binary came from, such as Homebrew, Docker image, or release archive or build; `data directory (the executable's own is vA.B.C)` when the server runs a newer binary kept in the data directory.
           type: string
         schema:
           description: The database's schema version.

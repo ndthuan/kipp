@@ -117,6 +117,9 @@ db.sqlite-wal, db.sqlite-shm
 db.schema-N.sqlite
                the database as it was before the last upgrade, at schema N
                (mode 600); see Upgrading
+bin/           kipp-<version> binaries and the files that choose among them
+               (`current`, `previous`, `pending`, `rejected`); see Upgrading
+upgrade/       progress of an upgrade in the making
 secret.key     the key the secrets are sealed with (mode 600)
 device.key     the key the device cookies are signed with (mode 600)
 lock           held by the running server; one server per directory
@@ -171,6 +174,24 @@ Use [quiet mode](#restarting-without-losing-builds) first so that no
 build is lost. Standing agents run the server's own version: drain each
 (`kipp agent set <name> --disable`), upgrade the server, upgrade and
 restart the agents, then enable them again.
+
+### A newer binary in the data directory
+
+A release build of `kipp serve` looks, before anything else, at
+`<data>/bin/current` and the binary `<data>/bin/kipp-<version>` it names.
+When that is a higher release than the executable's own, the process
+becomes it (`exec`: same arguments, environment and process ID, so a
+service manager sees one process) with `KIPP_LAUNCHED_FROM_DATADIR=1`,
+`KIPP_BUNDLED_EXE` and `KIPP_BUNDLED_VERSION` set to the executable it
+replaced; the Server page then shows "data directory (the executable's
+own is vA.B.C)". Equal or lower versions, a version listed in
+`<data>/bin/rejected`, a file that is missing, not executable or that does
+not answer `version` with its own version: the executable's own runs, and
+a broken file is logged once. Only plain releases (`vX.Y.Z`) take part; a
+dev build, or any other version, ignores `bin/` completely.
+`KIPP_USE_BUNDLED_BINARY=1` keeps the executable's own, for a pinned image.
+At start, `kipp-<version>` files lower than the running version and older
+than 7 days are removed, except the one `previous` names.
 
 A release whose database schema is newer upgrades the database when it
 starts, before it listens, and logs it:

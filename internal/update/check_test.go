@@ -348,3 +348,24 @@ func TestTheBundledExecutableIsWhatTheInstallTypeJudges(t *testing.T) {
 		t.Fatal(Origin())
 	}
 }
+
+func TestServerOriginNamesTheDataDirectoryOnlyWhenTheLauncherSwitched(t *testing.T) {
+	t.Setenv("KIPP_INSTALL_SOURCE", "docker")
+	t.Setenv("KIPP_BUNDLED_EXE", "")
+	t.Setenv("KIPP_BUNDLED_VERSION", "v1.0.0")
+	t.Setenv("KIPP_LAUNCHED_FROM_DATADIR", "")
+	if got := ServerOrigin(); got != "Docker image" {
+		t.Fatalf("without the switch: %q", got)
+	}
+	t.Setenv("KIPP_LAUNCHED_FROM_DATADIR", "1")
+	if got := ServerOrigin(); got != "data directory (the executable's own is v1.0.0)" {
+		t.Fatalf("after the switch: %q", got)
+	}
+	if got := Origin(); got != "Docker image" {
+		t.Fatalf("kipp version is not changed: %q", got)
+	}
+	t.Setenv("KIPP_BUNDLED_VERSION", "not a version")
+	if got := ServerOrigin(); got != "Docker image" {
+		t.Fatalf("a bundled version that is no release is not shown: %q", got)
+	}
+}
