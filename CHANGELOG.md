@@ -8,6 +8,9 @@ lines and the data directory are the public surface.
 
 ## [1.1.0] - 2026-11-08
 
+- A standing agent that asked a restarted server for work before it had
+  connected to it again was told its token was refused and stopped for
+  good. It is now told to connect again, and carries on.
 - The release signing key is in place: `internal/update/release.pub` holds
   the public half of the key that signs each release's `SHA256SUMS`
   (`minisign` key id `7BD1AD4FDBC773E5`), replacing the test-only
