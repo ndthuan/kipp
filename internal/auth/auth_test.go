@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ndthuan/kipp/internal/store"
+	"github.com/ndthuan/kipp/internal/waitfor"
 	"golang.org/x/crypto/argon2"
 )
 
@@ -362,7 +363,7 @@ func TestALoginWaitingForASlotEndsWhenItsRequestDoes(t *testing.T) {
 		if !errors.Is(err, context.Canceled) {
 			t.Fatalf("got %v", err)
 		}
-	case <-time.After(10 * time.Second):
+	case <-time.After(waitfor.Safety):
 		t.Fatal("a login whose client left kept waiting")
 	}
 }

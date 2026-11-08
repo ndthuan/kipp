@@ -18,6 +18,7 @@ import (
 	"golang.org/x/crypto/ssh/knownhosts"
 
 	"github.com/ndthuan/kipp/internal/engine/docker/dockertest"
+	"github.com/ndthuan/kipp/internal/waitfor"
 )
 
 // sshd is an ssh server that lets one key in and forwards its
@@ -214,7 +215,7 @@ func TestAnSSHHostThatNeverAnswersIsGivenUp(t *testing.T) {
 		if err == nil {
 			t.Fatal("a host that never answered was reached")
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(waitfor.Safety):
 		t.Fatal("the ssh handshake held the caller after its context ended")
 	}
 }

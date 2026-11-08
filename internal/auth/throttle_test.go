@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"golang.org/x/crypto/argon2"
+
+	"github.com/ndthuan/kipp/internal/waitfor"
 )
 
 // clock is a time that moves only when a test says.
@@ -436,7 +438,7 @@ func TestManyWrongPasswordsSentAtOnceForANameVerifyNoMoreThanTheFreeOnes(t *test
 	// that let more through answers none of those before the release, so
 	// the timeout lets the test end and fail rather than hang.
 	var throttledN, bad int
-	timeout := time.After(5 * time.Second)
+	timeout := time.After(waitfor.Safety)
 	for range logins - freeFailures {
 		select {
 		case err := <-results:

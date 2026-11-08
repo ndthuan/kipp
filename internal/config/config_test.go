@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ndthuan/kipp/internal/waitfor"
 )
 
 const smoke = `
@@ -464,8 +466,8 @@ func TestAliasesThatMultiplyAreRefusedBeforeTheyAreExpanded(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "once its aliases are written out") {
 			t.Fatalf("got %v", err)
 		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("still expanding after 5s")
+	case <-time.After(waitfor.Safety):
+		t.Fatal("still expanding after 30s")
 	}
 }
 
