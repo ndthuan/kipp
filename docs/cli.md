@@ -77,6 +77,7 @@ directory.
 | `--artifacts-max <size>` | `50GB` | The most every build's artifacts come to; past it the oldest builds' are removed. |
 | `--cache-max <size>` | `20GB` | The most every cache entry comes to; past it the least recently restored are removed. |
 | `--mcp` | off | Serve an MCP endpoint at `/mcp` for Claude and other MCP clients, authenticated by API tokens and limited to their users' grants ([The MCP endpoint](mcp.md)). |
+| `--mcp-oauth` | off | Let MCP clients such as a Claude custom connector sign in by OAuth, served by kipp itself. Needs `--mcp` and `--base-url` as an `https://` origin (`http://localhost` for trying it) ([Connect Claude](mcp.md#connect-claude-claudeai-the-apps-claude-code)). |
 | `--no-update-check` | off (also `KIPP_NO_UPDATE_CHECK=1` or `true`) | Do not ask GitHub for the latest release ([The update check](install.md#the-update-check)). Without it the server knows of no release to upgrade to. |
 
 Once it listens, it prints one line on stdout:

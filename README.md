@@ -180,7 +180,7 @@ rollback and what a failed upgrade looks like; a release can be
   secrets, and how logins and secrets are protected.
 - [The API](docs/api.md): `/api/v1`, its errors, lists and routes.
 - [The MCP endpoint](docs/mcp.md): `--mcp`, for Claude and other MCP
-  clients, with the tools and how to connect.
+  clients, with the tools, how to connect and the OAuth sign-in for Claude custom connectors.
 - [Commands](docs/cli.md): every `kipp` command, its flags and exit
   codes.
 - [Operations](docs/operations.md): running as a service, behind a proxy,

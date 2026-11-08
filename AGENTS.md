@@ -78,7 +78,9 @@ Others read these, so a change to one is a decision, not a refactor:
   wraps it in `apispectest.Wrap`.
 - `/mcp`, served with `serve --mcp` and documented in `docs/mcp.md`: its
   tools and their arguments. It is not under `/api/v1`, so `api/` does not
-  describe it; `internal/mcp` tests it directly.
+  describe it; `internal/mcp` tests it directly. So are the routes of
+  `serve --mcp-oauth` (`/.well-known/oauth-*`, `/oauth/...`), documented
+  there and tested in `internal/oauth` and `internal/web`.
 - CLI flags and exit codes.
 - The job file format.
 - The two reload lines in the server's log, "jobs reloaded" and "reload

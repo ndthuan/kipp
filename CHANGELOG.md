@@ -15,6 +15,18 @@ lines and the data directory are the public surface.
   header of an API token and lets the token's user do only what their
   grants allow. Without `--mcp` nothing is served there. New dependency:
   `github.com/modelcontextprotocol/go-sdk`. See [docs/mcp.md](docs/mcp.md).
+- `kipp serve --mcp-oauth` (with `--mcp` and an `https://` `--base-url`)
+  makes kipp an OAuth 2.1 authorization server for `/mcp`, so that Claude
+  can use it as a custom connector from claude.ai, the apps and Claude
+  Code: discovery documents, `/oauth/authorize` with a consent page (the
+  scopes `kipp:read` and `kipp:build`), `/oauth/token` with PKCE S256 and
+  rotating refresh tokens, `/oauth/register` and clients named by the URL
+  of their metadata document, and `/oauth/revoke`. The Account page lists
+  the connected apps and a user's page does for an admin; a new password
+  or the deletion of the user ends them. The database gains tables for
+  clients, grants and token hashes (a migration; going back to a kipp
+  before it needs the copy the upgrade keeps). Without the flag nothing
+  changes.
 - The front page is an overview: what is running and queued, the jobs that
   are failing now and for how long, the flaky ones (green now, but changing
   colour often among their last 20 builds; `kipp serve --flaky-flips`, 4 by

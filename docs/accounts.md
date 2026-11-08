@@ -44,7 +44,9 @@ top right:
   browser it was changed in gets a new one;
 - make and revoke their own API tokens, each lasting 30, 90 or 365 days
   or for good;
-- end their other sessions.
+- end their other sessions;
+- with `--mcp-oauth`, see the apps they let in, such as a Claude custom
+  connector, and disconnect them ([Connect Claude](mcp.md#connect-claude-claudeai-the-apps-claude-code)).
 
 The theme picked at the top right of every page (light, dark, or the
 system's) is kept in a cookie, `kipp_theme`, which is only a look.
@@ -136,6 +138,9 @@ secret, or change any other login or secret, admin or not.
   already changes nothing and prints `<name>: password unchanged`, so a
   deploy script may set the same password on every run without logging
   anybody out.
+- A new password, whoever sets it, also ends the user's connected apps
+  (the OAuth grants of [the MCP endpoint](mcp.md)); deleting the user
+  deletes them.
 
 ## Secrets
 
@@ -218,7 +223,10 @@ password, says what was being done, and leads back to the page the change
 came from, where it is sent again; a wrong password there counts as a
 wrong login does. Changing one's own password needs the current one
 instead, and ending one's other sessions or reloading the job files needs
-neither. An API token never makes these changes.
+neither. An API token never makes these changes. Approving an app on the
+consent page ([Connect Claude](mcp.md#connect-claude-claudeai-the-apps-claude-code))
+asks for it too, and a login that leads straight to that page counts as
+having given it.
 
 ## The audit
 
