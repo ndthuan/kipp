@@ -133,10 +133,18 @@ func launcherDone(t *testing.T, s *served, next string) *served {
 	return s2
 }
 
+// untilBuildRuns waits until build 1 is running: one that is still queued is
+// counted as queued, not as running, by what the upgrade says of the wait.
+func untilBuildRuns(t *testing.T, s *served) {
+	t.Helper()
+	eventually(t, "build 1 runs", func() bool { return strings.Contains(kippGet(t, s, "/api/v1/builds/1"), `"status":"running"`) })
+}
+
 func TestAnUpgradeFollowsEveryStepWaitsForTheBuildAndTheNewServerSaysItIsDone(t *testing.T) {
 	fx := fakeUpgrade(t)
 	s := fx.serving(t, map[string]string{"busy.yml": busyJob})
 	ok(t, "", "run", "busy", "--url", s.url, "--token", s.token)
+	untilBuildRuns(t, s)
 	cmd := s.inBackground("upgrade")
 
 	argv := fx.restarted(t)
@@ -160,7 +168,9 @@ func TestAnUpgradeFollowsEveryStepWaitsForTheBuildAndTheNewServerSaysItIsDone(t 
 	s2 := launcherDone(t, s, et.Newer)
 	r := result(t, cmd)
 	eq(t, "exit", r.code, 0)
-	contains(t, r.out, "upgrade: preflight", "upgrade: waiting", "1 running", "upgrade: backup", "upgrade: done", "kipp "+et.Newer+" is running")
+	// The backup is over too soon for every poll to see it, so its line is
+	// not asked for; the backup itself was checked above.
+	contains(t, r.out, "upgrade: preflight", "upgrade: waiting", "1 running", "upgrade: done", "kipp "+et.Newer+" is running")
 	// Quiet ended with the process that held it.
 	_, out, _ := s2.kipp("quiet", "status")
 	contains(t, out, "quiet off")
@@ -273,6 +283,7 @@ func TestWithoutASafeRestartTheBuildsLostMustBeConfirmedAndThenItRestartsAtOnce(
 	fx := fakeUpgrade(t)
 	s := fx.serving(t, map[string]string{"slow.yml": slowJob4})
 	ok(t, "", "run", "slow", "--url", s.url, "--token", s.token)
+	untilBuildRuns(t, s)
 	code, _, errOut := s.kipp("upgrade", "--no-safe")
 	eq(t, "unconfirmed", code, 1)
 	contains(t, errOut, "1 running builds", "lost", "--yes")
