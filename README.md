@@ -179,6 +179,8 @@ rollback and what a failed upgrade looks like; a release can be
 - [Accounts and security](docs/accounts.md): users, grants, tokens,
   secrets, and how logins and secrets are protected.
 - [The API](docs/api.md): `/api/v1`, its errors, lists and routes.
+- [The MCP endpoint](docs/mcp.md): `--mcp`, for Claude and other MCP
+  clients, with the tools and how to connect.
 - [Commands](docs/cli.md): every `kipp` command, its flags and exit
   codes.
 - [Operations](docs/operations.md): running as a service, behind a proxy,

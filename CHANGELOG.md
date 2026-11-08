@@ -8,6 +8,13 @@ lines and the data directory are the public surface.
 
 ## Unreleased
 
+- `kipp serve --mcp` serves an MCP endpoint at `/mcp` (streamable HTTP, on
+  `--listen` only), so that Claude and other MCP clients can read the
+  overview, jobs, builds, logs, test results and the queue, and run,
+  rerun and cancel builds. It takes the `Authorization: Bearer kipp_...`
+  header of an API token and lets the token's user do only what their
+  grants allow. Without `--mcp` nothing is served there. New dependency:
+  `github.com/modelcontextprotocol/go-sdk`. See [docs/mcp.md](docs/mcp.md).
 - The front page is an overview: what is running and queued, the jobs that
   are failing now and for how long, the flaky ones (green now, but changing
   colour often among their last 20 builds; `kipp serve --flaky-flips`, 4 by

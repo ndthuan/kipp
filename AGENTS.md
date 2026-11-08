@@ -76,6 +76,9 @@ Others read these, so a change to one is a decision, not a refactor:
   from each fail `go test`. Run `make openapi` after editing the sources and
   commit `api/openapi.gen.yaml` with them. A test that serves a handler
   wraps it in `apispectest.Wrap`.
+- `/mcp`, served with `serve --mcp` and documented in `docs/mcp.md`: its
+  tools and their arguments. It is not under `/api/v1`, so `api/` does not
+  describe it; `internal/mcp` tests it directly.
 - CLI flags and exit codes.
 - The job file format.
 - The two reload lines in the server's log, "jobs reloaded" and "reload

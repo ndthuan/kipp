@@ -34,6 +34,7 @@ import (
 	"github.com/ndthuan/kipp/internal/enginepool"
 	"github.com/ndthuan/kipp/internal/github"
 	"github.com/ndthuan/kipp/internal/index"
+	"github.com/ndthuan/kipp/internal/mcp"
 	"github.com/ndthuan/kipp/internal/overview"
 	"github.com/ndthuan/kipp/internal/problem"
 	"github.com/ndthuan/kipp/internal/retain"
@@ -98,6 +99,10 @@ keeps the executable's own. A dev build ignores the directory.
 One server at a time uses a data directory: it holds a lock on it for as
 long as it runs. Only serve makes the directory and the database in it;
 the user, token and secret commands work on one a server has made.
+
+--mcp serves an MCP endpoint at /mcp, on --listen only, for Claude and other
+MCP clients. It takes the Authorization: Bearer header of an API token and
+lets the token's user do what their grants allow; see docs/mcp.md.
 `
 
 const (
@@ -144,6 +149,8 @@ type serveFlags struct {
 	cacheMax config.ByteSize
 	// noUpdateCheck is --no-update-check, or KIPP_NO_UPDATE_CHECK.
 	noUpdateCheck bool
+	// mcp is --mcp: the MCP endpoint at /mcp is served.
+	mcp bool
 }
 
 func parseServeFlags(args []string, stderr io.Writer) (*serveFlags, error) {
@@ -174,6 +181,7 @@ func parseServeFlags(args []string, stderr io.Writer) (*serveFlags, error) {
 		return nil, refused(err.Error())
 	}
 	fs.BoolVar(&f.noUpdateCheck, "no-update-check", noUpdate, "do not ask GitHub for the latest release (also KIPP_NO_UPDATE_CHECK=1)")
+	fs.BoolVar(&f.mcp, "mcp", false, "serve an MCP endpoint at /mcp for Claude and other MCP clients, authenticated by API tokens and limited to their users' grants (docs/mcp.md)")
 	var zone string
 	fs.StringVar(&zone, "timezone", "", "IANA `zone` a cron is read in when its job names none, like Europe/Paris (default the host's)")
 	positional, err := parseArgs(fs, args)
@@ -771,6 +779,9 @@ func (s *server) handler() http.Handler {
 		},
 	})
 	mux.Handle(webhook.Prefix, hooks.Handler())
+	if s.f.mcp {
+		mux.Handle(mcp.Path, mcp.New(mcp.Config{Service: a.Service(), Auth: au, Version: version.Version, BaseURL: s.f.baseURL, Logger: s.log}).Handler())
+	}
 	// With a listener of their own, the agents' calls are not on this one.
 	agents := s.hub.Handler()
 	if s.agentLn != nil {

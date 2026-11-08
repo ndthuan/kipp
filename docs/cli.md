@@ -76,6 +76,7 @@ directory.
 | `--ssh-key <file>` | the user's own under `~/.ssh` | The private key for `ssh://` engines that name none. |
 | `--artifacts-max <size>` | `50GB` | The most every build's artifacts come to; past it the oldest builds' are removed. |
 | `--cache-max <size>` | `20GB` | The most every cache entry comes to; past it the least recently restored are removed. |
+| `--mcp` | off | Serve an MCP endpoint at `/mcp` for Claude and other MCP clients, authenticated by API tokens and limited to their users' grants ([The MCP endpoint](mcp.md)). |
 | `--no-update-check` | off (also `KIPP_NO_UPDATE_CHECK=1` or `true`) | Do not ask GitHub for the latest release ([The update check](install.md#the-update-check)). Without it the server knows of no release to upgrade to. |
 
 Once it listens, it prints one line on stdout:
