@@ -23,6 +23,7 @@ import (
 	"github.com/ndthuan/kipp/internal/auth"
 	"github.com/ndthuan/kipp/internal/problem"
 	"github.com/ndthuan/kipp/internal/runner"
+	"github.com/ndthuan/kipp/internal/waitfor"
 )
 
 const boxToken = "kippa_box-token-for-tests"
@@ -38,13 +39,23 @@ type fixture struct {
 	handler atomic.Pointer[http.Handler]
 	mu      sync.Mutex
 	known   map[string]*Identity // by token hash
+	// clock is the hub's time, which stands still until a test moves it: a
+	// loaded machine delaying an agent's heartbeat then cannot make the hub
+	// think it silent.
+	clock atomic.Int64
 }
+
+func (f *fixture) now() time.Time { return time.Unix(0, f.clock.Load()) }
+
+// advance moves the hub's time on by d.
+func (f *fixture) advance(d time.Duration) { f.clock.Add(int64(d)) }
 
 func newFixture(t *testing.T, opts ...func(*Options)) *fixture {
 	t.Helper()
 	f := &fixture{t: t, known: map[string]*Identity{
 		auth.HashToken(boxToken): {Name: "box", Labels: []string{"linux"}, Executors: 2, Enabled: true},
 	}}
+	f.clock.Store(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).UnixNano())
 	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		(*f.handler.Load()).ServeHTTP(w, r)
 	}))
@@ -56,7 +67,7 @@ func newFixture(t *testing.T, opts ...func(*Options)) *fixture {
 // newHub puts a new hub behind the server, as a server that started again
 // would be.
 func (f *fixture) newHub(opts ...func(*Options)) *Hub {
-	o := Options{Version: "v-test", Log: quiet, Heartbeat: 100 * time.Millisecond, ClaimWait: 200 * time.Millisecond,
+	o := Options{Version: "v-test", Log: quiet, Now: f.now, Heartbeat: 100 * time.Millisecond, ClaimWait: 200 * time.Millisecond,
 		Standing: func(_ context.Context, hash string) (*Identity, error) {
 			f.mu.Lock()
 			defer f.mu.Unlock()
@@ -103,12 +114,7 @@ func (f *fixture) runAgentEnded(token, workdir string) (func() error, <-chan str
 
 func eventually(t *testing.T, what string, ok func() bool) {
 	t.Helper()
-	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
-		if ok() {
-			return
-		}
-	}
-	t.Fatalf("timed out waiting until %s", what)
+	waitfor.Until(t, what, ok)
 }
 
 // online waits until the standing agent box is online.
@@ -214,7 +220,7 @@ func TestCancellingAStageOnAnAgentKillsItThere(t *testing.T) {
 	t0 := time.Now()
 	cancel()
 	code, _ := p.Wait()
-	if code == 0 || time.Since(t0) > 12*time.Second {
+	if code == 0 || time.Since(t0) > waitfor.Safety {
 		t.Fatalf("code %d after %v", code, time.Since(t0))
 	}
 }
@@ -249,10 +255,10 @@ func TestAnAgentThatStopsCallingGoesOfflineAndFailsItsStage(t *testing.T) {
 	p, out := f.start(context.Background(), "echo started; sleep 30", StageMeta{})
 	eventually(t, "the stage started", func() bool { return strings.Contains(out.String(), "started") })
 	f.handler.Store(new(http.Handler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusServiceUnavailable) }))))
-	t0 := time.Now()
+	f.advance((Missed + 1) * 100 * time.Millisecond)
 	code, err := p.Wait()
-	if code != -1 || !errors.Is(err, ErrOffline) || time.Since(t0) > 2*time.Second {
-		t.Fatalf("code %d err %v after %v", code, err, time.Since(t0))
+	if code != -1 || !errors.Is(err, ErrOffline) {
+		t.Fatalf("code %d err %v", code, err)
 	}
 	if f.hub.Free(Who{Name: "box"}) || f.hub.Agents()[0].Online {
 		t.Fatal("still online")
@@ -281,7 +287,7 @@ func TestAWrongTokenIsRefused(t *testing.T) {
 			if !errors.Is(err, agent.ErrTokenRefused) {
 				t.Fatalf("%s: %v", token, err)
 			}
-		case <-time.After(5 * time.Second):
+		case <-time.After(waitfor.Safety):
 			t.Fatalf("%s: the agent kept trying", token)
 		}
 	}
@@ -312,7 +318,7 @@ func TestABuildsTokenClaimsOnlyItsOwnStagesAndEndsWithTheBuild(t *testing.T) {
 	f.hub.EndBuild(7)
 	select {
 	case <-ended:
-	case <-time.After(5 * time.Second):
+	case <-time.After(waitfor.Safety):
 		t.Fatal("the agent of an ended build kept running")
 	}
 	if err := stop(); !errors.Is(err, agent.ErrTokenRefused) {
@@ -534,27 +540,15 @@ func TestAStageTheAgentNeverGotEndsAtItsHeartbeats(t *testing.T) {
 	f.call(http.MethodPost, "/api/v1/agent/connect", `{"Version":"v-test"}`)
 	p, _ := f.start(context.Background(), "echo ran", StageMeta{})
 	f.call(http.MethodGet, "/api/v1/agent/claim", "") // the answer is lost on the way
-	ended := make(chan struct{})
-	go func() {
-		defer close(ended)
-		if code, err := p.Wait(); code != -1 || !errors.Is(err, ErrLost) {
-			t.Errorf("code %d err %v", code, err)
-		}
-	}()
-	tick := time.NewTicker(20 * time.Millisecond)
-	defer tick.Stop()
-	for deadline := time.After(5 * time.Second); ; {
-		select {
-		case <-ended:
-			if !f.hub.Free(Who{Name: "box"}) {
-				t.Fatal("the lost stage still holds an executor")
-			}
-			return
-		case <-tick.C:
-			f.call(http.MethodPost, "/api/v1/agent/connect", `{"Version":"v-test","Running":[]}`)
-		case <-deadline:
-			t.Fatal("a stage the agent never got is still running")
-		}
+	// A heartbeat later the agent lists nothing it runs, which a stage claimed
+	// that long ago should be among.
+	f.advance(2 * 100 * time.Millisecond)
+	f.call(http.MethodPost, "/api/v1/agent/connect", `{"Version":"v-test","Running":[]}`)
+	if code, err := p.Wait(); code != -1 || !errors.Is(err, ErrLost) {
+		t.Fatalf("code %d err %v", code, err)
+	}
+	if !f.hub.Free(Who{Name: "box"}) {
+		t.Fatal("the lost stage still holds an executor")
 	}
 }
 
