@@ -12,6 +12,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/ndthuan/kipp/internal/waitfor"
 )
 
 func start(t *testing.T, ctx context.Context, command string) (Proc, *bytes.Buffer, string) {
@@ -27,27 +29,20 @@ func start(t *testing.T, ctx context.Context, command string) (Proc, *bytes.Buff
 
 func pidIn(t *testing.T, dir string) int {
 	t.Helper()
-	for range 40 {
-		if b, err := os.ReadFile(filepath.Join(dir, "pid")); err == nil && len(b) > 0 {
-			pid, err := strconv.Atoi(strings.TrimSpace(string(b)))
-			if err == nil {
-				return pid
-			}
+	pid := 0
+	waitfor.Until(t, "the stage wrote its pid", func() bool {
+		b, err := os.ReadFile(filepath.Join(dir, "pid"))
+		if err != nil {
+			return false
 		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	t.Fatal("no pid file")
-	return 0
+		pid, err = strconv.Atoi(strings.TrimSpace(string(b)))
+		return err == nil
+	})
+	return pid
 }
 
 func gone(pid int) bool {
-	for range 40 {
-		if err := syscall.Kill(pid, 0); err != nil || zombie(pid) {
-			return true
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	return false
+	return waitfor.Within(waitfor.Safety, func() bool { return syscall.Kill(pid, 0) != nil || zombie(pid) })
 }
 
 // zombie reports whether pid has exited and waits to be reaped. A killed

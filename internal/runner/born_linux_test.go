@@ -9,6 +9,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/ndthuan/kipp/internal/waitfor"
 )
 
 // The birth alone, a tick, is what a stranger with a reused pid can share
@@ -39,17 +41,10 @@ func TestALeaderThatDroppedItsEnvironmentIsLeftAlone(t *testing.T) {
 	p, _, dir := start(t, context.Background(), "echo $$ > $DIR/pid; exec env -i sleep 300")
 	defer p.Kill(100 * time.Millisecond)
 	pidIn(t, dir)
-	deadline := time.Now().Add(10 * time.Second)
-	for {
+	waitfor.Until(t, "the leader drops the mark with env -i", func() bool {
 		ours, _ := stillLeads(p.Group())
-		if !ours {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("the leader still carries the mark after env -i")
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+		return !ours
+	})
 	if killed, err := reap(p.Group(), time.Second); killed || !errors.Is(err, ErrNotProven) {
 		t.Fatalf("killed %v, err %v", killed, err)
 	}

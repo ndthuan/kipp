@@ -14,11 +14,13 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/ndthuan/kipp/internal/agentproto"
+	"github.com/ndthuan/kipp/internal/waitfor"
 )
 
 // The agent's own environment comes first, what the server sends after it
@@ -200,6 +202,8 @@ func TestAStageThatSaidItWasDoneIsNotKilledAfterwards(t *testing.T) {
 // and goes on, rather than ending and killing what it runs.
 func TestAClaimRefusedAsOfflineConnectsAgain(t *testing.T) {
 	var connects, claims atomic.Int32
+	secondClaim := make(chan struct{}) // closed when the agent claims again
+	var once sync.Once
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case agentproto.ConnectPath:
@@ -211,16 +215,27 @@ func TestAClaimRefusedAsOfflineConnectsAgain(t *testing.T) {
 				_ = json.NewEncoder(w).Encode(agentproto.Refusal{Error: "Bad Request"})
 				return
 			}
-			time.Sleep(20 * time.Millisecond)
-			_ = json.NewEncoder(w).Encode(agentproto.Claim{})
+			once.Do(func() { close(secondClaim) })
+			<-r.Context().Done() // a long-poll with nothing to give
 		}
 	}))
 	defer srv.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	err := Run(ctx, Config{URL: srv.URL, Token: "kippa_x", Workdir: t.TempDir(), Version: "v", Log: slog.New(slog.DiscardHandler), Retry: 10 * time.Millisecond})
-	if (err != nil && !errors.Is(err, context.DeadlineExceeded)) || ctx.Err() == nil {
+	ended := make(chan error, 1)
+	go func() {
+		ended <- Run(ctx, Config{URL: srv.URL, Token: "kippa_x", Workdir: t.TempDir(), Version: "v", Log: slog.New(slog.DiscardHandler), Retry: 10 * time.Millisecond})
+	}()
+	select {
+	case <-secondClaim:
+	case err := <-ended:
 		t.Fatalf("the agent ended on a claim refused as offline: %v", err)
+	case <-time.After(waitfor.Safety):
+		t.Fatal("the agent never claimed again")
+	}
+	cancel()
+	if err := <-ended; err != nil && !errors.Is(err, context.Canceled) {
+		t.Fatalf("the agent ended with %v", err)
 	}
 	if connects.Load() < 2 || claims.Load() < 2 {
 		t.Fatalf("connects %d claims %d", connects.Load(), claims.Load())
@@ -241,7 +256,7 @@ func TestAStageWhoseDoneTheServerNoLongerKnowsTakesItsWorkspace(t *testing.T) {
 			if claims.Add(1) == 1 {
 				claim.Assignment = &agentproto.Assignment{ID: "x", Job: "j", Number: 1, Stage: "s", Command: "echo x > f", Workspace: "j/1"}
 			} else {
-				time.Sleep(20 * time.Millisecond)
+				<-r.Context().Done() // a long-poll with nothing to give
 			}
 			_ = json.NewEncoder(w).Encode(claim)
 		case strings.HasSuffix(r.URL.Path, agentproto.LogSuffix):
@@ -264,17 +279,14 @@ func TestAStageWhoseDoneTheServerNoLongerKnowsTakesItsWorkspace(t *testing.T) {
 	}()
 	defer func() { cancel(); <-ended }()
 	ws := filepath.Join(dir, "j", "1")
-	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+	waitfor.Until(t, "the workspace of the stage the server forgot is removed", func() bool {
 		_, err := os.Stat(filepath.Join(ws, "f"))
-		if claims.Load() > 1 && errors.Is(err, os.ErrNotExist) {
-			if _, err := os.Stat(ws); errors.Is(err, os.ErrNotExist) {
-				return
-			}
+		if claims.Load() <= 1 || !errors.Is(err, os.ErrNotExist) {
+			return false
 		}
-		if time.Now().After(deadline) {
-			t.Fatal("the workspace of a stage the server forgot is left")
-		}
-	}
+		_, err = os.Stat(ws)
+		return errors.Is(err, os.ErrNotExist)
+	})
 }
 
 func TestKippAgentRunsMetricsCheck(t *testing.T) {
