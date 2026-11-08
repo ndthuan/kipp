@@ -8,6 +8,13 @@ lines and the data directory are the public surface.
 
 ## Unreleased
 
+- A pull request build could fail before its first stage with git's "could
+  not fetch ... from promisor remote" and "not our ref": `git merge` checks
+  the merged files out as it writes them, and in the blob-less clone its
+  prefetch asked the remote for a conflict blob it had just written, which
+  no remote has, failing the whole fetch. The merge is now made in the
+  object database (`git merge-tree`) and its result checked out afterwards.
+
 - A rollback after `brew upgrade`, or after a container was recreated from
   a newer image, no longer restores the old database and then hangs at
   "switching": the executable's own version is then as high as the running

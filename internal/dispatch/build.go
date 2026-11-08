@@ -866,8 +866,13 @@ func cloneURL(repo string) string {
 // runGit runs one git in dir, in a process group of its own that a cancel
 // kills.
 func runGit(ctx context.Context, dir string, out io.Writer, args ...string) error {
+	return runGitTo(ctx, dir, out, out, args...)
+}
+
+// runGitTo is runGit with git's stdout and stderr told apart.
+func runGitTo(ctx context.Context, dir string, stdout, stderr io.Writer, args ...string) error {
 	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...)
-	cmd.Stdout, cmd.Stderr = out, out
+	cmd.Stdout, cmd.Stderr = stdout, stderr
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
@@ -920,30 +925,46 @@ func gitMerge(ctx context.Context, dir, repo, base, baseCommit, head string, out
 // mergeHead merges refs/kipp/head into the checked-out base: ErrNoCleanMerge
 // for a conflict, once more after the one failure that is git's own.
 func mergeHead(ctx context.Context, dir string, out io.Writer) error {
-	mergeArgs := []string{"-c", "user.name=kipp", "-c", "user.email=kipp@localhost", "-c", "commit.gpgsign=false",
-		"-c", "core.hooksPath=/dev/null", "merge", "--quiet", "--no-ff", "--no-edit", "refs/kipp/head"}
 	for attempt := 0; ; attempt++ {
 		var said bytes.Buffer
-		err := runGit(ctx, dir, io.MultiWriter(out, &said), mergeArgs...)
+		err := mergeOnce(ctx, dir, io.MultiWriter(out, &said))
 		var exit *exec.ExitError
-		switch {
-		case ctx.Err() != nil || !errors.As(err, &exit):
-			return err
-		case exit.ExitCode() == 1:
-			return ErrNoCleanMerge
-		case attempt > 0 || exit.ExitCode() != 128 || !strings.Contains(said.String(), promisorFetchDied):
+		if ctx.Err() != nil || !errors.As(err, &exit) || attempt > 0 || exit.ExitCode() != 128 ||
+			!strings.Contains(said.String(), promisorFetchDied) {
 			return err
 		}
-		// Git's checkout prefetch of the merged tree sometimes asks the
-		// remote for a blob the merge wrote a moment before, which the
-		// remote never had, and dies. The merge is deterministic and the
-		// blob is on disk by now, so the same merge from the base again
-		// does not ask.
-		_, _ = fmt.Fprintln(out, "kipp: git died fetching an object the merge made; merging again")
-		if err := runGit(ctx, dir, out, "reset", "--quiet", "--hard", "refs/kipp/base"); err != nil {
-			return err
-		}
+		// Nothing was checked out, so the same merge can simply be made again.
+		_, _ = fmt.Fprintln(out, "kipp: git died fetching an object; merging again")
 	}
+}
+
+// mergeOnce makes the merge in the object database and only then checks the
+// result out. `git merge` writes the merged files (a conflict's blob among
+// them) and checks them out in one command, and in a blob-less clone the
+// checkout's prefetch of the blobs it lacks has been seen to list a blob
+// the merge had just written, which no remote has, so that the one fetch,
+// and the merge with it, died with "not our ref". merge-tree writes the
+// merged tree and nothing else, and the checkout then starts from a tree
+// that is all in the database: what it asks the remote for is blobs the
+// remote has.
+func mergeOnce(ctx context.Context, dir string, out io.Writer) error {
+	var tree bytes.Buffer
+	err := runGitTo(ctx, dir, &tree, out, "merge-tree", "--write-tree", "refs/kipp/base", "refs/kipp/head")
+	var exit *exec.ExitError
+	if errors.As(err, &exit) && exit.ExitCode() == 1 {
+		_, _ = out.Write(tree.Bytes())
+		return ErrNoCleanMerge
+	}
+	if err != nil {
+		return err
+	}
+	var commit bytes.Buffer
+	if err := runGitTo(ctx, dir, &commit, out, "-c", "user.name=kipp", "-c", "user.email=kipp@localhost",
+		"-c", "commit.gpgsign=false", "commit-tree", strings.TrimSpace(tree.String()),
+		"-p", "refs/kipp/base", "-p", "refs/kipp/head", "-m", "Merge the pull request's head into its base"); err != nil {
+		return err
+	}
+	return runGit(ctx, dir, out, "-c", "core.hooksPath=/dev/null", "checkout", "--quiet", "--detach", strings.TrimSpace(commit.String()))
 }
 
 // promisorFetchDied is what git prints, with exit 128, when the fetch of

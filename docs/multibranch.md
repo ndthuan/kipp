@@ -141,8 +141,10 @@ and never changes the build.
 Under `pull_requests: merge` (the default), a pull request's build builds
 its head merged into the tip of its base branch as of the build, merged
 by kipp itself: it fetches the base branch and the head with their
-history (`--filter=blob:none`, no `--depth`), checks the base tip out and
-runs `git merge --no-ff --no-edit` as `kipp <kipp@localhost>`. The base
+history (`--filter=blob:none`, no `--depth`), checks the base tip out,
+merges the head into it with `git merge-tree --write-tree` (git 2.38 or
+newer) and checks out the merge commit, made as `kipp <kipp@localhost>`
+with the base and the head as its parents. The base
 tip is fetched when the build starts, not taken from the event, so a base
 that moved since is the one merged into; GitHub's `refs/pull/<n>/merge`
 is not used, because GitHub makes it later and it can still be the merge

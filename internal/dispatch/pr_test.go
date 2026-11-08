@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -167,8 +168,8 @@ func TestMergeCommitKippWritesHasAShortSubjectAndKippAsItsAuthor(t *testing.T) {
 }
 
 // gitDyingOnItsFirstMerge puts a git ahead of the real one on PATH that
-// answers its first merge with said and exit 128, and counts the merges it
-// is asked for in the file it returns.
+// answers its first merge (the merge-tree that makes it) with said and exit
+// 128, and counts the merges it is asked for in the file it returns.
 func gitDyingOnItsFirstMerge(t *testing.T, said string) (merges string) {
 	t.Helper()
 	real, err := exec.LookPath("git")
@@ -178,7 +179,7 @@ func gitDyingOnItsFirstMerge(t *testing.T, said string) (merges string) {
 	bin := t.TempDir()
 	merges = filepath.Join(bin, "merges")
 	script := "#!/bin/sh\n" +
-		"for a in \"$@\"; do if [ \"$a\" = merge ]; then\n" +
+		"for a in \"$@\"; do if [ \"$a\" = merge-tree ]; then\n" +
 		"  echo m >> " + merges + "\n" +
 		"  if [ \"$(wc -l < " + merges + ")\" -eq 1 ]; then echo '" + said + "' >&2; exit 128; fi\n" +
 		"fi; done\nexec " + real + " \"$@\"\n"
@@ -215,6 +216,39 @@ func TestMergeTriesAgainWhenGitDiesFetchingAnObjectItMade(t *testing.T) {
 	}
 	if n := mergesAsked(merges); n != 2 || !strings.Contains(out.String(), "merging again") {
 		t.Fatalf("%d merges, log %q", n, out.String())
+	}
+}
+
+// `git merge` writes the merged files and checks them out in one command,
+// and in a blob-less clone its checkout prefetch has asked the remote for a
+// conflict blob the merge had just written: the merge is made in the object
+// database and its result checked out afterwards.
+func TestMergeDoesNotCheckOutWhileItMerges(t *testing.T) {
+	r, base, head := prRepo(t, treeStages)
+	real, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("no git on this machine")
+	}
+	bin := t.TempDir()
+	asked := filepath.Join(bin, "asked")
+	script := "#!/bin/sh\necho \"$*\" >> " + asked + "\nexec " + real + " \"$@\"\n"
+	if err := os.WriteFile(filepath.Join(bin, "git"), []byte(script), 0o700); err != nil { //nolint:gosec // a script for the test to run
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	dir := t.TempDir()
+	gotBase, gotHead, err := gitMerge(context.Background(), dir, "file://"+r.dir, "main", "", head, io.Discard)
+	if err != nil || gotBase != base || gotHead != head {
+		t.Fatalf("%q %q %v, want the merge of %s into %s", gotBase, gotHead, err, head, base)
+	}
+	data, _ := os.ReadFile(asked) //nolint:gosec // the test's own file
+	for line := range strings.SplitSeq(string(data), "\n") {
+		if slices.Contains(strings.Fields(line)[:min(len(strings.Fields(line)), 4)], "merge") {
+			t.Fatalf("git was asked %q: a merge that checks out as it goes", line)
+		}
+	}
+	if !strings.Contains(string(data), "merge-tree") {
+		t.Fatalf("git was never asked to merge-tree: %s", data)
 	}
 }
 
