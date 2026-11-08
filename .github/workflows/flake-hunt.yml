@@ -1,0 +1,58 @@
+name: flake-hunt
+
+# Once a week, off the hours of pushes, and by hand: the whole suite run
+# over and over, shuffled and under load, to find the tests that fail one
+# run in a hundred before a push or a release finds them. Never on a push
+# or a pull request, and nothing waits for it: it is not part of the gate.
+#
+# A failing test turns the job red and is listed in the job summary with
+# how often it failed, its -cpu value, the shuffle seed and its first
+# lines. Nothing else is told; GitHub's note of a failed scheduled run is
+# the alert.
+on:
+  schedule:
+    - cron: "17 2 * * 0" # Sundays, 02:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  hunt:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        cpu: ["1", "4"]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 240
+    env:
+      CPU: ${{ matrix.cpu }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      # The same tests as the gate's, with its flags (make test) except the
+      # profile, repeated and shuffled. Two busy loops hold the cores while
+      # the packages run side by side, which is the load the flakes seen so
+      # far showed up under. -timeout is for one package's binary, which
+      # runs all of its repeats.
+      - name: hunt
+        run: |
+          burn() { while :; do :; done; }
+          burn & burn &
+          burners="$(jobs -p)"
+          status=0
+          go test -race -json -count=20 -shuffle=on -cpu "$CPU" -timeout 120m ./... > "$RUNNER_TEMP/hunt.json" || status=$?
+          # shellcheck disable=SC2086 # pids, word by word
+          kill $burners
+          echo "go test exited $status"
+          go run ./internal/devtools/flakes -summary "$GITHUB_STEP_SUMMARY" "$CPU=$RUNNER_TEMP/hunt.json"
+          exit "$status"

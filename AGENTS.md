@@ -148,3 +148,13 @@ smoke test against a binary or an image of your own.
 Changes come as pull requests with the gate green; CI runs it on Linux and
 macOS, builds the archives and the image, and smoke-runs them
 (`.github/workflows/ci.yml`). CONTRIBUTING.md says how to send one.
+
+`.github/workflows/flake-hunt.yml` runs once a week and on demand, never on
+a push or a pull request, and is not a gate: it runs the whole suite as
+`go test -race -count=20 -shuffle=on` with `-cpu 1` and `-cpu 4`, on Linux
+and macOS, under extra CPU load, to find the tests that fail now and then
+before a push does. A failing test turns the job red and is listed in the
+job summary (package, test, failed runs, `-cpu`, shuffle seed, first
+lines), built by `internal/devtools/flakes` from `go test -json`. A test it
+reports is fixed at the root, a race in the test or a bug in the code,
+never retried or skipped.

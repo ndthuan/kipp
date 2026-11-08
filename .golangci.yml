@@ -54,6 +54,10 @@ linters:
       # The coverage tool reads the reports its caller names.
       - path: ^internal/devtools/coverage/main\.go$
         text: "G304"
+      # The same for the flake summary: the go test output its caller names,
+      # and the job summary file the runner names.
+      - path: ^internal/devtools/flakes/main(_test)?\.go$
+        text: "G304"
       # The CLI talks to the server its user names (--url, KIPP_URL) and
       # reads the token from its user's config directory.
       - path: ^internal/cli/client\.go$
