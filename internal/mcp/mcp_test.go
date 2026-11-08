@@ -25,6 +25,7 @@ import (
 	"github.com/ndthuan/kipp/internal/overview"
 	"github.com/ndthuan/kipp/internal/runner"
 	"github.com/ndthuan/kipp/internal/store"
+	"github.com/ndthuan/kipp/internal/waitfor"
 )
 
 const secretValue = "an-obvious-test-secret"
@@ -40,6 +41,7 @@ var jobFiles = map[string]string{
 }
 
 type env struct {
+	d       *dispatch.Dispatcher
 	srv     *httptest.Server
 	st      *store.Store
 	au      *auth.Service
@@ -90,7 +92,7 @@ func newEnvAt(t *testing.T, verify Verifier, metadata string) *env {
 	m := New(Config{Service: a.Service(), Auth: au, Verify: verify, ResourceMetadataURL: metadata, Version: "test", BaseURL: "https://ci.example.com", Logger: quiet})
 	mux := http.NewServeMux()
 	mux.Handle(Path, m.Handler())
-	e := &env{st: st, au: au, srv: httptest.NewServer(mux)}
+	e := &env{d: d, st: st, au: au, srv: httptest.NewServer(mux)}
 	t.Cleanup(func() { stop(); <-stopped; e.srv.Close(); _ = st.Close() })
 	e.admin = e.token(t, "admin", true, nil, nil)
 	e.viewer = e.token(t, "viewer", false, map[string][]string{"smoke": {"view"}}, nil)
@@ -188,19 +190,21 @@ func refused(t *testing.T, s *sdk.ClientSession, tool string, args map[string]an
 	}
 }
 
-// ended waits for the build to end and returns it.
+// ended waits for the build to end, and for what is written after its
+// status, and returns it.
 func (e *env) ended(t *testing.T, job string, number int) *store.Build {
 	t.Helper()
-	for range 600 {
-		b, err := e.st.BuildByNumber(context.Background(), job, number)
-		if err == nil && b.Status.Terminal() {
-			time.Sleep(100 * time.Millisecond) // what is written after the status
-			return b
-		}
-		time.Sleep(50 * time.Millisecond)
+	b, err := e.st.BuildByNumber(context.Background(), job, number)
+	if err != nil {
+		t.Fatalf("%s #%d: %v", job, number, err)
 	}
-	t.Fatalf("%s #%d did not end", job, number)
-	return nil
+	ctx, cancel := context.WithTimeout(context.Background(), waitfor.Safety)
+	defer cancel()
+	b, err = e.d.Wait(ctx, b.ID)
+	if err != nil {
+		t.Fatalf("%s #%d did not end: %v", job, number, err)
+	}
+	return b
 }
 
 // built runs a job as the admin and waits for its build to end.

@@ -16,6 +16,7 @@ import (
 	et "github.com/ndthuan/kipp/internal/upgrade/engine/enginetest"
 	"github.com/ndthuan/kipp/internal/upgrade/launch"
 	"github.com/ndthuan/kipp/internal/upgrade/state"
+	"github.com/ndthuan/kipp/internal/waitfor"
 )
 
 // upgradeEnv is a server running a release, with an engine that knows a
@@ -274,7 +275,7 @@ func TestTheCardShowsTheManualLinesWhereTheEngineCannotUpgrade(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 	host, _ := url.Parse(srv.URL)
-	chk := update.New(update.Options{Current: et.Running, Base: srv.URL, DownloadBase: srv.URL, Hosts: []string{host.Hostname()}, Insecure: true, Timeout: 5 * time.Second})
+	chk := update.New(update.Options{Current: et.Running, Base: srv.URL, DownloadBase: srv.URL, Hosts: []string{host.Hostname()}, Insecure: true, Timeout: waitfor.Safety})
 	must(t, chk.Check(context.Background()))
 	for _, c := range []struct{ origin, line string }{
 		{"Homebrew", "brew upgrade kipp"},

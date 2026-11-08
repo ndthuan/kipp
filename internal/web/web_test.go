@@ -34,6 +34,7 @@ import (
 	"github.com/ndthuan/kipp/internal/overview"
 	"github.com/ndthuan/kipp/internal/runner"
 	"github.com/ndthuan/kipp/internal/store"
+	"github.com/ndthuan/kipp/internal/waitfor"
 )
 
 // htmxSHA256 is static/htmx.min.js as published in the npm package
@@ -159,7 +160,7 @@ func (e *env) anon(t *testing.T) *http.Client {
 	jar, err := cookiejar.New(nil)
 	must(t, err)
 	c.Jar = jar
-	c.Timeout = 20 * time.Second
+	c.Timeout = waitfor.Safety
 	c.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	return &c
 }
@@ -281,7 +282,7 @@ func (e *env) at(t *testing.T, id int64) string {
 
 func (e *env) wait(t *testing.T, id int64) *store.Build {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), waitfor.Safety)
 	defer cancel()
 	b, err := e.d.Wait(ctx, id)
 	must(t, err)
@@ -292,12 +293,7 @@ func (e *env) wait(t *testing.T, id int64) *store.Build {
 // is final: the tests and the hook's log.
 func eventually(t *testing.T, what string, ok func() bool) {
 	t.Helper()
-	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
-		if ok() {
-			return
-		}
-	}
-	t.Fatalf("never happened: %s", what)
+	waitfor.Until(t, what, ok)
 }
 
 func TestALoginLeadsBackToThePageAskedForAndThePagesShowTheBuild(t *testing.T) {
@@ -2035,7 +2031,7 @@ func TestABrowserOnTheServersMachineLogsInOverPlainHTTPAndAProxiedOneNeverByThat
 	e := site(t)
 	plain := httptest.NewServer(e.srv.Config.Handler)
 	t.Cleanup(plain.Close)
-	c := &http.Client{Timeout: 20 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	c := &http.Client{Timeout: waitfor.Safety, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	login := func(hdr ...string) []*http.Cookie {
 		t.Helper()
 		req, err := http.NewRequest(http.MethodPost, plain.URL+"/login", strings.NewReader(url.Values{"name": {"admin"}, "password": {"pw"}}.Encode()))
@@ -2189,13 +2185,17 @@ func (e *env) lockJobs(t *testing.T) {
 // queued waits until the dispatcher has n builds running and m queued.
 func (e *env) queued(t *testing.T, running, queued int) {
 	t.Helper()
-	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+	timeout := time.After(waitfor.Safety)
+	for {
+		changes := e.d.Changes()
 		q, err := e.d.Queue(context.Background())
 		must(t, err)
 		if len(q.Running) == running && len(q.Queued) == queued && (running == 0 || len(q.Running[0].Stages) > 0) {
 			return
 		}
-		if time.Now().After(deadline) {
+		select {
+		case <-changes:
+		case <-timeout:
 			t.Fatalf("never %d running and %d queued: %+v", running, queued, q)
 		}
 	}
