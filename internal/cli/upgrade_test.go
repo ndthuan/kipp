@@ -294,7 +294,11 @@ func TestABadSignatureStopsTheUpgradeWithNothingDownloadedKeptAndNothingRestarte
 	s := fx.serving(t, map[string]string{"busy.yml": busyJob})
 	code, out, errOut := s.kipp("upgrade")
 	eq(t, "exit", code, 1)
-	contains(t, out, "upgrade: preflight")
+	// The signature is refused so soon that the answer to the request may
+	// already say failed, and the first status printed is the one it carries.
+	if !strings.Contains(out, "upgrade: preflight") {
+		contains(t, out, "upgrade: failed")
+	}
 	contains(t, errOut, "signature")
 	des, _ := os.ReadDir(state.BinDir(s.data))
 	eq(t, "files in bin/", len(des), 0)
