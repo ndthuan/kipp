@@ -76,6 +76,9 @@ echo "smoke: $out"
 # The first line is the version; the lines after it say where kipp came from.
 got=$(printf '%s\n' "$out" | head -n 1)
 [ -z "$want" ] || [ "$got" = "kipp $want" ] || fail "kipp version says '$got', want 'kipp $want'"
+if [ "$mode" = image ]; then
+	printf '%s\n' "$out" | grep -q '^installed from: Docker image$' || fail "the image does not say it is a Docker image: $out"
+fi
 
 # The server is up once its health answers; the image's from inside.
 health() {

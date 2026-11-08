@@ -17,6 +17,9 @@
 FROM --platform=$BUILDPLATFORM golang:1.27-trixie@sha256:c65ecfe613b539ac74c62a4c3b2c27e8f8a6076384c8f27e8a3c0f3be17cc385 AS build
 ARG TARGETOS TARGETARCH
 ARG VERSION=dev
+# Only scripts/smoke-upgrade.sh sets TAGS (to kipptest, for the doors a test
+# of the upgrade needs); the published image is built without it.
+ARG TAGS=
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -27,7 +30,7 @@ RUN set -eu; \
       CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -trimpath -buildvcs=false -ldflags "$ldflags" \
         -o internal/agentbin/bin/kipp-agent_linux_$arch ./cmd/kipp-agent; \
     done; \
-    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -buildvcs=false -ldflags "$ldflags" \
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build ${TAGS:+-tags "$TAGS"} -trimpath -buildvcs=false -ldflags "$ldflags" \
       -o /out/kipp ./cmd/kipp
 
 FROM debian:trixie-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4
@@ -43,6 +46,9 @@ RUN apt-get update \
 COPY --from=build /out/kipp /usr/local/bin/kipp
 COPY LICENSE THIRD_PARTY.md /usr/share/doc/kipp/
 
+# Names the image as the install source: the Server page and `kipp version`
+# say so, and an upgrade keeps its binary in the data volume.
+ENV KIPP_INSTALL_SOURCE=docker
 USER kipp
 WORKDIR /var/lib/kipp
 VOLUME ["/var/lib/kipp", "/etc/kipp"]

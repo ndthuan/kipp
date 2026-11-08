@@ -287,3 +287,27 @@ func TestTheReleaseWorkflowChecksTheKeySignsAndPublishesTheSignature(t *testing.
 		t.Error("the signing key is not in exactly one step's environment")
 	}
 }
+
+func TestTheUpgradeSmokeSaysNotVerifiedWithoutDocker(t *testing.T) {
+	cmd := exec.Command("/bin/sh", "smoke-upgrade.sh")
+	cmd.Env = []string{"PATH=" + t.TempDir()}
+	out, err := cmd.CombinedOutput()
+	if err != nil || !strings.Contains(string(out), "NOT VERIFIED") {
+		t.Fatalf("%v: %s", err, out)
+	}
+}
+
+// The test doors are compiled in by a build argument that only the smoke
+// sets, and the image names its install source.
+func TestTheImageTakesTestTagsOnlyByBuildArgumentAndNamesItsSource(t *testing.T) {
+	b, err := os.ReadFile("../Dockerfile")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(b)
+	for _, want := range []string{"\nARG TAGS=\n", "ENV KIPP_INSTALL_SOURCE=docker\n", `${TAGS:+-tags "$TAGS"}`} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the Dockerfile lacks %q", want)
+		}
+	}
+}

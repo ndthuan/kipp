@@ -42,9 +42,11 @@ cover:   ## coverage.json from coverage.out, and the total against COVERAGE_BASE
 # The engine tests run against a real Docker engine when KIPP_TEST_DOCKER
 # names one (unix://, tcp:// or ssh://, as kipp engine add takes it), with
 # KIPP_TEST_AGENT_HOST an address of this machine a container there
-# reaches; the fake engine covers the same calls in test.
+# reaches; the fake engine covers the same calls in test. The end-to-end
+# smoke of the upgrade (scripts/smoke-upgrade.sh) runs in containers on the
+# same engine.
 docker: agents   ## the engine tests against the engine KIPP_TEST_DOCKER names
-	@if [ -n "$$KIPP_TEST_DOCKER" ]; then $(GO) test -race -count=1 -tags dockerreal ./internal/engine/... ./internal/enginepool/... && echo "docker: verified against $$KIPP_TEST_DOCKER"; else echo "docker: NOT VERIFIED (KIPP_TEST_DOCKER not set)"; fi
+	@if [ -n "$$KIPP_TEST_DOCKER" ]; then $(GO) test -race -count=1 -tags dockerreal ./internal/engine/... ./internal/enginepool/... && sh scripts/smoke-upgrade.sh && echo "docker: verified against $$KIPP_TEST_DOCKER"; else echo "docker: NOT VERIFIED (KIPP_TEST_DOCKER not set)"; fi
 
 # build.js, copy.js, metrics.js, nav.js, queue.js, scopes.js, theme.js and upgrade.js run in a browser; node stands in for one when it is here.
 js:   ## the tests of the page scripts in internal/web/static under node
