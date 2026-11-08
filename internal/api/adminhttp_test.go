@@ -144,7 +144,11 @@ func TestServerAnswersWhatServeSaysWithTheJobsLoaded(t *testing.T) {
 	e := newEnv(t)
 	var got map[string]any
 	text := e.decode(t, "/api/v1/admin/server", &got)
-	utc(t, text, "started_at", "last_reload_at")
+	utc(t, text, "started_at", "last_reload_at", "checked_at")
+	if got["origin"] != "Homebrew" || got["update_check"] != true || got["latest"] != "v9.9.9" || got["upgradable"] != true ||
+		got["notes_url"] != "https://github.com/ndthuan/kipp/releases/tag/v9.9.9" || got["checked_at"] != "2026-01-02T03:04:05.000Z" {
+		t.Fatalf("the update fields: %v", got)
+	}
 	if got["version"] != "test" || got["listen"] != "127.0.0.1:8085" || got["executors"] != float64(4) || got["jobs"] != float64(len(jobFiles)) ||
 		got["free_disk_bytes"] != nil || got["last_reload_error"] != "" {
 		t.Fatalf("%v", got)
@@ -236,5 +240,16 @@ func TestSecretsAnswerScopesTheHintAndWhatIsOutOfScope(t *testing.T) {
 	e.decode(t, "/api/v1/admin/secrets", &got)
 	if len(got.OutOfScope) != 1 || got.OutOfScope[0]["name"] != "TOKEN" || fmt.Sprint(got.OutOfScope[0]["jobs"]) != "[deploy]" {
 		t.Fatalf("%v", got.OutOfScope)
+	}
+}
+
+func TestServerSaysNullForCheckedAtBeforeAnyAnswerAndEmptyForNoNewerRelease(t *testing.T) {
+	out := toServerJSON(&ServerInfo{Version: "v1.0.0", Origin: "Docker image", UpdateCheck: true})
+	b, err := json.Marshal(out)
+	must(t, err)
+	var got map[string]any
+	must(t, json.Unmarshal(b, &got))
+	if got["checked_at"] != nil || got["latest"] != "" || got["notes_url"] != "" || got["upgradable"] != false || got["origin"] != "Docker image" {
+		t.Fatalf("%v", got)
 	}
 }

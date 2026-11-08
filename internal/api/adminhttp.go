@@ -72,6 +72,12 @@ type serverJSON struct {
 	LastReloadAt    stamp   `json:"last_reload_at"`
 	LastReloadError string  `json:"last_reload_error"`
 	Jobs            int     `json:"jobs"`
+	Origin          string  `json:"origin"`
+	UpdateCheck     bool    `json:"update_check"`
+	Latest          string  `json:"latest"`
+	NotesURL        string  `json:"notes_url"`
+	Upgradable      bool    `json:"upgradable"`
+	CheckedAt       *stamp  `json:"checked_at"`
 }
 
 type auditJSON struct {
@@ -117,7 +123,9 @@ func toServerJSON(info *ServerInfo) serverJSON {
 		DefaultRunsOn: append([]string{}, info.DefaultRunsOn...), AgentEnv: append([]string{}, info.AgentEnv...),
 		AgentURL: info.AgentURL, AgentListen: info.AgentListen, Shell: info.Shell,
 		SessionTTLSeconds: int64(info.SessionTTL / time.Second), TimeZone: info.TimeZone, DataDir: info.DataDir, JobsDir: info.JobsDir,
-		LastReloadAt: stampOf(info.LastReloadAt), LastReloadError: info.LastReloadError, Jobs: info.Jobs}
+		LastReloadAt: stampOf(info.LastReloadAt), LastReloadError: info.LastReloadError, Jobs: info.Jobs,
+		Origin: info.Origin, UpdateCheck: info.UpdateCheck, Latest: info.Latest, NotesURL: info.NotesURL, Upgradable: info.Upgradable,
+		CheckedAt: stampSince(info.CheckedAt)}
 	if info.FreeDiskKnown {
 		out.FreeDiskBytes = new(info.FreeDisk)
 	}

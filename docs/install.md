@@ -163,6 +163,25 @@ the server runs as, while the server runs or not. Log in as `admin` with
 that password; everyone else is added on the Users page or with
 `kipp user add`.
 
+## The update check
+
+A server of a release (not a dev build) asks GitHub whether a newer one
+exists: one unauthenticated `GET` of
+`https://api.github.com/repos/ndthuan/kipp/releases/latest` when it starts
+and about every 12 hours after. The request carries what any HTTP request
+does, including a `User-Agent` of `kipp/<version>`, and nothing about you,
+your jobs or your install. The Server page and
+`GET /api/v1/admin/server` then say which version is the newest, link its
+release notes, and whether kipp can upgrade to it (only a release with a
+signed `SHA256SUMS.sig` can). The answer is kept in `update-check.json` in
+the data directory, so a restart does not ask again inside the interval.
+A server that cannot reach GitHub, or is refused, stays silent and tries
+again later.
+
+It is on by default. Turn it off with `kipp serve --no-update-check`, or
+with `KIPP_NO_UPDATE_CHECK=1` in the server's environment; the server then
+makes no request at all. `kipp version` never asks.
+
 ## Limits
 
 - Windows is not supported, for the server or for an agent.

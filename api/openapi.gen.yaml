@@ -3727,6 +3727,8 @@ components:
         builds:
           description: The builds with something running at once.
           type: integer
+        checked_at:
+          $ref: "#/components/schemas/NullableTimestamp"
         data_dir:
           type: string
         db_size_bytes:
@@ -3759,7 +3761,16 @@ components:
         last_reload_error:
           description: Why the last read of the job files was refused; empty when it was taken.
           type: string
+        latest:
+          description: The latest release's version when it is newer than `version`; empty when it is not, or when none is known.
+          type: string
         listen:
+          type: string
+        notes_url:
+          description: The page of the release in `latest`; empty when `latest` is.
+          type: string
+        origin:
+          description: Where the running binary came from, such as Homebrew, Docker image, or release archive or build.
           type: string
         schema:
           description: The database's schema version.
@@ -3772,6 +3783,12 @@ components:
           $ref: "#/components/schemas/Timestamp"
         timezone:
           type: string
+        update_check:
+          description: Whether the server looks for newer releases; false with `--no-update-check`.
+          type: boolean
+        upgradable:
+          description: Whether the release in `latest` carries the signed checksums an upgrade needs.
+          type: boolean
         version:
           type: string
       required:
@@ -3797,6 +3814,12 @@ components:
         - last_reload_at
         - last_reload_error
         - jobs
+        - origin
+        - update_check
+        - latest
+        - notes_url
+        - upgradable
+        - checked_at
       type: object
     Stage:
       additionalProperties: false

@@ -24,6 +24,12 @@ required:
   - last_reload_at
   - last_reload_error
   - jobs
+  - origin
+  - update_check
+  - latest
+  - notes_url
+  - upgradable
+  - checked_at
 properties:
   version:
     type: string
@@ -84,3 +90,20 @@ properties:
   jobs:
     type: integer
     description: How many jobs are loaded.
+  origin:
+    type: string
+    description: Where the running binary came from, such as Homebrew, Docker image, or release archive or build.
+  update_check:
+    type: boolean
+    description: Whether the server looks for newer releases; false with `--no-update-check`.
+  latest:
+    type: string
+    description: The latest release's version when it is newer than `version`; empty when it is not, or when none is known.
+  notes_url:
+    type: string
+    description: The page of the release in `latest`; empty when `latest` is.
+  upgradable:
+    type: boolean
+    description: Whether the release in `latest` carries the signed checksums an upgrade needs.
+  checked_at:
+    $ref: NullableTimestamp.yaml

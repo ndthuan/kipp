@@ -95,7 +95,9 @@ func newEnv(t *testing.T, tune ...func(*API)) *env {
 		},
 		Seal: func(name string, value []byte) ([]byte, error) { return secretbox.Seal(testSecretKey, name, value) },
 		ServerInfo: func() ServerInfo {
-			return ServerInfo{Version: "test", Listen: "127.0.0.1:8085", Executors: 4, DataDir: dir}
+			return ServerInfo{Version: "test", Listen: "127.0.0.1:8085", Executors: 4, DataDir: dir,
+				Origin: "Homebrew", UpdateCheck: true, Latest: "v9.9.9", NotesURL: "https://github.com/ndthuan/kipp/releases/tag/v9.9.9",
+				Upgradable: true, CheckedAt: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)}
 		},
 		Listen: "127.0.0.1:0",
 	})

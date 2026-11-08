@@ -8,6 +8,7 @@ import (
 	"io"
 
 	"github.com/ndthuan/kipp/internal/cache"
+	"github.com/ndthuan/kipp/internal/update"
 	"github.com/ndthuan/kipp/internal/version"
 )
 
@@ -77,6 +78,7 @@ func cmdVersion(args []string, _ io.Reader, stdout, stderr io.Writer) int {
 		return exitFor(err)
 	}
 	say(stdout, "kipp %s", version.Version)
+	say(stdout, "installed from: %s", update.Origin())
 	return 0
 }
 

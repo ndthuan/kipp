@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -36,6 +37,7 @@ import (
 	"github.com/ndthuan/kipp/internal/runner"
 	"github.com/ndthuan/kipp/internal/secretbox"
 	"github.com/ndthuan/kipp/internal/store"
+	"github.com/ndthuan/kipp/internal/update"
 	"github.com/ndthuan/kipp/internal/version"
 	"github.com/ndthuan/kipp/internal/web"
 	"github.com/ndthuan/kipp/internal/webhook"
@@ -73,6 +75,13 @@ reaches them at --agent-url, which it must be given, on --listen or on
 A cron is read in its job's timezone, else in --timezone, else in the
 host's zone (TZ, or /etc/localtime). The pages show times in --timezone,
 else the host's zone, and the retention sweep runs at 03:30 there.
+
+The server asks GitHub's releases API for the latest release at start and
+about every 12 hours, one unauthenticated GET that sends nothing about you
+or this install but a User-Agent of kipp/<version>, and says on the Server
+page when a newer one exists. A build that is not a release (dev) never
+asks. --no-update-check, or KIPP_NO_UPDATE_CHECK=1 in the environment,
+turns it off.
 
 One server at a time uses a data directory: it holds a lock on it for as
 long as it runs. Only serve makes the directory and the database in it;
@@ -121,6 +130,8 @@ type serveFlags struct {
 	artifactsMax config.ByteSize
 	// cacheMax is the most every cache entry comes to.
 	cacheMax config.ByteSize
+	// noUpdateCheck is --no-update-check, or KIPP_NO_UPDATE_CHECK.
+	noUpdateCheck bool
 }
 
 func parseServeFlags(args []string, stderr io.Writer) (*serveFlags, error) {
@@ -145,6 +156,11 @@ func parseServeFlags(args []string, stderr io.Writer) (*serveFlags, error) {
 	passEnv := fs.String("pass-env", strings.Join(dispatch.DefaultPassEnv, ","), "`names`, comma-separated, of the server's environment variables a stage is given; NAME_* for a prefix, * for all")
 	fs.Var(&f.artifactsMax, "artifacts-max", "the most every build's artifacts come to, a `size` like 50GB; past it the oldest builds' are removed")
 	fs.Var(&f.cacheMax, "cache-max", "the most every cache entry comes to, a `size` like 20GB; past it the least recently restored are removed")
+	noUpdate, err := envBool("KIPP_NO_UPDATE_CHECK")
+	if err != nil {
+		return nil, refused(err.Error())
+	}
+	fs.BoolVar(&f.noUpdateCheck, "no-update-check", noUpdate, "do not ask GitHub for the latest release (also KIPP_NO_UPDATE_CHECK=1)")
 	var zone string
 	fs.StringVar(&zone, "timezone", "", "IANA `zone` a cron is read in when its job names none, like Europe/Paris (default the host's)")
 	positional, err := parseArgs(fs, args)
@@ -186,6 +202,19 @@ func parseServeFlags(args []string, stderr io.Writer) (*serveFlags, error) {
 		f.zone = hostZone(tz, set, "/etc/localtime")
 	}
 	return f, nil
+}
+
+// envBool reads a true or false from the environment; unset is false.
+func envBool(name string) (bool, error) {
+	v := os.Getenv(name)
+	if v == "" {
+		return false, nil
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return false, fmt.Errorf("%s is true or false, not %q", name, v)
+	}
+	return b, nil
 }
 
 // parseAgentFlags reads the flags of where the server's stages run.
@@ -266,6 +295,10 @@ func hostZone(tz string, set bool, localtime string) *time.Location {
 	return z
 }
 
+// updateOptions is update.Production, a variable so that a test can have
+// the checker ask a fake instead of GitHub.
+var updateOptions = update.Production
+
 // listen is net.Listen, a variable so that a test can have the listener
 // say it took an address it did not.
 var listen = net.Listen
@@ -307,6 +340,9 @@ type server struct {
 	publicURL string
 	// listenAddr is the address taken, the port the system picked included.
 	listenAddr string
+
+	// updates asks for newer releases; nil with --no-update-check.
+	updates *update.Checker
 
 	// startedAt is when the server began to open its data directory.
 	startedAt time.Time
@@ -438,6 +474,9 @@ func (s *server) listen(ctx context.Context, snap *config.Snapshot) (net.Listene
 		agentURL = s.f.agentURL
 	}
 	s.apps = github.NewApps(s.f.githubAPI)
+	if !s.f.noUpdateCheck {
+		s.updates = update.New(updateOptions(version.Version, s.f.data, s.log))
+	}
 	s.d = dispatch.New(s.st, runner.Local{Shell: s.f.shell}, dispatch.Options{
 		DataDir: s.f.data, Executors: s.f.executors, RunsNoStages: s.f.executors == 0, Builds: s.f.builds,
 		BaseURL: s.f.baseURL, TimeZone: s.f.zone,
@@ -679,8 +718,14 @@ func (s *server) info() api.ServerInfo {
 	if fi, err := os.Stat(filepath.Join(s.f.data, dbFile)); err == nil {
 		dbSize = fi.Size()
 	}
+	up := update.Status{}
+	if s.updates != nil {
+		up = s.updates.Status()
+	}
 	return api.ServerInfo{
-		Version: version.Version, GoVersion: runtime.Version(), Schema: s.st.Upgrade().To, StartedAt: s.startedAt,
+		Origin: update.Origin(), Latest: up.Latest, NotesURL: up.NotesURL, Upgradable: up.Upgradable, CheckedAt: up.CheckedAt,
+		UpdateCheck: s.updates != nil,
+		Version:     version.Version, GoVersion: runtime.Version(), Schema: s.st.Upgrade().To, StartedAt: s.startedAt,
 		Listen: s.listenAddr, BaseURL: s.f.baseURL, Executors: s.f.executors, Builds: s.d.Builds(), Shell: s.f.shell, SessionTTL: s.f.sessionTTL,
 		DefaultRunsOn: s.f.defaultRunsOn, AgentEnv: s.f.agentEnv, AgentURL: s.f.agentURL, AgentListen: s.agentListenAddr(),
 		TimeZone: s.d.Zone(nil).String(), DataDir: s.f.data, JobsDir: s.f.jobs,
@@ -801,6 +846,9 @@ func (s *server) startWork(work context.Context, hup <-chan os.Signal, wg *sync.
 	zone := s.d.Zone(nil)
 	wg.Go(func() { every(work, func() time.Time { return time.Now().In(zone) }, sleep, sweepAt, s.sweep) })
 	wg.Go(func() { s.reloadOn(work, hup) })
+	if s.updates != nil {
+		wg.Go(func() { s.updates.Run(work) })
+	}
 	// The first scan is at start; a job whose scan is 0 never scans on its own.
 	wg.Go(func() { s.scanner.Reload(); s.scanner.Run(work) })
 }

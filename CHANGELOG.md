@@ -8,6 +8,14 @@ lines and the data directory are the public surface.
 
 ## Unreleased
 
+- The server asks GitHub for the latest release at start and about every 12
+  hours (one unauthenticated request carrying only a `User-Agent` of
+  `kipp/<version>`; a dev build never asks) and the Server page and
+  `GET /api/v1/admin/server` say when a newer one exists: the new fields
+  are `origin`, `update_check`, `latest`, `notes_url`, `upgradable` and
+  `checked_at`. `kipp serve --no-update-check`, or `KIPP_NO_UPDATE_CHECK=1`,
+  turns it off. `kipp version` also prints where the binary was installed
+  from (Homebrew, a Docker image, or a release archive or build).
 - The release workflow signs `SHA256SUMS` with the release key, checks the
   signature against the public key in the repository before anything is
   public, publishes it as `SHA256SUMS.sig`, and verifies the downloaded

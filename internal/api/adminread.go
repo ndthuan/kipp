@@ -260,6 +260,17 @@ type ServerInfo struct {
 	LastReloadError string
 	// Jobs is how many jobs are loaded.
 	Jobs int
+	// Origin is where the running binary came from, for people to read.
+	Origin string
+	// UpdateCheck is whether the server looks for newer releases at all.
+	UpdateCheck bool
+	// Latest is the newest release when it is newer than Version, else
+	// empty; NotesURL is its page, Upgradable whether it carries the
+	// signature file, and CheckedAt when it was last looked up, zero before
+	// any answer.
+	Latest, NotesURL string
+	Upgradable       bool
+	CheckedAt        time.Time
 }
 
 // ServerInfo is for an admin; a token may read it.

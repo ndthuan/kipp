@@ -7,6 +7,8 @@
 {{with .Info}}
 <dl class="facts">
 <div><dt>kipp</dt><dd>{{.Version}}</dd></div>
+<div><dt>Installed from</dt><dd>{{.Origin}}</dd></div>
+<div><dt>Updates</dt><dd id="update-line">{{if .Latest}}{{.Latest}} is available (<a href="{{.NotesURL}}" rel="noopener noreferrer">release notes</a>){{if not .Upgradable}}, but it cannot be installed from here{{end}}{{else if not .UpdateCheck}}the check is off (--no-update-check){{else if not .CheckedAt.IsZero}}up to date, as of {{clock .CheckedAt}}{{else}}not checked yet{{end}}</dd></div>
 <div><dt>Go</dt><dd>{{.GoVersion}}</dd></div>
 <div><dt>Schema</dt><dd>{{.Schema}}</dd></div>
 <div><dt>Started</dt><dd>{{clock .StartedAt}}, up {{$.Data.Uptime}}</dd></div>

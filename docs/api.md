@@ -182,7 +182,13 @@ and none answers a password, a token, a hash or a secret's value.
   `session_ttl_seconds`, `timezone`, `data_dir`, `jobs_dir`,
   `free_disk_bytes` and `db_size_bytes` (null when they cannot be read),
   `last_reload_at`, `last_reload_error` (empty when the last reload was
-  taken) and `jobs`, how many are loaded.
+  taken), `jobs`, how many are loaded, `origin` (where the binary came
+  from: Homebrew, Docker image, or release archive or build),
+  `update_check` (false with `--no-update-check`), `latest` and
+  `notes_url` (the newest release and its page when it is newer than
+  `version`, else empty), `upgradable` (that release carries the signed
+  checksums an upgrade needs) and `checked_at` (when it was last looked up,
+  null before any answer).
 - `GET /api/v1/admin/engines`: each engine's `name`, `kind`, `url` (with
   no credentials in it), `labels`, `executors`, `enabled`, `reachable`,
   `since`, `version`, `last_error` and `running`, the stages that run on it as `job#number/stage`.

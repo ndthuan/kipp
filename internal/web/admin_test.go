@@ -611,3 +611,38 @@ func TestTheSecretsPageRefusesScopesWithoutSudoAndListsAnOutOfScopeSecretBesideT
 	eq(t, "without sudo", res.StatusCode, http.StatusForbidden)
 	contains(t, page, "change a secret&#39;s scopes", `name="next" value="/admin/secrets"`)
 }
+
+func TestTheServerPageSaysWhereTheBinaryCameFromAndWhatTheUpdateCheckFound(t *testing.T) {
+	checked := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	for _, c := range []struct {
+		name  string
+		set   func(*api.ServerInfo)
+		wants []string
+		lacks []string
+	}{
+		{"a newer upgradable release", func(i *api.ServerInfo) {
+			i.Latest, i.NotesURL, i.Upgradable, i.CheckedAt = "v9.9.9", "https://github.com/ndthuan/kipp/releases/tag/v9.9.9", true, checked
+		}, []string{"Homebrew", "v9.9.9 is available", `href="https://github.com/ndthuan/kipp/releases/tag/v9.9.9"`}, []string{"cannot be installed"}},
+		{"a newer release with no signature", func(i *api.ServerInfo) {
+			i.Latest, i.NotesURL, i.CheckedAt = "v9.9.9", "https://github.com/ndthuan/kipp/releases/tag/v9.9.9", checked
+		}, []string{"v9.9.9 is available", "cannot be installed from here"}, nil},
+		{"nothing newer", func(i *api.ServerInfo) { i.CheckedAt = checked }, []string{"up to date, as of"}, []string{"is available"}},
+		{"not asked yet", func(*api.ServerInfo) {}, []string{"not checked yet"}, nil},
+		{"the check off", func(i *api.ServerInfo) { i.UpdateCheck = false }, []string{"the check is off (--no-update-check)"}, nil},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			e := site(t, func(d *api.Deps) {
+				d.ServerInfo = func() api.ServerInfo {
+					i := serverInfoNow()
+					i.Origin, i.UpdateCheck = "Homebrew", true
+					c.set(&i)
+					return i
+				}
+			})
+			code, page := get(t, e.login(t, "admin"), e.srv.URL+"/admin/server")
+			eq(t, "server", code, http.StatusOK)
+			contains(t, page, c.wants...)
+			lacks(t, page, c.lacks...)
+		})
+	}
+}

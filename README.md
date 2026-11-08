@@ -69,6 +69,12 @@ source, `make build` (Go 1.27.3 or newer) gives `bin/kipp`.
 [docs/install.md](docs/install.md) has every way in detail, with how to
 check an archive and what the server needs.
 
+A running server asks GitHub for the latest release at start and about
+every 12 hours, one request that sends nothing about you or your install,
+and says on its Server page when a newer one exists. Turn it off with
+`kipp serve --no-update-check` or `KIPP_NO_UPDATE_CHECK=1`
+([details](docs/install.md#the-update-check)).
+
 ## Quick start
 
 Write a job and start the server. `serve` stays in the foreground, so

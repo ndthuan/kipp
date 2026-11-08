@@ -17,7 +17,7 @@ or `--name`.
 | [`kipp agent`](#kipp-agent) | Runs a standing agent, or registers them. | the server, or the data directory |
 | [`kipp metrics`](#kipp-metrics) | Checks a stage's guards; reads and changes what metric stores remember. | the stage, or the data directory |
 | [`kipp cache`](#kipp-cache) | A stage's keyed cache; lists and removes entries. | the server, or the data directory |
-| `kipp version` | Prints the version. | nothing |
+| `kipp version` | Prints the version and where the binary was installed from. | nothing |
 
 **Talking to a server.** `reload`, `quiet` and `run` take `--url` (else
 `$KIPP_URL`, else `http://127.0.0.1:8085`) and `--token` (else
@@ -74,6 +74,7 @@ directory.
 | `--ssh-key <file>` | the user's own under `~/.ssh` | The private key for `ssh://` engines that name none. |
 | `--artifacts-max <size>` | `50GB` | The most every build's artifacts come to; past it the oldest builds' are removed. |
 | `--cache-max <size>` | `20GB` | The most every cache entry comes to; past it the least recently restored are removed. |
+| `--no-update-check` | off (also `KIPP_NO_UPDATE_CHECK=1`) | Do not ask GitHub for the latest release ([Update check](install.md#the-update-check)). |
 
 Once it listens, it prints one line on stdout:
 
