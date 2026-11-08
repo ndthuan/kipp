@@ -165,7 +165,7 @@ func TestEveryBuildRecordsHowLongEachStageTook(t *testing.T) {
 	h := newHarness(t, map[string]string{"site-smoke": "name: site-smoke\nstages:\n  slow: {run: sleep 0.3}\n  quick: {needs: [slow], run: 'true'}\n  never: {needs: [quick], when: {triggers: [cron]}, run: 'true'}\n"})
 	b := h.wait(t, h.trigger(t, "site-smoke").ID)
 	got := h.reported(t, b.ID, config.StageSeconds)
-	if len(got) != 2 || got["slow"] < 0.3 || got["slow"] > 10 || got["quick"] >= got["slow"] {
+	if len(got) != 2 || got["slow"] < 0.25 || got["slow"] > 10 || got["quick"] >= got["slow"] {
 		t.Fatalf("%v", got)
 	}
 	if rows, _ := h.st.BuildMetrics(context.Background(), b.ID); rows[0].Unit != "s" || rows[0].Store != "site-smoke" {

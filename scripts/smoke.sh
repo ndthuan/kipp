@@ -71,8 +71,10 @@ image)
 	;;
 esac
 
-got=$(kipp version) || fail "kipp version"
-echo "smoke: $got"
+out=$(kipp version) || fail "kipp version"
+echo "smoke: $out"
+# The first line is the version; the lines after it say where kipp came from.
+got=$(printf '%s\n' "$out" | head -n 1)
 [ -z "$want" ] || [ "$got" = "kipp $want" ] || fail "kipp version says '$got', want 'kipp $want'"
 
 # The server is up once its health answers; the image's from inside.
