@@ -33,14 +33,14 @@ linters:
     rules:
       # The launcher runs the data directory's binary, which is its subject:
       # the file an upgrade put there, checked by version before it is run.
-      - path: ^internal/upgrade/launch/launch\.go$
+      - path: ^internal/upgrade/launch/(launch|supervise)\.go$
         text: "G204"
       # The state files are read at fixed names under the data directory.
       - path: ^internal/upgrade/state/state\.go$
         text: "G304"
       # The launcher's tests build stand-in kipp executables and run them,
       # and make them executable.
-      - path: ^internal/upgrade/launch/launch_test\.go$
+      - path: ^internal/upgrade/launch/(launch|supervise)_test\.go$
         text: "G204|G304|G306|G301|G703"
       # Running a job's command is what kipp is for.
       - path: ^internal/runner/local\.go$

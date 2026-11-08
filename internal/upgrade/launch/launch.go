@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/ndthuan/kipp/internal/update"
+	"github.com/ndthuan/kipp/internal/upgrade/backup"
 	"github.com/ndthuan/kipp/internal/upgrade/state"
 )
 
@@ -51,10 +52,25 @@ func Run(log *slog.Logger, data, version string, args []string) {
 	if !update.Release(version) {
 		return
 	}
-	if os.Getenv(EnvLaunched) != "1" && os.Getenv(EnvUseBundled) != "1" {
-		switchTo(log, data, version, args)
+	// The resident launcher is the parent of a supervised server, which
+	// only serves.
+	if os.Getenv(EnvSupervised) == "1" {
+		return
+	}
+	// Retention comes before anything else, once per start.
+	if _, err := backup.Clean(data, time.Now()); err != nil {
+		log.Warn("not cleaning the old backups", "err", err)
 	}
 	cleanup(log, data, version, time.Now())
+	if os.Getenv(EnvUseBundled) == "1" {
+		return
+	}
+	// Launched alone does not skip this: a pending record is the launcher's
+	// to carry out whoever started it.
+	newLauncher(log, data, version, args).processPending()
+	if os.Getenv(EnvLaunched) != "1" {
+		switchTo(log, data, version, args)
+	}
 }
 
 // switchTo replaces this process with the data directory's binary when it

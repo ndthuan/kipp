@@ -55,6 +55,7 @@ const (
 	statusFile      = "status.json"
 	lastFailureFile = "last-failure.json"
 	migratingFile   = "migrating"
+	refusedFile     = "pending.refused"
 
 	binaryPrefix = "kipp-"
 )
@@ -102,9 +103,11 @@ type Status struct {
 
 // Failure is why the launcher went back to an earlier version.
 type Failure struct {
-	Version string    `json:"version"`
-	From    string    `json:"from,omitempty"`
-	Reason  string    `json:"reason"`
+	Version string `json:"version"`
+	From    string `json:"from,omitempty"`
+	Reason  string `json:"reason"`
+	// LogTail is the end of what the failed version printed.
+	LogTail string    `json:"log_tail,omitempty"`
 	At      time.Time `json:"at"`
 }
 
@@ -124,6 +127,12 @@ func ReadCurrent(data string) (string, error) {
 // WriteCurrent makes v the version run by default.
 func WriteCurrent(data, v string) error {
 	return writeVersion(filepath.Join(BinDir(data), currentFile), v, false)
+}
+
+// ClearCurrent makes the executable itself the version run by default;
+// none is not an error.
+func ClearCurrent(data string) error {
+	return removeIfThere(filepath.Join(BinDir(data), currentFile))
 }
 
 // ReadPrevious is the version before the current one, or Bundled; "" when
@@ -156,7 +165,7 @@ func writeVersion(path, v string, allowBundled bool) error {
 	if !validVersion(v, allowBundled) {
 		return fmt.Errorf("%q is not a version a state file may name", v)
 	}
-	return writeAtomic(path, []byte(v+"\n"), 0o600)
+	return writeAtomic(path, []byte(v+"\n"))
 }
 
 // ReadPending is the record waiting for the next start; nil when there is
@@ -189,6 +198,23 @@ func WritePending(data string, p Pending) error {
 // ClearPending removes the pending record; none is not an error.
 func ClearPending(data string) error {
 	return removeIfThere(filepath.Join(BinDir(data), pendingFile))
+}
+
+// RefusePending sets the pending record aside as pending.refused, for an
+// admin to look at, so that the next start does not meet it again.
+func RefusePending(data string) error {
+	return os.Rename(filepath.Join(BinDir(data), pendingFile), filepath.Join(BinDir(data), refusedFile))
+}
+
+// MarkMigrating writes the file that says the store is being migrated and
+// returns the function that removes it. Failing to write it is reported to
+// the caller, which may carry on: the file only lengthens a deadline.
+func MarkMigrating(data string) (done func(), err error) {
+	path := MigratingPath(data)
+	if err := writeAtomic(path, []byte("1\n")); err != nil {
+		return func() {}, err
+	}
+	return func() { _ = os.Remove(path) }, nil
 }
 
 // ReadRejected is the versions the launcher must never pick, one per line
@@ -228,7 +254,23 @@ func Reject(data, v string) error {
 	for _, h := range append(have, v) {
 		buf.WriteString(h + "\n")
 	}
-	return writeAtomic(filepath.Join(BinDir(data), rejectedFile), buf.Bytes(), 0o600)
+	return writeAtomic(filepath.Join(BinDir(data), rejectedFile), buf.Bytes())
+}
+
+// Unreject takes v off the versions the launcher never picks; none is not
+// an error.
+func Unreject(data, v string) error {
+	have, err := ReadRejected(data)
+	if err != nil || !slices.Contains(have, v) {
+		return err
+	}
+	var buf bytes.Buffer
+	for _, h := range have {
+		if h != v {
+			buf.WriteString(h + "\n")
+		}
+	}
+	return writeAtomic(filepath.Join(BinDir(data), rejectedFile), buf.Bytes())
 }
 
 // ReadStatus is the progress of the last upgrade; nil when there is none.
@@ -280,7 +322,7 @@ func writeJSON(path string, v any) error {
 	if err != nil {
 		return err
 	}
-	return writeAtomic(path, append(b, '\n'), 0o600)
+	return writeAtomic(path, append(b, '\n'))
 }
 
 func removeIfThere(path string) error {
@@ -292,7 +334,7 @@ func removeIfThere(path string) error {
 
 // writeAtomic writes a file beside its place and renames it there, making
 // the directory when it is not there yet.
-func writeAtomic(path string, b []byte, mode os.FileMode) (err error) {
+func writeAtomic(path string, b []byte) (err error) {
 	dir := filepath.Dir(path)
 	if err = os.MkdirAll(dir, 0o700); err != nil {
 		return err
@@ -310,7 +352,7 @@ func writeAtomic(path string, b []byte, mode os.FileMode) (err error) {
 	if _, err = f.Write(b); err != nil {
 		return err
 	}
-	if err = f.Chmod(mode); err != nil {
+	if err = f.Chmod(0o600); err != nil {
 		return err
 	}
 	if err = f.Sync(); err != nil {

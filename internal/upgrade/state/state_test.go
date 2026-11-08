@@ -163,3 +163,60 @@ func TestBinaryVersionNamesOnlyReleaseBinaries(t *testing.T) {
 		t.Fatal(BinaryPath("/d", "v1.0.1"))
 	}
 }
+
+func TestUnrejectDropsOneVersionAndClearCurrentAndRefusePendingSetThingsAside(t *testing.T) {
+	d := t.TempDir()
+	for _, v := range []string{"v1.0.1", "v1.0.2"} {
+		if err := Reject(d, v); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := Unreject(d, "v1.0.1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := Unreject(d, "v9.9.9"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := ReadRejected(d); !reflect.DeepEqual(got, []string{"v1.0.2"}) {
+		t.Fatal(got)
+	}
+	if err := WriteCurrent(d, "v1.0.2"); err != nil {
+		t.Fatal(err)
+	}
+	if err := ClearCurrent(d); err != nil {
+		t.Fatal(err)
+	}
+	if err := ClearCurrent(d); err != nil {
+		t.Fatal("none is not an error:", err)
+	}
+	if v, _ := ReadCurrent(d); v != "" {
+		t.Fatal(v)
+	}
+	if err := WritePending(d, Pending{Kind: KindUpgrade, Version: "v1.0.3"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := RefusePending(d); err != nil {
+		t.Fatal(err)
+	}
+	if p, _ := ReadPending(d); p != nil {
+		t.Fatal("pending is still there")
+	}
+	if _, err := os.Stat(filepath.Join(BinDir(d), "pending.refused")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMarkMigratingHoldsTheFileUntilDone(t *testing.T) {
+	d := t.TempDir()
+	done, err := MarkMigrating(d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(MigratingPath(d)); err != nil {
+		t.Fatal(err)
+	}
+	done()
+	if _, err := os.Stat(MigratingPath(d)); !os.IsNotExist(err) {
+		t.Fatal("the file is still there:", err)
+	}
+}

@@ -193,6 +193,26 @@ dev build, or any other version, ignores `bin/` completely.
 At start, `kipp-<version>` files lower than the running version and older
 than 7 days are removed, except the one `previous` names.
 
+### A pending version is tried, and undone if it does not come up
+
+When `<data>/bin/pending` names a version, `kipp serve` runs that binary as
+a child (`KIPP_SUPERVISED=1`), forwards `SIGTERM`, `SIGINT` and `SIGHUP`
+to it, passes its output and exit code through, and stays the parent. The
+child is healthy when its `/api/v1/health` (on `--listen`) answers
+`{"ok":true}`: it then becomes `current`, the version before it becomes
+`previous`, and `pending` goes. The deadline is 90 seconds, counted from
+the end of the store's migration (a server holds `<data>/upgrade/migrating`
+while it migrates), and 30 minutes in all. A child that exits, or is not
+healthy by then, is stopped, the backup named in `pending` is put back,
+the version goes into `<data>/bin/rejected`, the reason and the end of the
+child's output into `<data>/upgrade/last-failure.json`, and the previous
+version (or the executable itself, `bundled`) starts in place of the
+launcher. Nothing is tried again until an upgrade is started again. A
+`rollback` record is carried out before anything starts: its backup goes
+back, and the target starts. One whose backup is missing is set aside as
+`pending.refused`. A supervised server that exits with code 75 has written
+a new record, which the launcher reads next.
+
 A release whose database schema is newer upgrades the database when it
 starts, before it listens, and logs it:
 

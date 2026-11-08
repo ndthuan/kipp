@@ -40,6 +40,7 @@ import (
 	"github.com/ndthuan/kipp/internal/store"
 	"github.com/ndthuan/kipp/internal/update"
 	"github.com/ndthuan/kipp/internal/upgrade/launch"
+	"github.com/ndthuan/kipp/internal/upgrade/state"
 	"github.com/ndthuan/kipp/internal/version"
 	"github.com/ndthuan/kipp/internal/web"
 	"github.com/ndthuan/kipp/internal/webhook"
@@ -436,7 +437,15 @@ func (s *server) openData(ctx context.Context, snap *config.Snapshot) (net.Liste
 	if s.deviceKey, err = secretbox.LoadOrCreateKey(filepath.Join(s.f.data, deviceKeyFile)); err != nil {
 		return nil, err
 	}
-	if s.st, err = openStore(s.f.data, true); err != nil {
+	// A launcher waiting for this process reads the file: a migration may
+	// outlast its deadline for a listener.
+	migrated, merr := state.MarkMigrating(s.f.data)
+	if merr != nil {
+		s.log.Warn("not marking the migration for the launcher", "err", merr)
+	}
+	s.st, err = openStore(s.f.data, true)
+	migrated()
+	if err != nil {
 		return nil, err
 	}
 	logUpgrade(s.log, s.st.Upgrade())
