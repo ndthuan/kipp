@@ -8,6 +8,11 @@ lines and the data directory are the public surface.
 
 ## Unreleased
 
+- A second SIGTERM or SIGINT sent as soon as the server had logged that it
+  was shutting down could be swallowed, leaving a slow shutdown to run to
+  its end; the signals are now handed back to their default before the
+  shutdown begins.
+
 - The release workflow no longer runs the gate a second time. It requires
   the `ci` workflow to have passed on the tagged commit (waiting up to 30
   minutes for a run still going) and fails if there is none or it failed.

@@ -118,11 +118,14 @@ const (
 )
 
 func cmdServe(args []string, _ io.Reader, stdout, stderr io.Writer) int {
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	sigCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	// The first signal starts the shutdown and hands both back to their
-	// default, so that a second one kills a shutdown that does not end.
-	context.AfterFunc(ctx, stop)
+	// The first signal hands both back to their default before the shutdown
+	// starts, so that a second one kills a shutdown that does not end, and
+	// one that comes as soon as the shutdown is logged is not swallowed.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { <-sigCtx.Done(); stop(); cancel() }()
 	// The site and the webhook log through the default logger; in this
 	// process that is the server's own log.
 	slog.SetDefault(slog.New(slog.NewTextHandler(stderr, nil)))
