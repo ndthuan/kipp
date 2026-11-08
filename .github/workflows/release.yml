@@ -1,8 +1,8 @@
 name: release
 
-# Publishing a GitHub release (which makes its tag) releases kipp: the
-# gate, the archives smoke-run each on its own platform before anything is
-# published, then the archives with their build provenance, the signed
+# Publishing a GitHub release (which makes its tag) releases kipp: ci must
+# have passed on the commit, the archives smoke-run each on its own platform
+# before anything is published, then the archives with their build provenance, the signed
 # SHA256SUMS and the changelog's section as the notes, the container image on ghcr.io, and the
 # Homebrew formula. What was published is installed and smoke-run again the
 # way a user gets it. "Releasing" in AGENTS.md says what comes first.
@@ -44,38 +44,27 @@ jobs:
       - name: a real release key
         run: ./scripts/check-release-key.sh
 
-  quality:
+  # The gate is not run again: the commit is released only once the ci
+  # workflow has passed on it, a second run being another chance for a
+  # flaky test to fail a release the first one passed.
+  ci-green:
     needs: tag
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     permissions:
       contents: read
+      actions: read # the ci runs of the tagged commit
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 24
-      # golangci-lint keeps its analysis in a cache of its own, which
-      # setup-go does not save; without it every run analyses from scratch.
-      # The key moves with each commit and falls back to the newest one.
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ runner.temp }}/golangci-lint
-          key: golangci-lint-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.sum', '.golangci.yml') }}-${{ github.sha }}
-          restore-keys: |
-            golangci-lint-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('go.sum', '.golangci.yml') }}-
-            golangci-lint-${{ runner.os }}-${{ runner.arch }}-
-      - run: make quality
+      - name: ci passed on this commit
         env:
-          GOLANGCI_LINT_CACHE: ${{ runner.temp }}/golangci-lint
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/check-ci.sh "$GITHUB_REPOSITORY" "$GITHUB_SHA"
 
   dist:
-    needs: quality
+    needs: ci-green
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -127,7 +116,7 @@ jobs:
   # Each architecture's image is built natively and smoke-run before the
   # two are pushed together.
   smoke-image:
-    needs: quality
+    needs: ci-green
     strategy:
       fail-fast: false
       matrix:

@@ -6,6 +6,12 @@ versions follow Semantic Versioning (https://semver.org/): the job file,
 the HTTP API under `/api/v1`, the command line, the server's reload log
 lines and the data directory are the public surface.
 
+## Unreleased
+
+- The release workflow no longer runs the gate a second time. It requires
+  the `ci` workflow to have passed on the tagged commit (waiting up to 30
+  minutes for a run still going) and fails if there is none or it failed.
+
 ## [1.1.0] - 2026-11-08
 
 - A standing agent that asked a restarted server for work before it had

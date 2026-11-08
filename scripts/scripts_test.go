@@ -272,8 +272,8 @@ func TestTheReleaseWorkflowChecksTheKeySignsAndPublishesTheSignature(t *testing.
 		t.Fatal(err)
 	}
 	w := string(data)
-	check, tag, quality := strings.Index(w, "check-release-key.sh"), strings.Index(w, "\n  tag:"), strings.Index(w, "\n  quality:")
-	if check < tag || check > quality {
+	check, tag, ciGreen := strings.Index(w, "check-release-key.sh"), strings.Index(w, "\n  tag:"), strings.Index(w, "\n  ci-green:")
+	if check < tag || check > ciGreen {
 		t.Error("check-release-key.sh is not in the first job")
 	}
 	sign, upload := strings.Index(w, "sign-release.sh sign"), strings.Index(w, "gh release upload")
@@ -309,5 +309,99 @@ func TestTheImageTakesTestTagsOnlyByBuildArgumentAndNamesItsSource(t *testing.T)
 		if !strings.Contains(text, want) {
 			t.Errorf("the Dockerfile lacks %q", want)
 		}
+	}
+}
+
+// ghStub puts a gh on PATH that prints the next line of answers on each
+// call (the last one repeats), the way `gh api --jq` prints what the
+// script asks for. An answer "fail" makes gh exit 1.
+func ghStub(t *testing.T, answers ...string) []string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "answers"), []byte(strings.Join(answers, "\n")+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	stub := `#!/bin/sh
+d=$(dirname "$0")
+n=$(cat "$d/n" 2>/dev/null || echo 0)
+n=$((n+1))
+echo "$n" > "$d/n"
+echo "$*" > "$d/args"
+a=$(sed -n "${n}p" "$d/answers")
+[ -n "$a" ] || a=$(tail -n 1 "$d/answers")
+[ "$a" = fail ] && exit 1
+echo "$a"
+`
+	gh := filepath.Join(dir, "gh")
+	if err := os.WriteFile(gh, []byte(stub), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(gh, 0o700); err != nil { //nolint:gosec // a stub the test runs
+		t.Fatal(err)
+	}
+	return []string{"PATH=" + dir + ":" + os.Getenv("PATH"), "STUB=" + dir}
+}
+
+func checkCI(t *testing.T, env []string, wait string) (string, error) {
+	t.Helper()
+	cmd := exec.Command("sh", "./check-ci.sh", "o/r", "abc123")
+	cmd.Env = append([]string{"CI_WAIT_SECONDS=" + wait, "CI_POLL_SECONDS=1"}, env...)
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
+func TestAReleaseNeedsTheCIRunOfItsCommitToHavePassed(t *testing.T) {
+	const url = "https://example.com/run/1"
+	cases := []struct {
+		name    string
+		answers []string
+		wait    string
+		ok      bool
+		want    string
+	}{
+		{"green", []string{"completed success " + url}, "5", true, "ci passed"},
+		{"red", []string{"completed failure " + url}, "5", false, "did not pass"},
+		{"cancelled", []string{"completed cancelled " + url}, "5", false, "did not pass"},
+		{"missing", []string{"none"}, "5", false, "no run"},
+		{"running then green", []string{"in_progress null " + url, "completed success " + url}, "5", true, "ci passed"},
+		{"running then red", []string{"queued null " + url, "completed failure " + url}, "5", false, "did not pass"},
+		{"running past the deadline", []string{"in_progress null " + url}, "2", false, "still running after 2s"},
+		{"the API failing", []string{"fail"}, "5", false, "could not list"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			env := ghStub(t, c.answers...)
+			out, err := checkCI(t, env, c.wait)
+			if (err == nil) != c.ok || !strings.Contains(out, c.want) {
+				t.Fatalf("ok=%v err=%v, want %q:\n%s", c.ok, err, c.want, out)
+			}
+		})
+	}
+}
+
+func TestTheCIRunIsAskedForByCommitOnAPushToMain(t *testing.T) {
+	env := ghStub(t, "completed success u")
+	if out, err := checkCI(t, env, "5"); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	args := string(mustRead(t, filepath.Join(strings.TrimPrefix(env[1], "STUB="), "args")))
+	for _, want := range []string{"repos/o/r/actions/workflows/ci.yml/runs", "head_sha=abc123", "event=push", "branch=main"} {
+		if !strings.Contains(args, want) {
+			t.Errorf("gh was called without %q: %s", want, args)
+		}
+	}
+}
+
+func TestTheReleaseWorkflowChecksCIAndDoesNotRunTheGate(t *testing.T) {
+	data, err := os.ReadFile("../.github/workflows/release.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := string(data)
+	if strings.Contains(w, "make quality") {
+		t.Error("the release runs the gate again")
+	}
+	if !strings.Contains(w, "check-ci.sh") || !strings.Contains(w, "actions: read") {
+		t.Error("the release does not check the ci run with actions: read")
 	}
 }

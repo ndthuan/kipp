@@ -117,7 +117,10 @@ Others read these, so a change to one is a decision, not a refactor:
    `vX.Y.Z-<pre-release>`) is on that commit. `.github/workflows/release.yml`
    does the rest: it refuses a tag that is not a release's
    (`scripts/check-version.sh --release`), is not on `main` or has no
-   changelog section; runs the gate; builds the archives (`make dist`) and
+   changelog section; requires the `ci` workflow to be green on that exact
+   commit (a push to `main` that completed with success, waited for up to
+   30 minutes if still running, `scripts/check-ci.sh`) and never runs the
+   gate again; builds the archives (`make dist`) and
    smoke-runs each on a runner of its own platform, and the container image
    on each architecture (`scripts/smoke.sh`); then signs `SHA256SUMS` with
    the secret `RELEASE_SIGNING_KEY` and checks the signature against
