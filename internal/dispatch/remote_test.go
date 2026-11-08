@@ -215,7 +215,7 @@ func TestTheBuildsLimitIsApartFromTheServersExecutors(t *testing.T) {
 		"b": "name: b\nstages:\n  s: {run: 'true'}\n",
 	}, func(o *Options) { o.Executors, o.Builds = 4, 1 })
 	first := h.trigger(t, "a")
-	h.untilRunning(t, first.ID)
+	h.untilStageHoldsSlot(t, first.ID, "s")
 	second := h.trigger(t, "b")
 	eventually(t, "the second build waits for the builds limit", func() bool {
 		q, err := h.d.Queue(context.Background())

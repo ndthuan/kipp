@@ -140,6 +140,17 @@ func (h *harness) untilRunning(t *testing.T, id int64) {
 	})
 }
 
+// untilStageHoldsSlot waits until the stage of a build runs and the build
+// holds a slot. A build lets go of its slot between its prepare and its
+// stage, and a build queued in that gap would take it.
+func (h *harness) untilStageHoldsSlot(t *testing.T, id int64, stage string) {
+	t.Helper()
+	eventually(t, "the stage of the build runs holding a slot", func() bool {
+		s := h.stages(t, id)[stage]
+		return s != nil && s.Status == store.StageRunning && h.slotsTaken() == 1
+	})
+}
+
 // gated is a command that blocks until the returned file exists.
 func gated(t *testing.T) (command string, open func()) {
 	t.Helper()
