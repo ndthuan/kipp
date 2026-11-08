@@ -269,13 +269,15 @@ func (e *Engine) finish(ctx context.Context, r *active, st state.Status, err err
 		st.State = state.StateFailed
 		e.o.Log.Warn("the upgrade failed", "version", st.Version, "err", err)
 	}
-	e.writeStatus(st)
+	// One critical section, so that a reader who sees the failed status
+	// also sees why, and a new run cannot be overwritten by this one's end.
 	e.mu.Lock()
-	e.run = nil
+	defer e.mu.Unlock()
 	if st.State == state.StateFailed {
 		e.last = err.Error()
 	}
-	e.mu.Unlock()
+	e.writeStatus(st)
+	e.run = nil
 }
 
 // Cancel ends the run in progress and leaves the server as it was. It is
