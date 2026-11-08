@@ -25,6 +25,7 @@ import (
 	"github.com/ndthuan/kipp/internal/index"
 	"github.com/ndthuan/kipp/internal/sched"
 	"github.com/ndthuan/kipp/internal/store"
+	"github.com/ndthuan/kipp/internal/upgrade/engine"
 )
 
 // Errors a Service call answers with. Anything else is the server's fault.
@@ -104,6 +105,9 @@ type Deps struct {
 	// Cache is the keyed caches the server keeps; an admin sees and
 	// clears them. Without it there are none to see.
 	Cache *cachesrv.Service
+	// Upgrade upgrades the server; without it the routes answer that this
+	// server does not.
+	Upgrade *engine.Engine
 }
 
 // API holds the handlers and the Service.

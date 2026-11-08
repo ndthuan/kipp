@@ -410,3 +410,29 @@ func TestRestoreIntoADirectoryItCannotWriteFailsAndSaysWhichFile(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 }
+
+func TestLastSucceededIsTheNewestBackupOfAnUpgradeThatCameUp(t *testing.T) {
+	data, _ := seed(t, 1)
+	if name, ok := LastSucceeded(data); ok {
+		t.Fatalf("a backup %q in a directory with none", name)
+	}
+	var names []string
+	for i := range 3 {
+		name, err := Take(context.Background(), data, "v1.0.0", t0.Add(time.Duration(i)*time.Hour))
+		if err != nil {
+			t.Fatal(err)
+		}
+		names = append(names, name)
+	}
+	if name, ok := LastSucceeded(data); ok {
+		t.Fatalf("a backup %q that no upgrade came up for", name)
+	}
+	for _, i := range []int{1, 0} { // the middle one first, the oldest after
+		if err := MarkSucceeded(data, names[i], t0.Add(5*time.Hour)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if name, ok := LastSucceeded(data); !ok || name != names[1] {
+		t.Fatalf("got %q, want %q: the newest that succeeded, not the newest", name, names[1])
+	}
+}

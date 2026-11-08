@@ -8,6 +8,22 @@ lines and the data directory are the public surface.
 
 ## Unreleased
 
+- `kipp upgrade` upgrades a running server to the latest release and
+  `kipp upgrade --rollback` returns it to the version before. By default it
+  makes the server quiet, waits for the builds to end (`--wait-timeout`,
+  2 hours), backs up the data directory and restarts into the new version,
+  which the launcher puts back if it does not come up; `--no-safe --yes`
+  restarts at once and the builds that run end as `lost`, `--cancel` ends an
+  upgrade that has not reached its backup, `--check` and `status` only say
+  what is known. The release archive is downloaded from the repository's own
+  GitHub releases (at most 200 MiB, redirects only within GitHub's release
+  hosts), its checksum and the signature of `SHA256SUMS` are checked, and the
+  unpacked binary is run once before anything is switched. The API has
+  `GET`, `POST` and `DELETE /api/v1/admin/upgrade` and `POST
+  /api/v1/admin/upgrade/rollback`, for an admin and recorded in the audit
+  log. Where the data directory cannot be written, and in a dev build, it
+  refuses and prints the lines that upgrade by hand. A rollback loses
+  everything written since the upgrade.
 - A release build of `kipp serve` runs the higher release of its own
   executable and the binary `<data>/bin/kipp-<version>` that
   `<data>/bin/current` names, by `exec` (the process ID stays). A dev build,

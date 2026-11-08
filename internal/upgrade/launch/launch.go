@@ -111,6 +111,10 @@ func switchTo(log *slog.Logger, data, version string, args []string) {
 		"version", cur, "path", path, "err", err)
 }
 
+// Usable is usable for the engine, which proves a download runs before it
+// is switched to.
+func Usable(path, ver string) error { return usable(path, ver) }
+
 // usable checks that path is an executable file that says it is kipp ver.
 func usable(path, ver string) error {
 	info, err := os.Stat(path)

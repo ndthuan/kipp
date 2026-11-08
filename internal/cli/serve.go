@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -39,6 +40,7 @@ import (
 	"github.com/ndthuan/kipp/internal/secretbox"
 	"github.com/ndthuan/kipp/internal/store"
 	"github.com/ndthuan/kipp/internal/update"
+	"github.com/ndthuan/kipp/internal/upgrade/engine"
 	"github.com/ndthuan/kipp/internal/upgrade/launch"
 	"github.com/ndthuan/kipp/internal/upgrade/state"
 	"github.com/ndthuan/kipp/internal/version"
@@ -308,6 +310,14 @@ func hostZone(tz string, set bool, localtime string) *time.Location {
 // the checker ask a fake instead of GitHub.
 var updateOptions = update.Production
 
+// releaseKey and upgradeWaitPoll are the release public key and how often an
+// upgrade looks at the builds, variables so that a test can sign a release
+// of its own and not wait seconds.
+var (
+	releaseKey      = update.ReleaseKey
+	upgradeWaitPoll time.Duration
+)
+
 // listen is net.Listen, a variable so that a test can have the listener
 // say it took an address it did not.
 var listen = net.Listen
@@ -352,6 +362,13 @@ type server struct {
 
 	// updates asks for newer releases; nil with --no-update-check.
 	updates *update.Checker
+	// upgrades carries out an upgrade or a rollback. It asks the server to
+	// stop through switchOver, and serve then starts again as the launcher.
+	upgrades *engine.Engine
+	// args are serve's own arguments, which the restart is given again.
+	args      []string
+	switching atomic.Bool
+	stopRun   context.CancelFunc
 
 	// startedAt is when the server began to open its data directory.
 	startedAt time.Time
@@ -375,7 +392,7 @@ func serve(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	case err != nil:
 		return exitFor(err)
 	}
-	s := &server{f: f, log: slog.New(slog.NewTextHandler(stderr, nil))}
+	s := &server{f: f, args: args, log: slog.New(slog.NewTextHandler(stderr, nil))}
 	// Before anything is read or opened: the process may become another.
 	launch.Run(s.log, f.data, version.Version, args)
 	ln, err := s.open(ctx)
@@ -383,7 +400,57 @@ func serve(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return fail(stderr, "serve", err)
 	}
 	defer s.close()
-	return s.run(ctx, ln, stdout)
+	code := s.run(ctx, ln, stdout)
+	if s.switching.Load() {
+		// The store and the lock first: the next process opens them.
+		s.close()
+		return restart(s.log, args)
+	}
+	return code
+}
+
+// execve is syscall.Exec, a variable so that a test can see where the
+// process would have gone.
+var execve = syscall.Exec
+
+// restart is what a server does once an upgrade has written its pending
+// record and the server has stopped. Under the launcher (which ran this
+// process as its child) it ends with the code that has the launcher read the
+// records again. Alone it becomes `kipp serve` again with the same
+// arguments and the same process ID, and that start is the launcher's.
+func restart(log *slog.Logger, args []string) int {
+	if os.Getenv(launch.EnvSupervised) == "1" {
+		return launch.ExitRestart
+	}
+	exe, err := os.Executable()
+	if err == nil {
+		err = execve(exe, append([]string{exe, "serve"}, args...), os.Environ())
+	}
+	log.Error("not restarting by itself; the pending record is carried out at the next start", "err", err)
+	return 1
+}
+
+// switchOver stops the server for an upgrade that has written its record.
+func (s *server) switchOver() {
+	s.switching.Store(true)
+	s.stopRun()
+}
+
+func (s *server) quietCounts(q dispatch.QuietState, err error) (engine.Counts, error) {
+	return engine.Counts{Quiet: q.On, Running: q.Running, Queued: q.Queued}, err
+}
+
+// newUpgrades makes the engine for this server's data directory.
+func (s *server) newUpgrades() *engine.Engine {
+	return engine.New(engine.Options{
+		Data: s.f.data, Version: version.Version, Checker: s.updates, Key: releaseKey(), Poll: upgradeWaitPoll,
+		SetQuiet: func(ctx context.Context, on bool) (engine.Counts, error) {
+			return s.quietCounts(s.d.SetQuiet(ctx, on))
+		},
+		Counts: func(ctx context.Context) (engine.Counts, error) { return s.quietCounts(s.d.QuietState(ctx)) },
+		Switch: s.switchOver,
+		Log:    s.log,
+	})
 }
 
 func (s *server) close() {
@@ -505,6 +572,7 @@ func (s *server) listen(ctx context.Context, snap *config.Snapshot) (net.Listene
 		Cache:        s.cache, CacheURL: s.cacheURL, AgentURL: agentURL,
 		Status: index.PostStatusFor(s.f.githubAPI, s.secret, s.appClient), PublicURL: s.publicURL,
 	})
+	s.upgrades = s.newUpgrades()
 	// Before anything can ask: the dispatcher has no jobs until it is given some.
 	s.ix = index.New(s.st, s.d.SetSnapshot)
 	if err := s.ix.SetBase(ctx, snap); err != nil {
@@ -723,7 +791,7 @@ func (s *server) deps(au *auth.Service) api.Deps {
 		Seal:       func(name string, value []byte) ([]byte, error) { return secretbox.Seal(s.key, name, value) },
 		ServerInfo: s.info, Listen: s.listenAddr,
 		Engines: s.pool.Status, Agents: s.hub.Agents, PlacesChanged: s.loadPlaces,
-		Cache: s.cache, Scanner: s.scanner,
+		Cache: s.cache, Scanner: s.scanner, Upgrade: s.upgrades,
 	}
 }
 
@@ -788,9 +856,13 @@ func (s *server) appClient(ctx context.Context, app *config.App, login string) (
 
 // run serves until ctx ends or the listener fails, then stops everything.
 func (s *server) run(ctx context.Context, ln net.Listener, stdout io.Writer) int {
+	// An upgrade ends the run the way a signal does.
+	ctx, s.stopRun = context.WithCancel(ctx)
+	defer s.stopRun()
 	// Not ctx's child: stop decides when the builds end.
 	work, stopWork := context.WithCancel(context.WithoutCancel(ctx))
 	defer stopWork()
+	s.upgrades.Resume()
 	s.scanner = index.NewScanner(work, s.ix, index.ScannerOptions{API: s.f.githubAPI, Token: s.secret, Trigger: s.d.Trigger, Quiet: s.d.Quiet, Hook: s.hookPlan, Log: s.log, App: s.appClient})
 	srv := &http.Server{
 		Handler:           s.handler(),
@@ -824,7 +896,11 @@ func (s *server) run(ctx context.Context, ln net.Listener, stdout io.Writer) int
 		s.log.Error("the HTTP server stopped", "err", err)
 		code = 1
 	case <-ctx.Done():
-		s.log.Info("shutting down")
+		if s.switching.Load() {
+			s.log.Info("shutting down to start the other version")
+		} else {
+			s.log.Info("shutting down")
+		}
 	}
 	s.stop(stopWork, &wg, srv, agentSrv)
 	return code

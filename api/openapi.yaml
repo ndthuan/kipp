@@ -36,7 +36,7 @@ tags:
   - name: queue
     description: What runs and what waits.
   - name: admin
-    description: Reads of users, secrets, engines, agents, the cache and the audit, and the server's quiet mode; for an admin.
+    description: Reads of users, secrets, engines, agents, the cache and the audit, the server's quiet mode and its upgrade; for an admin.
   - name: webhooks
     description: Deliveries from GitHub.
   - name: internal
@@ -104,6 +104,10 @@ paths:
     $ref: paths/admin_reload.yaml
   /admin/quiet:
     $ref: paths/admin_quiet.yaml
+  /admin/upgrade:
+    $ref: paths/admin_upgrade.yaml
+  /admin/upgrade/rollback:
+    $ref: paths/admin_upgrade_rollback.yaml
   /admin/users:
     $ref: paths/admin_users.yaml
   /admin/users/{name}:

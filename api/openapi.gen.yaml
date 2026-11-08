@@ -35,7 +35,7 @@ tags:
     name: metrics
   - description: What runs and what waits.
     name: queue
-  - description: Reads of users, secrets, engines, agents, the cache and the audit, and the server's quiet mode; for an admin.
+  - description: Reads of users, secrets, engines, agents, the cache and the audit, the server's quiet mode and its upgrade; for an admin.
     name: admin
   - description: Deliveries from GitHub.
     name: webhooks
@@ -278,6 +278,137 @@ paths:
       tags:
         - admin
         - server
+      x-kipp-package: api
+  /admin/upgrade:
+    delete:
+      description: |
+        Possible until the backup begins: it turns quiet mode off, removes what was
+        downloaded and leaves the server as it was. After that only a rollback
+        exists.
+      operationId: cancelUpgrade
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Upgrade"
+          description: The upgrade, now cancelled.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - bearerToken: []
+        - csrfToken: []
+          sessionCookie: []
+      summary: Cancel the upgrade
+      tags:
+        - admin
+      x-kipp-package: api
+    get:
+      description: |
+        Where an upgrade or a rollback is, the last failure, and whether an upgrade
+        or a rollback can start now. For an admin.
+      operationId: getUpgrade
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Upgrade"
+          description: The upgrade.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: The server's upgrade
+      tags:
+        - admin
+      x-kipp-package: api
+    post:
+      description: |
+        Checks free space, downloads the release and checks its signature and
+        checksum, waits in quiet mode for the builds to end, backs up the data,
+        and restarts into the new version; the launcher puts everything back if
+        the new version does not come up. The answer is the first status; poll
+        `GET` for the rest, the server being away while it restarts. One upgrade
+        runs at a time. Not available in a development build, or where the data
+        directory cannot be written, and then the answer names the lines to upgrade
+        by hand.
+      operationId: startUpgrade
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpgradeRequest"
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Upgrade"
+          description: The upgrade has begun.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - bearerToken: []
+        - csrfToken: []
+          sessionCookie: []
+      summary: Upgrade the server to the latest release
+      tags:
+        - admin
+      x-kipp-package: api
+  /admin/upgrade/rollback:
+    post:
+      description: |
+        Waits in quiet mode like an upgrade, then restarts with the backup of the
+        last upgrade put back, so that everything written since the upgrade is
+        lost. Available while that backup exists. The answer is the first status;
+        poll `GET /admin/upgrade` for the rest.
+      operationId: startRollback
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpgradeRequest"
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Upgrade"
+          description: The rollback has begun.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - bearerToken: []
+        - csrfToken: []
+          sessionCookie: []
+      summary: Go back to the version before the last upgrade
+      tags:
+        - admin
       x-kipp-package: api
   /admin/users:
     get:
@@ -4002,6 +4133,130 @@ components:
           additionalProperties:
             type: string
           type: object
+      type: object
+    Upgrade:
+      additionalProperties: false
+      description: |
+        The server's upgrade, or its return to the version before: the step it is at,
+        the last failure, and what can be done now. The progress survives the
+        server's restart, so it is read from a server that has just come back.
+      properties:
+        backup:
+          description: The backup taken for it, once there is one.
+          type: string
+        error:
+          description: Why the last run of this process ended without switching; empty otherwise.
+          type: string
+        from:
+          description: The version the server was running when it began; empty when idle.
+          type: string
+        last_failure:
+          anyOf:
+            - $ref: "#/components/schemas/UpgradeFailure"
+            - type: "null"
+          description: Why the launcher last went back to an earlier version; null when it did not.
+        latest:
+          description: The newer release the update check knows; empty when there is none.
+          type: string
+        queued:
+          description: Builds waiting to start, while the upgrade waits for them.
+          type: integer
+        rollback_to:
+          description: |
+            The version a rollback returns to (`bundled` is the executable the
+            server was installed as); empty when there is none to return to.
+          type: string
+        running:
+          description: Builds with something running, while the upgrade waits for them.
+          type: integer
+        state:
+          description: |
+            `idle` before any upgrade, then `preflight`, `downloading`, `verifying`,
+            `waiting` (quiet, for the builds to end), `backup`, `switching` (the
+            server stops and the launcher starts the new version), and the ends:
+            `done`, `failed` and `cancelled`.
+          enum:
+            - idle
+            - preflight
+            - downloading
+            - verifying
+            - waiting
+            - backup
+            - switching
+            - done
+            - failed
+            - cancelled
+          type: string
+        unavailable:
+          description: Why an upgrade cannot start now; empty when it can.
+          type: string
+        updated_at:
+          $ref: "#/components/schemas/NullableTimestamp"
+        upgradable:
+          description: True when that release can be upgraded to.
+          type: boolean
+        version:
+          description: The version being upgraded to, or returned to; empty when idle.
+          type: string
+      required:
+        - state
+        - version
+        - from
+        - backup
+        - running
+        - queued
+        - updated_at
+        - error
+        - latest
+        - upgradable
+        - unavailable
+        - rollback_to
+        - last_failure
+      type: object
+    UpgradeFailure:
+      additionalProperties: false
+      description: Why the launcher went back to the version before, as it recorded it.
+      properties:
+        at:
+          $ref: "#/components/schemas/Timestamp"
+        from:
+          type: string
+        log_tail:
+          description: The end of what the version that failed printed.
+          type: string
+        reason:
+          type: string
+        version:
+          type: string
+      required:
+        - version
+        - from
+        - reason
+        - log_tail
+        - at
+      type: object
+    UpgradeRequest:
+      additionalProperties: false
+      description: |
+        The body of an upgrade or a rollback. No body at all is a safe restart with
+        the default wait.
+      properties:
+        confirm_lost:
+          default: false
+          description: Says the running builds may end as lost, when `safe_restart` is false.
+          type: boolean
+        safe_restart:
+          default: true
+          description: |
+            Wait, in quiet mode, until no build runs or waits, and restart then.
+            Without it the builds that run end as `lost`, and `confirm_lost` is needed.
+          type: boolean
+        version:
+          description: The release to upgrade to; it must be the latest one. Not for a rollback.
+          type: string
+        wait_timeout:
+          description: A Go duration, such as `90m`. How long to wait for the builds, 2 hours when absent.
+          type: string
       type: object
     User:
       additionalProperties: false

@@ -21,6 +21,8 @@ const (
 	// releaseAPI and releasePath are the one lookup kipp makes: the latest
 	// release that is not a pre-release.
 	releaseAPI  = "https://api.github.com"
+	releaseHost = "https://github.com"
+	repoPath    = "/ndthuan/kipp"
 	releasePath = "/repos/ndthuan/kipp/releases/latest"
 	// SigFile is the asset that makes a release one kipp may upgrade to.
 	SigFile = "SHA256SUMS.sig"
@@ -29,10 +31,11 @@ const (
 	CacheFile = "update-check.json"
 
 	// Interval is how often the server asks.
-	Interval       = 12 * time.Hour
-	defaultTimeout = 15 * time.Second
-	maxReply       = 1 << 20
-	maxRedirects   = 5
+	Interval        = 12 * time.Hour
+	defaultTimeout  = 15 * time.Second
+	downloadTimeout = 15 * time.Minute
+	maxReply        = 1 << 20
+	maxRedirects    = 5
 )
 
 // defaultHosts are the hosts a lookup, and the download after it, may reach
@@ -53,16 +56,28 @@ type Options struct {
 	Base     string
 	Hosts    []string
 	Insecure bool
-	Interval time.Duration
-	Timeout  time.Duration
-	Now      func() time.Time
-	Log      *slog.Logger
+	// DownloadBase is where release files are fetched from, as
+	// <DownloadBase>/<owner>/<repo>/releases/download/<tag>/<file>.
+	DownloadBase string
+	Interval     time.Duration
+	Timeout      time.Duration
+	// DownloadTimeout bounds one file's download, which the lookup's
+	// Timeout is too short for.
+	DownloadTimeout time.Duration
+	Now             func() time.Time
+	Log             *slog.Logger
 }
 
 // Production is the options of the server's own checker.
 func Production(current, dir string, log *slog.Logger) Options {
 	base, hosts, insecure := target()
-	return Options{Current: current, Dir: dir, Base: base, Hosts: hosts, Insecure: insecure, Log: log}
+	// Only a build that lets the lookup go elsewhere lets the downloads
+	// follow it; the rest fetch from GitHub.
+	download := releaseHost
+	if insecure {
+		download = base
+	}
+	return Options{Current: current, Dir: dir, Base: base, Hosts: hosts, Insecure: insecure, DownloadBase: download, Log: log}
 }
 
 // Status is what the checker knows. Latest is empty unless a release newer
@@ -89,6 +104,8 @@ type found struct {
 type Checker struct {
 	o      Options
 	client *http.Client
+	// dl fetches release files: the same rules, a longer timeout.
+	dl *http.Client
 
 	mu  sync.Mutex
 	got found
@@ -109,7 +126,11 @@ func New(o Options) *Checker {
 		o.Log = slog.New(slog.DiscardHandler)
 	}
 	c := &Checker{o: o}
+	if o.DownloadTimeout <= 0 {
+		o.DownloadTimeout = downloadTimeout
+	}
 	c.client = &http.Client{Timeout: o.Timeout, CheckRedirect: c.redirect}
+	c.dl = &http.Client{Timeout: o.DownloadTimeout, CheckRedirect: c.redirect}
 	c.got = c.load()
 	return c
 }

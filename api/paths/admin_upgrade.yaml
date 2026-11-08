@@ -1,0 +1,90 @@
+get:
+  operationId: getUpgrade
+  tags: [admin]
+  summary: The server's upgrade
+  description: |
+    Where an upgrade or a rollback is, the last failure, and whether an upgrade
+    or a rollback can start now. For an admin.
+  x-kipp-package: api
+  responses:
+    "200":
+      description: The upgrade.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/Upgrade.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "403":
+      $ref: ../responses/Forbidden.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml
+post:
+  operationId: startUpgrade
+  tags: [admin]
+  summary: Upgrade the server to the latest release
+  description: |
+    Checks free space, downloads the release and checks its signature and
+    checksum, waits in quiet mode for the builds to end, backs up the data,
+    and restarts into the new version; the launcher puts everything back if
+    the new version does not come up. The answer is the first status; poll
+    `GET` for the rest, the server being away while it restarts. One upgrade
+    runs at a time. Not available in a development build, or where the data
+    directory cannot be written, and then the answer names the lines to upgrade
+    by hand.
+  x-kipp-package: api
+  security:
+    - bearerToken: []
+    - sessionCookie: []
+      csrfToken: []
+  requestBody:
+    required: false
+    content:
+      application/json:
+        schema:
+          $ref: ../schemas/UpgradeRequest.yaml
+  responses:
+    "202":
+      description: The upgrade has begun.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/Upgrade.yaml
+    "400":
+      $ref: ../responses/BadRequest.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "403":
+      $ref: ../responses/Forbidden.yaml
+    "409":
+      $ref: ../responses/Conflict.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml
+delete:
+  operationId: cancelUpgrade
+  tags: [admin]
+  summary: Cancel the upgrade
+  description: |
+    Possible until the backup begins: it turns quiet mode off, removes what was
+    downloaded and leaves the server as it was. After that only a rollback
+    exists.
+  x-kipp-package: api
+  security:
+    - bearerToken: []
+    - sessionCookie: []
+      csrfToken: []
+  responses:
+    "200":
+      description: The upgrade, now cancelled.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/Upgrade.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "403":
+      $ref: ../responses/Forbidden.yaml
+    "409":
+      $ref: ../responses/Conflict.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

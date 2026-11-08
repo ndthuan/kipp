@@ -406,3 +406,22 @@ func expired(e entry, newestOK, now time.Time) bool {
 	}
 	return now.Sub(e.success) >= Retention
 }
+
+// LastSucceeded is the newest backup of an upgrade that came up, which is
+// the one a rollback puts back; false when there is none.
+func LastSucceeded(data string) (string, bool) {
+	all, err := list(data)
+	if err != nil {
+		return "", false
+	}
+	best := -1
+	for i, e := range all {
+		if !e.success.IsZero() && (best < 0 || e.taken.After(all[best].taken)) {
+			best = i
+		}
+	}
+	if best < 0 {
+		return "", false
+	}
+	return all[best].name, true
+}

@@ -1,0 +1,68 @@
+type: object
+additionalProperties: false
+description: |
+  The server's upgrade, or its return to the version before: the step it is at,
+  the last failure, and what can be done now. The progress survives the
+  server's restart, so it is read from a server that has just come back.
+required:
+  - state
+  - version
+  - from
+  - backup
+  - running
+  - queued
+  - updated_at
+  - error
+  - latest
+  - upgradable
+  - unavailable
+  - rollback_to
+  - last_failure
+properties:
+  state:
+    type: string
+    description: |
+      `idle` before any upgrade, then `preflight`, `downloading`, `verifying`,
+      `waiting` (quiet, for the builds to end), `backup`, `switching` (the
+      server stops and the launcher starts the new version), and the ends:
+      `done`, `failed` and `cancelled`.
+    enum: [idle, preflight, downloading, verifying, waiting, backup, switching, done, failed, cancelled]
+  version:
+    type: string
+    description: The version being upgraded to, or returned to; empty when idle.
+  from:
+    type: string
+    description: The version the server was running when it began; empty when idle.
+  backup:
+    type: string
+    description: The backup taken for it, once there is one.
+  running:
+    type: integer
+    description: Builds with something running, while the upgrade waits for them.
+  queued:
+    type: integer
+    description: Builds waiting to start, while the upgrade waits for them.
+  updated_at:
+    $ref: NullableTimestamp.yaml
+  error:
+    type: string
+    description: Why the last run of this process ended without switching; empty otherwise.
+  latest:
+    type: string
+    description: The newer release the update check knows; empty when there is none.
+  upgradable:
+    type: boolean
+    description: True when that release can be upgraded to.
+  unavailable:
+    type: string
+    description: Why an upgrade cannot start now; empty when it can.
+  rollback_to:
+    type: string
+    description: |
+      The version a rollback returns to (`bundled` is the executable the
+      server was installed as); empty when there is none to return to.
+  last_failure:
+    anyOf:
+      - $ref: UpgradeFailure.yaml
+      - type: "null"
+    description: Why the launcher last went back to an earlier version; null when it did not.

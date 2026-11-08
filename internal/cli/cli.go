@@ -21,6 +21,7 @@ const usage = `usage: kipp <command> [flags]
   check     validate a jobs directory and exit non-zero on any error
   reload    ask a running server to re-read its jobs directory
   quiet     on, off, status: stop a running server taking builds, before a restart
+  upgrade   upgrade a running server to the latest release, or return it to the version before
   run       start a build and optionally wait for it
   user      add, passwd, delete, grant, revoke, list
   token     create, revoke, list
@@ -37,6 +38,7 @@ var commands = map[string]Command{
 	"check":   cmdCheck,
 	"reload":  cmdReload,
 	"quiet":   cmdQuiet,
+	"upgrade": cmdUpgrade,
 	"run":     cmdRun,
 	"user":    cmdUser,
 	"token":   cmdToken,
