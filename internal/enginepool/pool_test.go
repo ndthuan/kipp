@@ -294,11 +294,16 @@ func TestAnEngineThatStopsAnsweringIsSaidToSinceWhenAndWhy(t *testing.T) {
 	if cs := f.pool.Candidates(2, ""); !strings.HasPrefix(cs[0].Why, "unreachable since ") {
 		t.Fatal(cs[0].Why)
 	}
-	for _, a := range f.hub.Agents() {
-		if a.Name == name {
-			t.Fatal("the agent of a given-up container is still known")
+	// The container is forgotten under the pool's lock and its agent is
+	// revoked a moment after, by the goroutine that removes it.
+	eventually(t, "the agent of the given-up container is forgotten", func() bool {
+		for _, a := range f.hub.Agents() {
+			if a.Name == name {
+				return false
+			}
 		}
-	}
+		return true
+	})
 }
 
 // A server that starts again removes what a server of its name left on
