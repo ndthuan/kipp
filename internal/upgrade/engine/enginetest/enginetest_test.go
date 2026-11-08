@@ -3,7 +3,6 @@ package enginetest
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/ndthuan/kipp/internal/update"
 	"github.com/ndthuan/kipp/internal/upgrade/engine"
@@ -19,20 +18,9 @@ func TestTheFixtureRunsAnEngineThroughAnUpgradeToTheSwitch(t *testing.T) {
 	if _, err := e.Start(context.Background(), engine.Request{Safe: true}); err != nil {
 		t.Fatal(err)
 	}
-	deadline := time.Now().Add(10 * time.Second)
-	for len(f.QuietCalls()) == 0 {
-		if time.Now().After(deadline) {
-			t.Fatal("never quiet")
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
+	f.Wait(t, "the server is asked to be quiet", func() bool { return len(f.QuietCalls()) > 0 })
 	f.SetBusy(0)
-	for f.Switched.Load() == 0 {
-		if time.Now().After(deadline) {
-			t.Fatal("never switched")
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
+	f.Wait(t, "the server is asked to restart", func() bool { return f.Switched.Load() > 0 })
 	if p, err := state.ReadPending(data); err != nil || p == nil || p.Version != Newer {
 		t.Fatalf("%+v, %v", p, err)
 	}

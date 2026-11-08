@@ -3,6 +3,7 @@ package engine_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -17,6 +18,7 @@ import (
 	et "github.com/ndthuan/kipp/internal/upgrade/engine/enginetest"
 	"github.com/ndthuan/kipp/internal/upgrade/launch"
 	"github.com/ndthuan/kipp/internal/upgrade/state"
+	"github.com/ndthuan/kipp/internal/waitfor"
 )
 
 type rig struct {
@@ -33,24 +35,39 @@ func newRig(t *testing.T, rel *et.Release, tweak func(*engine.Options)) *rig {
 	return &rig{e: e, f: f, data: data, rel: rel}
 }
 
-// settle waits for the run to end one way or the other and returns the
-// info then.
-func (r *rig) settle(t *testing.T) engine.Info {
+// until reads the info, again at each status the engine writes, until ok
+// holds of it.
+func (r *rig) until(t *testing.T, what string, ok func(engine.Info) bool) engine.Info {
 	t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
-	for time.Now().Before(deadline) {
+	timeout := time.After(waitfor.Safety)
+	for {
+		changes := r.e.Changes()
 		in, err := r.e.Info(context.Background())
 		if err != nil {
 			t.Fatal(err)
 		}
-		switch in.Status.State {
-		case state.StateSwitching, state.StateFailed, state.StateCancelled, state.StateDone:
+		if ok(in) {
 			return in
 		}
-		time.Sleep(5 * time.Millisecond)
+		select {
+		case <-changes:
+		case <-timeout:
+			t.Fatalf("timed out waiting until %s: %+v", what, in.Status)
+		}
 	}
-	t.Fatal("the upgrade did not end")
-	return engine.Info{}
+}
+
+// settle waits for the run to end one way or the other and returns the
+// info then.
+func (r *rig) settle(t *testing.T) engine.Info {
+	t.Helper()
+	return r.until(t, "the upgrade ends", func(in engine.Info) bool {
+		switch in.Status.State {
+		case state.StateSwitching, state.StateFailed, state.StateCancelled, state.StateDone:
+			return true
+		}
+		return false
+	})
 }
 
 func (r *rig) binEntries(t *testing.T) []string {
@@ -75,30 +92,16 @@ func start(t *testing.T, r *rig, req engine.Request) engine.Info {
 // untilWaiting waits until the upgrade waits for n builds.
 func untilWaiting(t *testing.T, r *rig, n int) {
 	t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		in, _ := r.e.Info(context.Background())
-		if in.Status.State == state.StateWaiting && in.Status.Running == n {
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("never waiting for %d builds: %+v", n, in.Status)
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
+	r.until(t, fmt.Sprintf("the upgrade waits for %d builds", n), func(in engine.Info) bool {
+		return in.Status.State == state.StateWaiting && in.Status.Running == n
+	})
 }
 
 // untilQuiet waits until the server was asked to be quiet. The status says
 // waiting just before that call is made.
 func untilQuiet(t *testing.T, r *rig) {
 	t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
-	for len(r.f.QuietCalls()) == 0 {
-		if time.Now().After(deadline) {
-			t.Fatal("the server was never asked to be quiet")
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
+	r.f.Wait(t, "the server is asked to be quiet", func() bool { return len(r.f.QuietCalls()) > 0 })
 }
 
 func TestASafeUpgradeGoesThroughTheStepsWithQuietOnWhileItWaitsAndHandsOver(t *testing.T) {
@@ -192,13 +195,7 @@ func TestCancellingTheWaitTurnsQuietOffRemovesTheDownloadAndRestartsNothing(t *t
 	r := newRig(t, et.NewRelease(t, et.GoodBinary(et.Newer)), nil)
 	r.f.SetBusy(1)
 	start(t, r, engine.Request{Safe: true})
-	for {
-		in, _ := r.e.Info(context.Background())
-		if in.Status.State == state.StateWaiting {
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
+	r.until(t, "the upgrade waits", func(in engine.Info) bool { return in.Status.State == state.StateWaiting })
 	in, err := r.e.Cancel(context.Background())
 	if err != nil || in.Status.State != state.StateCancelled {
 		t.Fatalf("%+v, %v", in.Status, err)
@@ -250,13 +247,7 @@ func TestQuietThatWasOnBeforeStaysOnWhenTheUpgradeIsCancelled(t *testing.T) {
 	r.f.SetQuietOn(true)
 	r.f.SetBusy(1)
 	start(t, r, engine.Request{Safe: true})
-	for {
-		in, _ := r.e.Info(context.Background())
-		if in.Status.State == state.StateWaiting {
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
+	r.until(t, "the upgrade waits", func(in engine.Info) bool { return in.Status.State == state.StateWaiting })
 	if _, err := r.e.Cancel(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -422,7 +413,8 @@ func TestARollbackWritesTheRecordThatRestoresTheLastBackupAfterQuietIsReached(t 
 	if _, err := r.e.Rollback(context.Background(), engine.Request{Safe: true}); err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(50 * time.Millisecond)
+	// Waiting is the state of the loop that looks at the builds.
+	untilWaiting(t, r, 1)
 	if r.f.Switched.Load() != 0 {
 		t.Fatal("rolled back while a build ran")
 	}

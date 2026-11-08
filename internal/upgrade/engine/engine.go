@@ -95,6 +95,9 @@ type Engine struct {
 	mu   sync.Mutex
 	run  *active
 	last string // why the last run ended in failure
+
+	changeMu sync.Mutex
+	changes  chan struct{} // closed and replaced at every status written
 }
 
 // active is the run in progress.
@@ -126,7 +129,7 @@ func New(o Options) *Engine {
 	if o.Key == nil {
 		o.Key = update.ReleaseKey()
 	}
-	return &Engine{o: o}
+	return &Engine{o: o, changes: make(chan struct{})}
 }
 
 // Request starts an upgrade or a rollback.
@@ -257,6 +260,18 @@ func (e *Engine) writeStatus(st state.Status) {
 	if err := state.WriteStatus(e.o.Data, st); err != nil {
 		e.o.Log.Warn("not writing the upgrade status", "err", err)
 	}
+	e.changeMu.Lock()
+	close(e.changes)
+	e.changes = make(chan struct{})
+	e.changeMu.Unlock()
+}
+
+// Changes is a channel closed when the next status is written. Ask for it
+// before reading Info, and a status written in between is not missed.
+func (e *Engine) Changes() <-chan struct{} {
+	e.changeMu.Lock()
+	defer e.changeMu.Unlock()
+	return e.changes
 }
 
 // begin takes the one place for a run and writes its first status. It

@@ -28,6 +28,7 @@ import (
 	"github.com/ndthuan/kipp/internal/update"
 	"github.com/ndthuan/kipp/internal/upgrade/backup"
 	"github.com/ndthuan/kipp/internal/upgrade/engine"
+	"github.com/ndthuan/kipp/internal/waitfor"
 )
 
 // The versions of the fixture: the server runs Running, and the release
@@ -120,7 +121,7 @@ func (r *Release) serve(w http.ResponseWriter, req *http.Request) {
 func (r *Release) Checker(current string) *update.Checker {
 	u, _ := url.Parse(r.Srv.URL)
 	c := update.New(update.Options{Current: current, Base: r.Srv.URL, DownloadBase: r.Srv.URL,
-		Hosts: []string{u.Hostname()}, Insecure: true, Timeout: 5 * time.Second})
+		Hosts: []string{u.Hostname()}, Insecure: true, Timeout: waitfor.Safety})
 	if err := c.Check(context.Background()); err != nil {
 		r.t.Fatal(err)
 	}
@@ -133,8 +134,48 @@ type Server struct {
 	quiet bool
 	busy  int // builds running
 	calls []bool
+	// changes is closed and replaced at each call the engine makes.
+	changes chan struct{}
 	// Switched counts the restarts asked for.
 	Switched atomic.Int32
+}
+
+// notify announces a call. f.mu is held.
+func (f *Server) notify() {
+	if f.changes != nil {
+		close(f.changes)
+	}
+	f.changes = make(chan struct{})
+}
+
+// Changes is a channel closed at the next call of SetQuiet or Switch. Ask
+// for it before looking at what the calls left, and one in between is not
+// missed.
+func (f *Server) Changes() <-chan struct{} {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.changes == nil {
+		f.changes = make(chan struct{})
+	}
+	return f.changes
+}
+
+// Wait returns once ok holds of the calls made, looking again at each one;
+// the test fails with what if none of them makes it hold.
+func (f *Server) Wait(t testing.TB, what string, ok func() bool) {
+	t.Helper()
+	timeout := time.After(waitfor.Safety)
+	for {
+		ch := f.Changes()
+		if ok() {
+			return
+		}
+		select {
+		case <-ch:
+		case <-timeout:
+			t.Fatalf("timed out waiting until %s", what)
+		}
+	}
 }
 
 // SetQuiet is the dispatcher's, recorded.
@@ -143,6 +184,7 @@ func (f *Server) SetQuiet(_ context.Context, on bool) (engine.Counts, error) {
 	defer f.mu.Unlock()
 	f.quiet = on
 	f.calls = append(f.calls, on)
+	f.notify()
 	return engine.Counts{Quiet: f.quiet, Running: f.busy}, nil
 }
 
@@ -171,7 +213,12 @@ func (f *Server) QuietCalls() []bool {
 func NewServer() *Server { return &Server{} }
 
 // Switch is the restart, counted.
-func (f *Server) Switch() { f.Switched.Add(1) }
+func (f *Server) Switch() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.Switched.Add(1)
+	f.notify()
+}
 
 // SetQuietOn sets the quiet mode as an operator might have.
 func (f *Server) SetQuietOn(on bool) {
