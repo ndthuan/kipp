@@ -8,6 +8,13 @@ lines and the data directory are the public surface.
 
 ## Unreleased
 
+- Groundwork for verified upgrades, with no change to what kipp does yet:
+  `internal/update` checks that a release's `SHA256SUMS` is signed by the
+  release key compiled into kipp (an ed25519 signature in the minisign file
+  format) and that an archive is listed there, and `go run ./cmd/kipp-release`
+  makes the key (`keygen`), signs a release (`sign`) and checks one
+  (`verify`). The key in the repository is a placeholder until a release
+  key replaces it, and `scripts/check-release-key.sh` refuses it.
 - A child that becomes gone (its pull request closed or merged, its branch
   deleted, or the scan no longer finding it) has its queued and running
   builds cancelled, saying why in the log and the activity. A queued build

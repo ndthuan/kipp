@@ -127,3 +127,38 @@ func TestTheHeadFormulaHasNoReleaseInIt(t *testing.T) {
 		t.Errorf("no head url in\n%s", f)
 	}
 }
+
+func TestAReleaseIsNotBuiltWithThePlaceholderKey(t *testing.T) {
+	dir := t.TempDir()
+	placeholder := filepath.Join(dir, "placeholder.pub")
+	real := filepath.Join(dir, "real.pub")
+	if err := os.WriteFile(placeholder, []byte("# TEST-ONLY PLACEHOLDER\nuntrusted comment: minisign public key 0\nRWQ=\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(real, []byte("untrusted comment: minisign public key 0\nRWQ=\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command("sh", "./check-release-key.sh", placeholder).CombinedOutput(); err == nil {
+		t.Errorf("the placeholder passed:\n%s", out)
+	}
+	if out, err := exec.Command("sh", "./check-release-key.sh", real).CombinedOutput(); err != nil {
+		t.Errorf("a key without the marker refused: %v\n%s", err, out)
+	}
+	if err := exec.Command("sh", "./check-release-key.sh", filepath.Join(dir, "none")).Run(); err == nil {
+		t.Error("a missing key file passed")
+	}
+}
+
+// The repository carries the placeholder until the real key lands, so the
+// script must refuse the file kipp is built with today.
+func TestTheKeyInTheRepositoryIsCheckedByDefault(t *testing.T) {
+	data, err := os.ReadFile("../internal/update/release.pub")
+	if err != nil {
+		t.Fatal(err)
+	}
+	placeholder := strings.HasPrefix(string(data), "# TEST-ONLY PLACEHOLDER")
+	err = exec.Command("sh", "./check-release-key.sh").Run()
+	if placeholder == (err == nil) {
+		t.Errorf("placeholder=%v but the script said %v", placeholder, err)
+	}
+}

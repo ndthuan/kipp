@@ -136,6 +136,14 @@ linters:
       # A server that redirects elsewhere is the case those tests are about.
       - path: ^internal/cli/serve_test\.go$
         text: "G710"
+      # kipp-release writes the signature where its maintainer says and reads
+      # the files they name; its tests read what they wrote under t.TempDir().
+      - path: ^internal/releasetool/releasetool(_test)?\.go$
+        text: "G703|G304"
+      # The test builds the two binaries of this module to look for a test
+      # hook in them, and reads the result.
+      - path: ^internal/update/update_test\.go$
+        text: "G204|G304"
 formatters:
   enable:
     - gofmt
