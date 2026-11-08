@@ -8,6 +8,11 @@ lines and the data directory are the public surface.
 
 ## Unreleased
 
+- A queued build ended before it started (its job disabled or removed) was
+  reported done by a wait, and by the API's build view, a moment before the
+  line saying why had reached the job's activity. It stays busy until the
+  line is written.
+
 - A pull request build could fail before its first stage with git's "could
   not fetch ... from promisor remote" and "not our ref": `git merge` checks
   the merged files out as it writes them, and in the blob-less clone its

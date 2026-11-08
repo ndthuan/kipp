@@ -157,6 +157,7 @@ type Dispatcher struct {
 	mu      sync.Mutex
 	snap    *config.Snapshot
 	running map[int64]*run              // by build id, from reserved to released
+	ending  map[int64]bool              // queued builds being ended, until released
 	locks   map[string]int64            // lock name to the build holding it
 	done    map[int64][]chan struct{}   // waiters per build
 	waiting map[int64]map[string]string // by build and stage: what a stage waits for to be placed
@@ -250,7 +251,7 @@ func New(st *store.Store, r runner.Runner, opts Options) *Dispatcher {
 		slots: make(chan struct{}, opts.Builds), local: make(chan struct{}, opts.Executors),
 		wake: make(chan struct{}, 1), quit: make(chan struct{}), waiting: map[int64]map[string]string{},
 		snap:    &config.Snapshot{Jobs: map[string]*config.Job{}},
-		running: map[int64]*run{}, locks: map[string]int64{},
+		running: map[int64]*run{}, ending: map[int64]bool{}, locks: map[string]int64{},
 		done: map[int64][]chan struct{}{}, changes: make(chan struct{}),
 	}
 }
@@ -582,8 +583,16 @@ func (d *Dispatcher) cancelQueued(ctx context.Context, b *store.Build, why strin
 // endQueued ends a queued build in status and says line on its job's activity.
 func (d *Dispatcher) endQueued(ctx context.Context, b *store.Build, status store.Status, line string) {
 	now := time.Now()
+	// Busy until the line is written: Wait answers a terminal build that is
+	// not busy, and the line is part of what it ended with.
+	d.mu.Lock()
+	d.ending[b.ID] = true
+	d.mu.Unlock()
 	if err := d.st.SetBuildStatus(ctx, b.ID, status, now); err != nil {
 		d.log.Error("ending a queued build", "build", b.ID, "status", status, "err", err)
+		d.mu.Lock()
+		delete(d.ending, b.ID)
+		d.mu.Unlock()
 		return // still queued: the next pass tries again, and the line below is written once
 	}
 	if err := d.st.AddActivity(ctx, b.Job, line, now); err != nil {
@@ -729,6 +738,7 @@ func (d *Dispatcher) slotWaiter(on bool) {
 // release gives back what a build still holds, and wakes its waiters and the loop.
 func (d *Dispatcher) release(id int64) {
 	d.mu.Lock()
+	delete(d.ending, id)
 	if r := d.running[id]; r != nil {
 		for _, l := range r.job.Locks {
 			delete(d.locks, l)
@@ -784,7 +794,7 @@ func (d *Dispatcher) subscribe(id int64) chan struct{} {
 func (d *Dispatcher) Busy(id int64) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.running[id] != nil
+	return d.running[id] != nil || d.ending[id]
 }
 
 func (d *Dispatcher) unsubscribe(id int64, ch chan struct{}) {
