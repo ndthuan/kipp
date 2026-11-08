@@ -2,8 +2,11 @@ package dispatch
 
 import (
 	"context"
+	"errors"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -160,5 +163,70 @@ func TestMergeCommitKippWritesHasAShortSubjectAndKippAsItsAuthor(t *testing.T) {
 		if got := log("%" + who + "n <%" + who + "e>"); got != "kipp <kipp@localhost>" {
 			t.Fatalf("the merge's %s is %q", who, got)
 		}
+	}
+}
+
+// gitDyingOnItsFirstMerge puts a git ahead of the real one on PATH that
+// answers its first merge with said and exit 128, and counts the merges it
+// is asked for in the file it returns.
+func gitDyingOnItsFirstMerge(t *testing.T, said string) (merges string) {
+	t.Helper()
+	real, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("no git on this machine")
+	}
+	bin := t.TempDir()
+	merges = filepath.Join(bin, "merges")
+	script := "#!/bin/sh\n" +
+		"for a in \"$@\"; do if [ \"$a\" = merge ]; then\n" +
+		"  echo m >> " + merges + "\n" +
+		"  if [ \"$(wc -l < " + merges + ")\" -eq 1 ]; then echo '" + said + "' >&2; exit 128; fi\n" +
+		"fi; done\nexec " + real + " \"$@\"\n"
+	if err := os.WriteFile(filepath.Join(bin, "git"), []byte(script), 0o700); err != nil { //nolint:gosec // a script for the test to run
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	return merges
+}
+
+func mergesAsked(file string) int {
+	data, _ := os.ReadFile(file) //nolint:gosec // the test's own file
+	return strings.Count(string(data), "m")
+}
+
+func conflictingPR(t *testing.T) (r *repo, head string) {
+	t.Helper()
+	r, _, _ = prRepo(t, treeStages)
+	r.git("checkout", "-q", "feature-x")
+	head = r.commit("feature-x", map[string]string{"shared.txt": "the head's\n"})
+	r.commit("main", map[string]string{"shared.txt": "the base's\n"})
+	return r, head
+}
+
+// Git has been seen to die, in a blob-less clone, asking the remote for the
+// conflict it had just written: a merge that died so is made once more.
+func TestMergeTriesAgainWhenGitDiesFetchingAnObjectItMade(t *testing.T) {
+	r, head := conflictingPR(t)
+	merges := gitDyingOnItsFirstMerge(t, "fatal: could not fetch abc from promisor remote")
+	var out strings.Builder
+	_, _, err := gitMerge(context.Background(), t.TempDir(), "file://"+r.dir, "main", "", head, &out)
+	if !errors.Is(err, ErrNoCleanMerge) {
+		t.Fatalf("%v, want the conflict the second merge found: %s", err, out.String())
+	}
+	if n := mergesAsked(merges); n != 2 || !strings.Contains(out.String(), "merging again") {
+		t.Fatalf("%d merges, log %q", n, out.String())
+	}
+}
+
+func TestMergeDoesNotTryAgainForAnyOtherFailure(t *testing.T) {
+	r, head := conflictingPR(t)
+	merges := gitDyingOnItsFirstMerge(t, "fatal: something else")
+	_, _, err := gitMerge(context.Background(), t.TempDir(), "file://"+r.dir, "main", "", head, io.Discard)
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 128 {
+		t.Fatalf("%v, want git's own exit 128", err)
+	}
+	if n := mergesAsked(merges); n != 1 {
+		t.Fatalf("%d merges, want one", n)
 	}
 }

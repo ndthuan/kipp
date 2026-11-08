@@ -1,6 +1,7 @@
 package dispatch
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"errors"
@@ -913,14 +914,41 @@ func gitMerge(ctx context.Context, dir, repo, base, baseCommit, head string, out
 	if err != nil {
 		return "", "", err
 	}
-	err = runGit(ctx, dir, out, "-c", "user.name=kipp", "-c", "user.email=kipp@localhost", "-c", "commit.gpgsign=false",
-		"-c", "core.hooksPath=/dev/null", "merge", "--quiet", "--no-ff", "--no-edit", "refs/kipp/head")
-	var exit *exec.ExitError
-	if errors.As(err, &exit) && exit.ExitCode() == 1 && ctx.Err() == nil {
-		return baseSHA, headSHA, ErrNoCleanMerge
-	}
-	return baseSHA, headSHA, err
+	return baseSHA, headSHA, mergeHead(ctx, dir, out)
 }
+
+// mergeHead merges refs/kipp/head into the checked-out base: ErrNoCleanMerge
+// for a conflict, once more after the one failure that is git's own.
+func mergeHead(ctx context.Context, dir string, out io.Writer) error {
+	mergeArgs := []string{"-c", "user.name=kipp", "-c", "user.email=kipp@localhost", "-c", "commit.gpgsign=false",
+		"-c", "core.hooksPath=/dev/null", "merge", "--quiet", "--no-ff", "--no-edit", "refs/kipp/head"}
+	for attempt := 0; ; attempt++ {
+		var said bytes.Buffer
+		err := runGit(ctx, dir, io.MultiWriter(out, &said), mergeArgs...)
+		var exit *exec.ExitError
+		switch {
+		case ctx.Err() != nil || !errors.As(err, &exit):
+			return err
+		case exit.ExitCode() == 1:
+			return ErrNoCleanMerge
+		case attempt > 0 || exit.ExitCode() != 128 || !strings.Contains(said.String(), promisorFetchDied):
+			return err
+		}
+		// Git's checkout prefetch of the merged tree sometimes asks the
+		// remote for a blob the merge wrote a moment before, which the
+		// remote never had, and dies. The merge is deterministic and the
+		// blob is on disk by now, so the same merge from the base again
+		// does not ask.
+		_, _ = fmt.Fprintln(out, "kipp: git died fetching an object the merge made; merging again")
+		if err := runGit(ctx, dir, out, "reset", "--quiet", "--hard", "refs/kipp/base"); err != nil {
+			return err
+		}
+	}
+}
+
+// promisorFetchDied is what git prints, with exit 128, when the fetch of
+// missing blobs from a partial clone's remote fails.
+const promisorFetchDied = "from promisor remote"
 
 // redacted is err with the repo's URL, where it says it, said without its
 // credentials: a Clone may put the URL in what it fails with.
