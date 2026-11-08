@@ -174,17 +174,15 @@ func (h *Hub) claim(w http.ResponseWriter, r *http.Request, id Identity) {
 }
 
 // take is what the agent may claim now: the oldest stage given to it, and
-// the builds that ended. An agent the hub forgot (its build ended, or it
-// was removed) is 401, for its token is no more; one that went offline is
-// 400 until it connects again.
+// the builds that ended. The caller's token is good, so one this hub has no
+// connection for (the server started again, or the agent went offline) is
+// 400 until it connects again; an agent whose token is gone never gets
+// here, authed refuses it with 401.
 func (h *Hub) take(who Who) (agentproto.Claim, <-chan struct{}, int) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	c := h.conns[who]
-	switch {
-	case c == nil:
-		return agentproto.Claim{}, nil, http.StatusUnauthorized
-	case !c.online:
+	if c == nil || !c.online {
 		return agentproto.Claim{}, nil, http.StatusBadRequest
 	}
 	claim := agentproto.Claim{Ended: c.ended}

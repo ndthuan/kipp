@@ -342,6 +342,29 @@ func TestAnAgentKillsWhatTheServerNoLongerKnows(t *testing.T) {
 	f.online()
 }
 
+// A server that started again has no connection for an agent whose token
+// it still honours: the agent's claim, made before its next heartbeat,
+// is told to connect again, never that its token is refused, which would
+// end the agent for good.
+func TestAClaimBeforeTheFirstConnectToThisServerIsToldToConnect(t *testing.T) {
+	f := newFixture(t)
+	f.call(http.MethodPost, "/api/v1/agent/connect", `{"Version":"v-test"}`)
+	f.hub = f.newHub()
+	req, err := http.NewRequest(http.MethodGet, f.srv.URL+"/api/v1/agent/claim", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+boxToken)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("answered %d", resp.StatusCode)
+	}
+}
+
 func TestAnAgentThatStartsAgainFailsWhatItRan(t *testing.T) {
 	f := newFixture(t)
 	stop := f.runAgent(t.TempDir())
