@@ -15,6 +15,7 @@ import (
 	"github.com/ndthuan/kipp/internal/upgrade/backup"
 	"github.com/ndthuan/kipp/internal/upgrade/engine"
 	et "github.com/ndthuan/kipp/internal/upgrade/engine/enginetest"
+	"github.com/ndthuan/kipp/internal/upgrade/launch"
 	"github.com/ndthuan/kipp/internal/upgrade/state"
 )
 
@@ -548,5 +549,41 @@ func TestARollbackThatIsCancelledWhileItWaitsLeavesQuietOffAndWritesNothing(t *t
 	}
 	if got := r.f.QuietCalls(); len(got) != 2 || got[1] {
 		t.Fatalf("quiet calls %v", got)
+	}
+}
+
+func TestAServerPinnedToItsOwnExecutableRefusesAnUpgradeBeforeDownloading(t *testing.T) {
+	rel := et.NewRelease(t, et.GoodBinary(et.Newer))
+	r := newRig(t, rel, nil)
+	t.Setenv(launch.EnvUseBundled, "1")
+	_, err := r.e.Start(context.Background(), engine.Request{Safe: true})
+	if !errors.Is(err, engine.ErrConflict) || !strings.Contains(err.Error(), "pinned to its own executable") {
+		t.Fatalf("%v", err)
+	}
+	in, _ := r.e.Info(context.Background())
+	if !strings.Contains(in.Unavailable, "KIPP_USE_BUNDLED_BINARY=1") || in.Status.State != "" {
+		t.Fatalf("%q %+v", in.Unavailable, in.Status)
+	}
+	if got := r.binEntries(t); len(got) != 0 {
+		t.Fatalf("bin/ holds %v", got)
+	}
+	if p, _ := state.ReadPending(r.data); p != nil {
+		t.Fatalf("pending %+v", p)
+	}
+}
+
+func TestAServerPinnedToItsOwnExecutableRefusesARollbackAndOffersNone(t *testing.T) {
+	r := newRig(t, et.NewRelease(t, et.GoodBinary(et.Newer)), nil)
+	r.afterAnUpgrade(t, et.Running)
+	if in, _ := r.e.Info(context.Background()); in.RollbackTo == "" {
+		t.Fatal("no rollback to refuse")
+	}
+	t.Setenv(launch.EnvUseBundled, "1")
+	_, err := r.e.Rollback(context.Background(), engine.Request{Safe: true})
+	if !errors.Is(err, engine.ErrConflict) || !strings.Contains(err.Error(), "pinned to its own executable") {
+		t.Fatalf("%v", err)
+	}
+	if in, _ := r.e.Info(context.Background()); in.RollbackTo != "" || in.RollbackBackup != "" {
+		t.Fatalf("%+v", in)
 	}
 }

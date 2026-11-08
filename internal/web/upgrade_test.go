@@ -14,6 +14,7 @@ import (
 	"github.com/ndthuan/kipp/internal/upgrade/backup"
 	"github.com/ndthuan/kipp/internal/upgrade/engine"
 	et "github.com/ndthuan/kipp/internal/upgrade/engine/enginetest"
+	"github.com/ndthuan/kipp/internal/upgrade/launch"
 	"github.com/ndthuan/kipp/internal/upgrade/state"
 )
 
@@ -295,4 +296,18 @@ func TestTheCardShowsTheManualLinesWhereTheEngineCannotUpgrade(t *testing.T) {
 		_, other := get(t, e.login(t, "admin"), e.srv.URL+"/")
 		lacks(t, other, "is available")
 	}
+}
+
+func TestAPinnedServersCardShowsTheManualLinesAndNoUpgradeOrRollback(t *testing.T) {
+	u := upgradeSite(t)
+	name, err := backup.Take(context.Background(), u.data, et.Running, time.Now())
+	must(t, err)
+	must(t, backup.MarkSucceeded(u.data, name, time.Now()))
+	must(t, state.WritePrevious(u.data, "v0.9.0"))
+	t.Setenv(launch.EnvUseBundled, "1")
+	page := u.server(t)
+	contains(t, page, "cannot install it from here", "pinned to its own executable", "Install it by hand")
+	lacks(t, page, "Upgrade to ", `name="safe"`, "Roll back to")
+	code, _ := get(t, u.login(t, "admin"), u.srv.URL+"/admin/server/upgrade/rollback")
+	eq(t, "rollback page", code, http.StatusConflict)
 }

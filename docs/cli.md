@@ -87,7 +87,8 @@ A release build first looks in `<data>/bin/`: it runs the binary an upgrade
 left there when that is a higher release than the executable's own, and
 carries out an upgrade or a rollback the server asked for before it
 restarted. `KIPP_USE_BUNDLED_BINARY=1` in the environment keeps the
-executable's own and skips both. A dev build ignores `bin/`. See
+executable's own and skips both, so `kipp upgrade` is refused. A dev build
+ignores `bin/`. See
 [Upgrading](operations.md#upgrading) in Operations.
 
 ## kipp check

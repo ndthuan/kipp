@@ -29,6 +29,14 @@ var (
 	ErrBadRequest = errors.New("bad request")
 )
 
+// pinnedText is why a server that KIPP_USE_BUNDLED_BINARY=1 holds to its
+// own executable cannot be switched: the launcher is what carries out the
+// switch, and the variable skips it, so a run would restart the same
+// version and leave the status at switching.
+const pinnedText = "this server is pinned to its own executable (" + launch.EnvUseBundled + "=1)"
+
+func pinned() bool { return os.Getenv(launch.EnvUseBundled) == "1" }
+
 func conflict(format string, a ...any) error {
 	return fmt.Errorf("%w: %s", ErrConflict, fmt.Sprintf(format, a...))
 }
@@ -187,6 +195,8 @@ func (e *Engine) unavailable(busy bool, latest string, upgradable bool) string {
 	switch {
 	case e.o.InstallType() == update.Dev:
 		return "not available in a development build"
+	case pinned():
+		return pinnedText
 	case e.o.Checker == nil:
 		return "the update check is off, so there is no release to upgrade to"
 	case busy:
@@ -204,7 +214,7 @@ func (e *Engine) unavailable(busy bool, latest string, upgradable bool) string {
 // upgrade that came up.
 func (e *Engine) rollbackTarget() (to, bk string) {
 	prev, err := state.ReadPrevious(e.o.Data)
-	if err != nil || prev == "" || e.o.InstallType() == update.Dev {
+	if err != nil || prev == "" || e.o.InstallType() == update.Dev || pinned() {
 		return "", ""
 	}
 	name, ok := backup.LastSucceeded(e.o.Data)
@@ -330,6 +340,9 @@ func (e *Engine) startLocked(ctx context.Context, req Request) error {
 	if e.o.InstallType() == update.Dev {
 		return conflict("not available in a development build")
 	}
+	if pinned() {
+		return conflict("%s", pinnedText)
+	}
 	if e.run != nil {
 		return conflict("an upgrade is already running")
 	}
@@ -396,6 +409,9 @@ func (e *Engine) Rollback(ctx context.Context, req Request) (Info, error) {
 func (e *Engine) rollbackLocked(ctx context.Context, req Request) error {
 	if e.o.InstallType() == update.Dev {
 		return conflict("not available in a development build")
+	}
+	if pinned() {
+		return conflict("%s", pinnedText)
 	}
 	if e.run != nil {
 		return conflict("an upgrade is already running")

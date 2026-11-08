@@ -339,9 +339,12 @@ docker run -d --name kipp -e KIPP_USE_BUNDLED_BINARY=1 -p 8085:8085 \
 ```
 
 Then the tag is the version, and an upgrade is a new tag, [by
-hand](#upgrading-by-hand). A pinned server does not carry out an upgrade
-or a rollback started in the app: the launcher is the part that does, and
-the variable skips it. Leave it unset if you want the app to do it. The
+hand](#upgrading-by-hand). A pinned server refuses an upgrade or a
+rollback started in the app, `kipp upgrade` or the API (409) before it
+downloads anything: the launcher is the part that carries one out, and
+the variable skips it. The Server page then shows the manual lines and no
+Upgrade or Roll back link. Leave the variable unset if you want the app to
+do it. The
 variable is read by any install, though a pinned image is where it is
 used.
 

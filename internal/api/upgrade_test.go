@@ -9,6 +9,7 @@ import (
 	"github.com/ndthuan/kipp/internal/upgrade/backup"
 	"github.com/ndthuan/kipp/internal/upgrade/engine"
 	et "github.com/ndthuan/kipp/internal/upgrade/engine/enginetest"
+	"github.com/ndthuan/kipp/internal/upgrade/launch"
 	"github.com/ndthuan/kipp/internal/upgrade/state"
 )
 
@@ -150,4 +151,22 @@ func TestAFailedUpgradeShowsItsReasonAndTheLaunchersFailureIsReported(t *testing
 	lf := e.object(t, 200, e.admin, "GET", "/api/v1/admin/upgrade", "")["last_failure"].(map[string]any)
 	eq(t, "reason", lf["reason"], "it did not answer its health check")
 	eq(t, "at", lf["at"], "2026-01-02T03:04:05.000Z")
+}
+
+func TestAnUpgradeOrRollbackOfAPinnedServerIsRefusedBeforeAnythingIsDone(t *testing.T) {
+	e := newEnv(t)
+	_, data := e.withUpgrades(t, func(o *engine.Options) { o.Version = "v1.1.0" })
+	name, err := backup.Take(context.Background(), data, et.Running, time.Now())
+	must(t, err)
+	must(t, backup.MarkSucceeded(data, name, time.Now()))
+	must(t, state.WritePrevious(data, et.Running))
+	t.Setenv(launch.EnvUseBundled, "1")
+	got := e.object(t, 200, e.admin, "GET", "/api/v1/admin/upgrade", "")
+	contains(t, got["unavailable"].(string), "pinned to its own executable")
+	eq(t, "rollback_to", got["rollback_to"], "")
+	for _, path := range []string{"/api/v1/admin/upgrade", "/api/v1/admin/upgrade/rollback"} {
+		d, _ := e.asProblem(t, 409, "conflict", e.admin, "POST", path, `{"safe_restart":true}`)
+		contains(t, d.Detail, "pinned to its own executable")
+	}
+	eq(t, "state", e.object(t, 200, e.admin, "GET", "/api/v1/admin/upgrade", "")["state"], "idle")
 }

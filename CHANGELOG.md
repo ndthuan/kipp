@@ -49,7 +49,10 @@ lines and the data directory are the public surface.
   [Operations](docs/operations.md#upgrading) describe them.
 - The Docker image sets `KIPP_INSTALL_SOURCE=docker`, so that the Server page
   and `kipp version` say it is a Docker image; the upgrade keeps its binary in
-  the data volume. `KIPP_USE_BUNDLED_BINARY=1` pins the image's own kipp.
+  the data volume. `KIPP_USE_BUNDLED_BINARY=1` pins the image's own kipp, and a pinned
+  server refuses an upgrade or a rollback (409, before anything is
+  downloaded) instead of restarting on the same version; the Server page
+  then shows the manual lines.
   `scripts/smoke-upgrade.sh` upgrades real containers end to end.
 - Docs: Upgrading in `docs/install.md` (from the app, `kipp upgrade`, by hand
   for Homebrew, Docker and an archive, a pinned image, rollback, a failed
