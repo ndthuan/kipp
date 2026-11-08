@@ -52,6 +52,14 @@ docs/ are the user's view: the job file, the commands, the data directory.
   flags. What is left is a finding whose flagged behaviour is the feature
   (running a job's command, a test about a file's mode); it goes in the one
   exclusions list in `.golangci.yml`, by file and rule, with the reason.
+- A test waits on an event, never on the clock: `time.Sleep` in a
+  `_test.go` file is refused by the linter. Code that runs on timers is
+  tested in a `testing/synctest` bubble (a fake clock); a state the code
+  can announce (a channel, a hook, a change counter such as
+  `Dispatcher.Changes`) is waited for on that; what it cannot announce is
+  waited for with `internal/waitfor.Until`, whose 30 second deadline is
+  only a safety net. A sleep that stays is one whose subject is real time
+  across a process, listed in `.golangci.yml` with its reason.
 - Process and timing tests must hold under `go test -race -count=3 ./...`;
   one that fails one time in three is a bug.
 - Dependencies are pinned in `go.mod`; check for the newest version before

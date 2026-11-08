@@ -17,9 +17,16 @@ linters:
     - gosec
     - gocognit
     - staticcheck
+    - forbidigo
   settings:
     gocognit:
       min-complexity: 15
+    # A test waits for what its code announces, never for the clock.
+    forbidigo:
+      analyze-types: true
+      forbid:
+        - pattern: ^time\.Sleep$
+          msg: a test waits on an event, not on the clock; use testing/synctest for timers (a fake clock in a bubble), or a hook or state of the code (internal/waitfor.Until for one it cannot announce)
     revive:
       rules:
         - name: exported
@@ -31,6 +38,23 @@ linters:
   exclusions:
     warn-unused: true
     rules:
+      # Sleeping is refused in tests only; the exceptions below are the tests
+      # whose subject is that nothing happens in a real time, with the reason.
+      - path-except: _test\.go$
+        linters:
+          - forbidigo
+      # The grace a killed stage gets is real time across a real process, which
+      # a bubble cannot move: the test sleeps to just before it ends and looks.
+      # And a cancelled start must leave no process, which only a window of
+      # real time can show.
+      - path: ^internal/runner/local_test\.go$
+        linters:
+          - forbidigo
+      # A third scan that a failed limit would let in has no event to wait for,
+      # only a window of real time to start in.
+      - path: ^internal/index/scanner_test\.go$
+        linters:
+          - forbidigo
       # The launcher runs the data directory's binary, which is its subject:
       # the file an upgrade put there, checked by version before it is run.
       - path: ^internal/upgrade/launch/(launch|supervise)\.go$
