@@ -1,0 +1,22 @@
+{{define "content"}}
+{{with .Data}}
+<form class="panel stack narrow middle" method="post" action="/oauth/authorize">
+<h1>Connect {{.Client}}</h1>
+<p><strong>{{.Client}}</strong> asks to act as <strong>{{.User}}</strong> on this kipp. If you approve, it is sent back to <strong>{{.Host}}</strong>.</p>
+<input type="hidden" name="csrf" value="{{$.CSRF}}">
+{{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{.Value}}">
+{{end}}
+<fieldset class="stack">
+<legend>It may</legend>
+<p>See your jobs, builds, logs and test results.</p>
+{{if .AsksBuild}}<label class="check"><input type="checkbox" name="build" checked> Start, repeat and cancel builds</label>
+{{else}}<p class="sub">It did not ask to start or cancel builds.</p>
+{{end}}</fieldset>
+<p class="sub">It can do only what your own grants allow, and nothing a person with no grants could not. The access lasts up to 90 days; you can disconnect it on your Account page.</p>
+<div class="actions">
+<button class="action action-main" name="decision" value="approve">Approve</button>
+<button class="action action-quiet" name="decision" value="deny">Deny</button>
+</div>
+</form>
+{{end}}
+{{end}}

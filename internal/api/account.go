@@ -43,6 +43,12 @@ func credentials(u *store.User, sess *store.Session) error {
 	return nil
 }
 
+// RequireSudo is nil when sess may change credentials: a browser session of
+// u's in sudo mode, ErrSudoRequired when the password is due again. A page
+// whose change is not made through this package, like the consent to an
+// app, asks it.
+func RequireSudo(u *store.User, sess *store.Session) error { return credentials(u, sess) }
+
 // verify checks u's own password on the counters a login is held to. A
 // throttled or busy check comes back as auth says it.
 func (s *Service) verify(ctx context.Context, u *store.User, password string, at auth.Attempt) error {

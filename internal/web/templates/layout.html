@@ -121,6 +121,23 @@
 </div>
 {{else}}<p class="sub">No token.</p>
 {{end}}{{end}}
+{{define "apps"}}{{if .Apps}}<div class="scroll">
+<table>
+<thead><tr><th>App</th><th>May</th><th>Connected</th><th>Last used</th><th>Ends</th><th><span class="sr-only">Disconnect</span></th></tr></thead>
+<tbody>
+{{range .Apps}}<tr>
+<td>{{.ClientName}}</td>
+<td>{{appScopes .}}</td>
+<td>{{clock .CreatedAt}}</td>
+<td>{{with .LastUsedAt}}{{clock .}}{{else}}<span class="sub">never</span>{{end}}</td>
+<td>{{clock .ExpiresAt}}</td>
+<td><a class="action action-quiet action-small" href="{{$.Base}}/{{.ID}}/revoke">Disconnect</a></td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>
+{{else}}<p class="sub">No app is connected.</p>
+{{end}}{{end}}
 {{define "token-form"}}<form class="panel stack pop" method="post" action="{{.Action}}">
 <h3>Make a token</h3>
 <input type="hidden" name="csrf" value="{{.CSRF}}">

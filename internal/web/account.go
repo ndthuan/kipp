@@ -39,6 +39,7 @@ type sudoAction struct {
 var sudoActions = map[string]sudoAction{
 	"POST /account/tokens":                        {"make a token", at("/account")},
 	"POST /account/tokens/{id}/revoke":            {"revoke a token", samePath},
+	"POST /oauth/authorize":                       {"let an app in", func(r *http.Request) string { return authorizeURL(r.PostForm) }},
 	"POST /admin/users":                           {"add a user", at("/admin/users")},
 	"POST /admin/users/{name}/admin/on":           {"make a user an admin", userPage},
 	"POST /admin/users/{name}/admin/off":          {"take admin away from a user", samePath},
@@ -125,6 +126,7 @@ var notices = map[string]string{
 	"password":          "Your password is changed. Every other session of yours has ended; this browser stays logged in.",
 	"sessions":          "Every other session of yours has ended.",
 	"revoked":           "The token is revoked: nothing can use it any more.",
+	"app-revoked":       "The app is disconnected: its tokens are refused from now on.",
 	"admin-on":          "The user is an admin now.",
 	"admin-off":         "The user is no longer an admin.",
 	"grants":            "The grants are saved.",
@@ -157,6 +159,10 @@ func done(w http.ResponseWriter, r *http.Request, to, what string) {
 
 type accountData struct {
 	Tokens []*store.Token
+	// Apps are the apps let in, when serve has sign-in for MCP clients;
+	// AppsOn says whether it has.
+	Apps   []*store.OAuthGrant
+	AppsOn bool
 	// Others is how many other sessions the user has.
 	Others int
 	Days   []int
@@ -182,6 +188,13 @@ func (s *Site) accountPage(w http.ResponseWriter, r *http.Request, u *store.User
 		return
 	}
 	d := accountData{Tokens: tokens, Others: others, Days: api.TokenDays, PasswordError: pwErr}
+	if s.oauth != nil {
+		d.AppsOn = true
+		if d.Apps, err = s.oauth.Grants(r.Context(), u.ID); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+	}
 	if code == http.StatusOK {
 		d.Notice = noticeOf(r)
 	}

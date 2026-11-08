@@ -836,7 +836,7 @@ func (s *server) handler() http.Handler {
 		data = s.f.data
 	}
 	mux.Handle("/", web.New(a, au, s.st, version.Version,
-		web.WithApps(web.AppFlow{DataDir: data, BaseURL: s.f.baseURL, API: s.f.githubAPI}))) // the pages and /static/
+		web.WithApps(web.AppFlow{DataDir: data, BaseURL: s.f.baseURL, API: s.f.githubAPI}), web.WithOAuth(oauthServer))) // the pages and /static/
 	return mux
 }
 

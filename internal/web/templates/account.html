@@ -41,7 +41,13 @@
 {{template "tokens" (tokenList .Tokens "/account/tokens")}}
 </section>
 
-<section class="stack narrow" aria-labelledby="sessions-heading">
+{{if .AppsOn}}<section class="stack" aria-labelledby="apps-heading">
+<h2 id="apps-heading">Connected apps</h2>
+<p class="lead">Apps you let in with a sign-in, like Claude. Each acts as you, only where it was allowed, and only where your own grants reach.</p>
+{{template "apps" (appList .Apps "/account/apps")}}
+</section>
+
+{{end}}<section class="stack narrow" aria-labelledby="sessions-heading">
 <h2 id="sessions-heading">Sessions</h2>
 {{if .Others}}<p>You are logged in on {{.Others}} other {{if eq .Others 1}}session{{else}}sessions{{end}} beside this one.</p>
 <form method="post" action="/account/sessions/end">

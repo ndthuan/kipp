@@ -27,6 +27,7 @@ import (
 	"github.com/ndthuan/kipp/internal/api"
 	"github.com/ndthuan/kipp/internal/auth"
 	"github.com/ndthuan/kipp/internal/config"
+	"github.com/ndthuan/kipp/internal/oauth"
 	"github.com/ndthuan/kipp/internal/store"
 	"github.com/ndthuan/kipp/internal/webhook"
 )
@@ -70,7 +71,10 @@ type Site struct {
 	// set up for it.
 	apps      *AppFlow
 	appStates *appStates
-	now       func() time.Time
+	// oauth is the sign-in of MCP clients; nil when serve has no
+	// --mcp-oauth, and then none of its pages exists.
+	oauth *oauth.Server
+	now   func() time.Time
 }
 
 type asset struct {
@@ -108,7 +112,7 @@ func parsePages(assets map[string]asset, zone *time.Location) map[string]*templa
 		return "/static/" + name + "?v=" + a.version(), nil
 	}
 	funcs := template.FuncMap{"static": static, "dag": dagOf, "ago": ago, "clock": clockIn(zone), "zoned": zoned, "since": since, "join": join, "cancelOf": cancelOf, "took": took, "millis": millis, "lines": lines, "buildPath": buildPath, "crumb": crumb,
-		"userPath": userPath, "secretPath": secretPath, "lasts": lasts, "expired": expired, "tokenList": tokenList, "tokenForm": tokenForm, "secretName": webhook.SecretName, "placePath": placePath, "bytes": byteSize, "scopePath": scopePath, "scopeField": scopeField, "metricsPath": metricsPath, "plural": plural, "percent": percent}
+		"userPath": userPath, "secretPath": secretPath, "lasts": lasts, "expired": expired, "tokenList": tokenList, "appList": appList, "appScopes": appScopes, "tokenForm": tokenForm, "secretName": webhook.SecretName, "placePath": placePath, "bytes": byteSize, "scopePath": scopePath, "scopeField": scopeField, "metricsPath": metricsPath, "plural": plural, "percent": percent}
 	layout := template.Must(template.New("layout.html").Funcs(funcs).ParseFS(templateFS, "templates/layout.html"))
 	files, err := fs.Glob(templateFS, "templates/*.html")
 	if err != nil {
@@ -166,6 +170,9 @@ func (s *Site) handler() http.Handler {
 	pages.HandleFunc("GET /metrics/{store}", s.withUser(s.metricsStore))
 	s.accountRoutes(pages)
 	s.adminRoutes(pages)
+	if s.oauth != nil {
+		s.oauthRoutes(pages)
+	}
 	pages.HandleFunc("/", s.withUser(func(w http.ResponseWriter, r *http.Request, _ *store.User) { s.fail(w, r, api.ErrNotFound) }))
 
 	mux := http.NewServeMux()
@@ -512,6 +519,7 @@ func (s *Site) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.endHeldSession(r)
+	s.sudoForConsent(r, next, sess)
 	for _, c := range s.api.LoginCookies(r, sess) {
 		http.SetCookie(w, c)
 	}

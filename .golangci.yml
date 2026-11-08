@@ -81,6 +81,11 @@ linters:
       # escaped part by part.
       - path: ^internal/api/artifacts\.go$
         text: "G710"
+      # The consent page sends the user back to the app's redirect address,
+      # which the oauth package matched exactly against the client's
+      # registered list before it was handed over.
+      - path: ^internal/web/oauth\.go$
+        text: "G710"
       # A log is sent as text/plain with nosniff, never as markup.
       - path: ^internal/api/log\.go$
         text: "G705"

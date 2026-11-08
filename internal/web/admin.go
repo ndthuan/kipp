@@ -98,6 +98,10 @@ type userData struct {
 	Groups []grantGroup
 	Days   []int
 	Notice string
+	// Apps are the apps the user let in, when serve has sign-in for MCP
+	// clients (AppsOn).
+	Apps   []*store.OAuthGrant
+	AppsOn bool
 }
 
 func (s *Site) userPage(w http.ResponseWriter, r *http.Request, u *store.User) {
@@ -113,6 +117,13 @@ func (s *Site) userPage(w http.ResponseWriter, r *http.Request, u *store.User) {
 		return
 	}
 	d := userData{Info: info, Self: info.Name == u.Name, Days: api.TokenDays, Notice: noticeOf(r)}
+	if s.oauth != nil {
+		d.AppsOn = true
+		if d.Apps, err = s.userApps(r, info.Name); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+	}
 	for _, g := range groups(jobs) {
 		if g.Removed { // not loaded: their grants are the gone ones, listed apart
 			continue
@@ -124,6 +135,15 @@ func (s *Site) userPage(w http.ResponseWriter, r *http.Request, u *store.User) {
 		d.Groups = append(d.Groups, gg)
 	}
 	s.render(w, r, "user", http.StatusOK, page{Title: info.Name, Here: "/admin/users", Data: d, oneTime: true})
+}
+
+// userApps are the apps the user called name let in.
+func (s *Site) userApps(r *http.Request, name string) ([]*store.OAuthGrant, error) {
+	who, err := s.st.UserByName(r.Context(), name)
+	if err != nil {
+		return nil, err
+	}
+	return s.oauth.Grants(r.Context(), who.ID)
 }
 
 // someone is the user the path names, for an admin.

@@ -63,7 +63,12 @@
 {{template "tokens" (tokenList .Info.Tokens (printf "%s/tokens" $path))}}
 </section>
 
-<section class="stack narrow" aria-labelledby="danger-heading">
+{{if .AppsOn}}<section class="stack" aria-labelledby="apps-heading">
+<h2 id="apps-heading">Connected apps</h2>
+{{template "apps" (appList .Apps (printf "%s/apps" $path))}}
+</section>
+
+{{end}}<section class="stack narrow" aria-labelledby="danger-heading">
 <h2 id="danger-heading">Password and deletion</h2>
 <div class="actions">
 <a class="action action-quiet" href="{{$path}}/password">Reset the password</a>
