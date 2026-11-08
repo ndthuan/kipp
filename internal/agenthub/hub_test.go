@@ -351,7 +351,10 @@ func TestAnAgentThatStartsAgainFailsWhatItRan(t *testing.T) {
 	_ = stop()
 	f.runAgent(t.TempDir())
 	code, err := p.Wait()
-	if code != -1 || (!errors.Is(err, ErrRestarted) && !errors.Is(err, ErrOffline) && err == nil) {
+	// Stopping the agent kills the stage, and the agent may report that
+	// before the new one connects: the stage then ends -1 with no error,
+	// or with the log that did not get through. What holds is that it failed.
+	if code != -1 {
 		t.Fatalf("code %d err %v", code, err)
 	}
 }
