@@ -122,28 +122,30 @@ func (s *Site) sudo(w http.ResponseWriter, r *http.Request, u *store.User) {
 // parameter of its address: a word, so that nothing a user typed is ever
 // put in an address and shown back from it.
 var notices = map[string]string{
-	"password":      "Your password is changed. Every other session of yours has ended; this browser stays logged in.",
-	"sessions":      "Every other session of yours has ended.",
-	"revoked":       "The token is revoked: nothing can use it any more.",
-	"admin-on":      "The user is an admin now.",
-	"admin-off":     "The user is no longer an admin.",
-	"grants":        "The grants are saved.",
-	"grant-removed": "The grant is removed.",
-	"deleted":       "The user is deleted, with their grants, tokens and sessions.",
-	"scoped":        "The scopes are replaced. Builds that start from now on are held to them.",
-	"secret-set":    "The secret is set. Builds that start from now on get the new value; running ones keep the one they started with.",
-	"app-created":   "The App is made. Its key is in a file only kipp's user reads and its webhook secret is set. Install it on the account, then put its line in the job file.",
-	"secret-gone":   "The secret is deleted.",
-	"reloaded":      "The job files are reloaded.",
-	"quiet-on":      "kipp is quiet: no build starts, and the running ones end by themselves.",
-	"quiet-off":     "kipp takes builds again.",
-	"engine-added":  "The engine is added. A stage that waits for its labels is placed on it once it is reached.",
-	"engine-set":    "The engine is changed.",
-	"engine-gone":   "The engine is removed. The containers it runs finish.",
-	"agent-set":     "The agent is changed. A disabled agent takes nothing new; what it runs finishes.",
-	"agent-gone":    "The agent is removed, and its token refused.",
-	"cache-gone":    "The cache entry is removed.",
-	"cache-cleared": "The scope's cache entries are removed.",
+	"password":          "Your password is changed. Every other session of yours has ended; this browser stays logged in.",
+	"sessions":          "Every other session of yours has ended.",
+	"revoked":           "The token is revoked: nothing can use it any more.",
+	"admin-on":          "The user is an admin now.",
+	"admin-off":         "The user is no longer an admin.",
+	"grants":            "The grants are saved.",
+	"grant-removed":     "The grant is removed.",
+	"deleted":           "The user is deleted, with their grants, tokens and sessions.",
+	"scoped":            "The scopes are replaced. Builds that start from now on are held to them.",
+	"secret-set":        "The secret is set. Builds that start from now on get the new value; running ones keep the one they started with.",
+	"app-created":       "The App is made. Its key is in a file only kipp's user reads and its webhook secret is set. Install it on the account, then put its line in the job file.",
+	"secret-gone":       "The secret is deleted.",
+	"reloaded":          "The job files are reloaded.",
+	"quiet-on":          "kipp is quiet: no build starts, and the running ones end by themselves.",
+	"quiet-off":         "kipp takes builds again.",
+	"upgrade-started":   "The upgrade is on its way. This page shows how far it is.",
+	"upgrade-cancelled": "The upgrade is cancelled. kipp takes builds again and nothing was changed.",
+	"engine-added":      "The engine is added. A stage that waits for its labels is placed on it once it is reached.",
+	"engine-set":        "The engine is changed.",
+	"engine-gone":       "The engine is removed. The containers it runs finish.",
+	"agent-set":         "The agent is changed. A disabled agent takes nothing new; what it runs finishes.",
+	"agent-gone":        "The agent is removed, and its token refused.",
+	"cache-gone":        "The cache entry is removed.",
+	"cache-cleared":     "The scope's cache entries are removed.",
 }
 
 func noticeOf(r *http.Request) string { return notices[r.URL.Query().Get("done")] }
@@ -264,11 +266,15 @@ type confirmData struct {
 	Back    string
 	// Check is a box on the form, off unless ticked.
 	Check *checkBox
+	// Hidden are fields the form sends besides the token.
+	Hidden []hiddenField
 	// oneTime: the change's answer shows a value once.
 	oneTime bool
 }
 
 type checkBox struct{ Name, Label string }
+
+type hiddenField struct{ Name, Value string }
 
 func (s *Site) confirm(w http.ResponseWriter, r *http.Request, here string, d confirmData) {
 	d.Action = r.URL.EscapedPath()

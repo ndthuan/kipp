@@ -49,6 +49,7 @@ func (s *Site) adminRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /admin/server/reload", s.withUser(s.reload))
 	mux.HandleFunc("POST /admin/server/quiet", s.withUser(s.quietOn))
 	mux.HandleFunc("POST /admin/server/quiet/off", s.withUser(s.quietOff))
+	s.upgradeRoutes(mux)
 }
 
 type usersData struct {
@@ -504,6 +505,8 @@ type serverData struct {
 	Notice string
 	// Quiet is the server's quiet, for the button that turns it on or off.
 	Quiet dispatch.QuietState
+	// Upgrade is the card's: what the engine says, nil for a build that is not a release.
+	Upgrade *upgradeView
 }
 
 // auditPage is how many audit rows the server page shows at a time.
@@ -522,7 +525,7 @@ func (s *Site) serverPage(w http.ResponseWriter, r *http.Request, u *store.User,
 	if code == http.StatusOK {
 		d.Notice = noticeOf(r)
 	}
-	s.render(w, r, "server", code, page{Title: "Server", Here: "/admin/server", Error: msg, Data: d})
+	s.render(w, r, "server", code, page{Title: "Server", Here: "/admin/server", Error: msg, Data: d, Upgrade: d.Upgrade})
 }
 
 func (s *Site) serverData(r *http.Request, u *store.User) (*serverData, error) {
@@ -554,6 +557,9 @@ func (s *Site) serverData(r *http.Request, u *store.User) (*serverData, error) {
 	}
 	if info.DBSize >= 0 {
 		d.DBSize = byteSize(info.DBSize)
+	}
+	if d.Upgrade = s.upgradeViewOf(r, u); d.Upgrade != nil && d.Upgrade.Manual {
+		d.Upgrade.ManualLines = manualLines(info.Origin, d.Upgrade.Info.Latest)
 	}
 	if len(rows) == auditPage {
 		d.Older = rows[len(rows)-1].ID

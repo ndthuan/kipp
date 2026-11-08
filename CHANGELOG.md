@@ -8,6 +8,13 @@ lines and the data directory are the public surface.
 
 ## Unreleased
 
+- Admins see a banner on every page when a newer release can be installed
+  ("Remind me later" puts it off for that release for 7 days, in a cookie),
+  and the Server page has an Upgrade card: the running and the new version,
+  a tick box for the safe restart, the steps of a run with a Cancel button
+  until the backup, the page reconnecting by itself after the restart, and
+  afterwards how it ended, with a Roll back link or the failure's reason and
+  log. Unticking the box asks again on a page of its own.
 - `kipp upgrade` upgrades a running server to the latest release and
   `kipp upgrade --rollback` returns it to the version before. By default it
   makes the server quiet, waits for the builds to end (`--wait-timeout`,

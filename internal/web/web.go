@@ -285,8 +285,11 @@ type page struct {
 	Theme     string // "light" or "dark" when the reader picked one, else the system's
 	Banner    string // shown on every page when not empty
 	Quiet     bool   // the server is quiet before a restart: every page says so
-	Error     string
-	Data      any
+	// Upgrade is the upgrade as an admin's pages show it, nil for anyone
+	// else; render reads it unless the page has it already.
+	Upgrade *upgradeView
+	Error   string
+	Data    any
 	// Here is the href of the group the page is in, "/" for every job;
 	// Job is the job it is about. The header marks both.
 	Here, Job string
@@ -325,6 +328,9 @@ func (s *Site) render(w http.ResponseWriter, r *http.Request, name string, code 
 		p.Banner = msg
 	}
 	p.Quiet = p.User != nil && s.api.Service().Quieting()
+	if p.Upgrade == nil {
+		p.Upgrade = s.upgradeViewOf(r, p.User)
+	}
 	p.Nav = s.nav(r, p)
 	if p.User != nil && p.Queue == nil {
 		// A queue that cannot be read costs the header its link, not the page.

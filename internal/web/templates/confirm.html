@@ -4,7 +4,8 @@
 <h1>{{.Heading}}</h1>
 {{range .Lines}}<p>{{.}}</p>
 {{end}}<input type="hidden" name="csrf" value="{{$.CSRF}}">
-{{with $.Once}}<input type="hidden" name="once" value="{{.}}">
+{{range .Hidden}}<input type="hidden" name="{{.Name}}" value="{{.Value}}">
+{{end}}{{with $.Once}}<input type="hidden" name="once" value="{{.}}">
 {{end}}
 {{with .Check}}<label class="check"><input type="checkbox" name="{{.Name}}"> {{.Label}}</label>
 {{end}}<div class="actions">

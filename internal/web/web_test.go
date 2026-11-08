@@ -128,7 +128,7 @@ func site(t *testing.T, tune ...func(*api.Deps)) *env {
 		f(&deps)
 	}
 	a := api.New(deps)
-	e.site = newSite(a, au, st, "t")
+	e.site = newSite(a, au, st, deps.Version)
 	mux := http.NewServeMux()
 	mux.Handle("/api/", a.Handler())
 	mux.Handle("/", e.site.handler())

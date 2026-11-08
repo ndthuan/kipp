@@ -139,6 +139,18 @@ docker exec kipp kipp user add admin --admin --data /var/lib/kipp
 Everyone else is added by an admin, on the Users page or with
 `kipp user add`.
 
+## Upgrading
+
+When a newer release exists, every page shows an admin a banner, and the
+Server page has an Upgrade card with the running version, where it was
+installed from, the new version's release notes and one button. By default
+it makes kipp quiet, waits for the running builds to end, backs up the data
+directory and restarts into the new version, which the launcher puts back if
+it does not come up; unticking the box restarts at once after asking again.
+`kipp upgrade` does the same from the command line.
+
+![The Server page with an upgrade banner and the Upgrade card](docs/screenshots/upgrade.png)
+
 ## Documentation
 
 - [Install](docs/install.md): Homebrew, Docker, release archives, from

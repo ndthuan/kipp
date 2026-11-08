@@ -4,6 +4,40 @@
 {{with .Notice}}<p class="notice" role="status">{{.}}</p>{{end}}
 {{with $.Error}}<p class="notice notice-error" role="alert">{{.}}</p>{{end}}
 <p class="lead">What this server runs with. It is set by the flags of kipp serve and by the job files, not here.</p>
+{{with .Upgrade}}{{if or .Active .Result .Offer .Manual}}<section id="upgrade" class="panel stack">
+<h2>Upgrade</h2>
+{{if .Active}}<p>Upgrading from {{$.Data.Info.Version}} to {{.Version}}.</p>
+<ol class="steps">
+{{range .Steps}}<li class="{{.Mark}}">{{.Text}}</li>
+{{end}}</ol>
+{{if .CanCancel}}<form method="post" action="/admin/server/upgrade/cancel">
+<input type="hidden" name="csrf" value="{{$.CSRF}}">
+<button class="action action-quiet">Cancel upgrade</button>
+<span class="sub">Quiet turns off again and everything stays as it was.</span>
+</form>
+{{end}}{{else}}{{if eq .Result "done"}}<p><strong>kipp is now {{.Version}}.</strong> The backup made before the upgrade is kept for 7 days.</p>
+{{if .Info.RollbackTo}}<p class="sub"><a class="link" href="/admin/server/upgrade/rollback">Roll back to {{.Info.RollbackTo}}</a>. Rolling back restores that backup, so everything written since the upgrade is lost.</p>
+{{end}}{{else if eq .Result "failed"}}{{if .Launcher}}<p class="notice notice-error" role="alert">{{.Version}} did not start; back on {{.From}}.</p>
+{{else}}<p class="notice notice-error" role="alert">The upgrade to {{.Version}} did not finish, and nothing was changed.</p>
+{{end}}{{with .Reason}}<p class="sub">Reason: {{.}}</p>
+{{end}}{{if .Log}}<p class="sub"><a class="link" href="/admin/server/upgrade/log">The end of its log</a></p>
+{{end}}{{end}}{{if .Offer}}<dl class="facts">
+<div><dt>Running</dt><dd>{{$.Data.Info.Version}}, installed from {{$.Data.Info.Origin}}</dd></div>
+<div><dt>New</dt><dd>{{.Info.Latest}} (<a href="{{$.Data.Info.NotesURL}}" rel="noopener noreferrer">release notes</a>)</dd></div>
+</dl>
+<form class="stack" method="post" action="/admin/server/upgrade">
+<input type="hidden" name="csrf" value="{{$.CSRF}}">
+<input type="hidden" name="version" value="{{.Info.Latest}}">
+<label class="check"><input type="checkbox" name="safe" checked> Wait for builds to end, then restart (safe restart)</label>
+<div><button class="action action-main">Upgrade to {{.Info.Latest}}</button></div>
+</form>
+{{else if .Manual}}<p>{{.Info.Latest}} is available (<a href="{{$.Data.Info.NotesURL}}" rel="noopener noreferrer">release notes</a>), but kipp cannot install it from here: {{.Info.Unavailable}}.</p>
+<p class="sub">Install it by hand:</p>
+<ul>
+{{range .ManualLines}}<li><code>{{.}}</code></li>
+{{end}}</ul>
+{{end}}{{end}}</section>
+{{end}}{{end}}
 {{with .Info}}
 <dl class="facts">
 <div><dt>kipp</dt><dd>{{.Version}}</dd></div>

@@ -13,6 +13,7 @@
 <script src="{{static "nav.js"}}" defer></script>
 <script src="{{static "theme.js"}}" defer></script>
 {{if .User}}<script src="{{static "queue.js"}}" defer></script>{{end}}
+{{if .Upgrade}}<script src="{{static "upgrade.js"}}" defer></script>{{end}}
 {{block "scripts" .}}{{end}}
 </head>
 <body{{with .HXHeaders}} hx-headers="{{.}}"{{end}}>
@@ -61,7 +62,12 @@
 </header>
 <main id="main">
 {{with .Banner}}<p class="notice notice-error" role="alert">{{.}}</p>{{end}}
-{{if .Quiet}}<p class="notice notice-warn" role="status">kipp is quiet: it starts no build until it has restarted, and a trigger is refused. Running builds end by themselves.</p>
+{{with .Upgrade}}<div id="upgrade-watch" data-state="{{.State}}" data-version="{{.Version}}" data-running="{{.Running}}" data-queued="{{.Queued}}">
+{{if .Active}}<p class="notice notice-warn" role="status">kipp is upgrading to {{.Version}}: {{.Label}}. <a class="link" href="/admin/server#upgrade">Details</a></p>
+{{else if .Latest}}<p class="notice" id="upgrade-banner" role="status">kipp {{.Latest}} is available. <a class="link" href="/admin/server#upgrade">See and upgrade</a> <button class="action action-quiet action-small" type="button" data-snooze="{{.Latest}}" hidden>Remind me later</button></p>
+{{end}}<p class="notice notice-warn" id="upgrade-live" role="status" hidden></p>
+</div>
+{{end}}{{if .Quiet}}<p class="notice notice-warn" role="status">kipp is quiet: it starts no build until it has restarted, and a trigger is refused. Running builds end by themselves.</p>
 {{end}}{{block "content" .}}{{end}}
 </main>
 <footer class="foot">kipp {{.Version}}</footer>
