@@ -79,7 +79,9 @@ func TestACancelDuringATryStartsNoOther(t *testing.T) {
 	runs := filepath.Join(t.TempDir(), "runs")
 	h := newHarness(t, map[string]string{"r": "name: r\nstages:\n  s: {run: 'echo x >> " + runs + "; sleep 30', retries: 3}\n"})
 	b := h.trigger(t, "r")
-	eventually(t, "the first try began", func() bool { _, err := os.Stat(runs); return err == nil })
+	// The shell creates the file before it writes the line, and a cancel
+	// between the two would leave the try unrecorded.
+	eventually(t, "the first try began", func() bool { data, _ := os.ReadFile(filepath.Clean(runs)); return len(data) > 0 })
 	if err := h.d.Cancel(context.Background(), b.ID, "ada"); err != nil {
 		t.Fatal(err)
 	}
