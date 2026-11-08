@@ -10,7 +10,8 @@ import (
 	"net/url"
 	"strings"
 	"testing"
-	"time"
+
+	"github.com/ndthuan/kipp/internal/waitfor"
 )
 
 // downloader is a checker whose downloads come from a server that answers
@@ -20,7 +21,7 @@ func downloader(t *testing.T, h http.HandlerFunc) *Checker {
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
 	u, _ := url.Parse(srv.URL)
-	return New(Options{Current: "v1.0.0", Base: srv.URL, DownloadBase: srv.URL, Hosts: []string{u.Hostname()}, Insecure: true, DownloadTimeout: 5 * time.Second})
+	return New(Options{Current: "v1.0.0", Base: srv.URL, DownloadBase: srv.URL, Hosts: []string{u.Hostname()}, Insecure: true, DownloadTimeout: waitfor.Safety})
 }
 
 func TestAFileIsFetchedFromTheAddressBuiltFromTheRepositoryAndTheTag(t *testing.T) {

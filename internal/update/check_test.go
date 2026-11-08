@@ -10,7 +10,10 @@ import (
 	"path/filepath"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
+
+	"github.com/ndthuan/kipp/internal/waitfor"
 )
 
 // fakeAPI answers the latest-release lookup with what its fields hold and
@@ -20,23 +23,36 @@ type fakeAPI struct {
 	tag        string
 	prerelease bool
 	assets     []string
-	delay      time.Duration
-	hits       atomic.Int32
-	agent      atomic.Value
-	srv        *httptest.Server
+	// hang has the server read the request and never answer it, so that the
+	// client's own timeout is what ends the request.
+	hang bool
+	// asked has a value for each request, for a test that waits for one.
+	asked chan struct{}
+	hits  atomic.Int32
+	agent atomic.Value
+	srv   *httptest.Server
 }
 
 func newFake(t *testing.T, tag string, assets ...string) *fakeAPI {
 	t.Helper()
-	f := &fakeAPI{status: http.StatusOK, tag: tag, assets: assets}
+	f := &fakeAPI{status: http.StatusOK, tag: tag, assets: assets, asked: make(chan struct{}, 16)}
 	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f.hits.Add(1)
+		defer func() {
+			select {
+			case f.asked <- struct{}{}:
+			default:
+			}
+		}()
 		f.agent.Store(r.Header.Get("User-Agent"))
 		if r.URL.Path != releasePath {
 			http.NotFound(w, r)
 			return
 		}
-		time.Sleep(f.delay)
+		if f.hang {
+			<-r.Context().Done()
+			return
+		}
 		if f.status != http.StatusOK {
 			http.Error(w, "no", f.status)
 			return
@@ -57,9 +73,19 @@ func newFake(t *testing.T, tag string, assets ...string) *fakeAPI {
 	return f
 }
 
+// waitAsked waits for the next request.
+func waitAsked(t *testing.T, f *fakeAPI) {
+	t.Helper()
+	select {
+	case <-f.asked:
+	case <-time.After(waitfor.Safety):
+		t.Fatal("the server was not asked")
+	}
+}
+
 func (f *fakeAPI) checker(current, dir string) *Checker {
 	u, _ := url.Parse(f.srv.URL)
-	return New(Options{Current: current, Dir: dir, Base: f.srv.URL, Hosts: []string{u.Hostname()}, Insecure: true, Timeout: time.Second})
+	return New(Options{Current: current, Dir: dir, Base: f.srv.URL, Hosts: []string{u.Hostname()}, Insecure: true, Timeout: waitfor.Safety})
 }
 
 func TestANewerReleaseIsReportedWithItsNotesAndWhetherItIsUpgradable(t *testing.T) {
@@ -136,7 +162,7 @@ func TestA404AndA403AndA429AndGarbageAndATimeoutLeaveNothingReported(t *testing.
 		t.Fatal("garbage was taken")
 	}
 	slow := newFake(t, "v2.0.0", SigFile)
-	slow.delay = 300 * time.Millisecond
+	slow.hang = true
 	sc := slow.checker("v1.1.0", "")
 	sc.client.Timeout = 50 * time.Millisecond
 	if sc.Check(context.Background()) == nil || sc.Status().Latest != "" {
@@ -151,9 +177,7 @@ func TestADevBuildMakesNoRequest(t *testing.T) {
 		if err := c.Check(context.Background()); err != nil {
 			t.Fatal(err)
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-		c.Run(ctx)
-		cancel()
+		c.Run(context.Background()) // a build that is not a release's ends it at once
 		if n := f.hits.Load(); n != 0 || c.Status() != (Status{}) {
 			t.Fatalf("%q: %d requests, %+v", v, n, c.Status())
 		}
@@ -178,16 +202,26 @@ func TestTheKeptAnswerStopsASecondRequestInsideTheIntervalAfterARestart(t *testi
 	if _, err := os.Stat(filepath.Join(dir, CacheFile)); err != nil {
 		t.Fatal(err)
 	}
-	second := f.checker("v1.1.0", dir)
+	// The bubble's own clock starts in 2000, before the kept answer was made.
+	now := time.Now()
+	u, _ := url.Parse(f.srv.URL)
+	second := New(Options{Current: "v1.1.0", Dir: dir, Base: f.srv.URL, Hosts: []string{u.Hostname()}, Insecure: true, Now: func() time.Time { return now }})
 	if st := second.Status(); st.Latest != "v1.2.0" || !st.Upgradable {
 		t.Fatalf("the kept answer was not read: %+v", st)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	second.Run(ctx)
-	cancel()
-	if n := f.hits.Load(); n != 1 {
-		t.Fatalf("%d requests, want the first only", n)
-	}
+	// In a bubble the run waits out the rest of the interval on a fake
+	// clock: once nothing else can move, it has not asked.
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan struct{})
+		go func() { second.Run(ctx); close(done) }()
+		synctest.Wait()
+		if n := f.hits.Load(); n != 1 {
+			t.Fatalf("%d requests, want the first only", n)
+		}
+		cancel()
+		<-done
+	})
 }
 
 func TestAnAnswerOlderThanTheIntervalIsAskedAgainAtOnce(t *testing.T) {
@@ -202,10 +236,7 @@ func TestAnAnswerOlderThanTheIntervalIsAskedAgainAtOnce(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() { c.Run(ctx); close(done) }()
-	deadline := time.Now().Add(2 * time.Second)
-	for f.hits.Load() == 0 && time.Now().Before(deadline) {
-		time.Sleep(5 * time.Millisecond)
-	}
+	waitAsked(t, f)
 	cancel()
 	<-done
 	if f.hits.Load() != 1 {
@@ -217,12 +248,14 @@ func TestARunAsksAgainEveryInterval(t *testing.T) {
 	f := newFake(t, "v1.2.0", SigFile)
 	u, _ := url.Parse(f.srv.URL)
 	c := New(Options{Current: "v1.1.0", Base: f.srv.URL, Hosts: []string{u.Hostname()}, Insecure: true, Interval: 30 * time.Millisecond})
-	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
-	defer cancel()
-	c.Run(ctx)
-	if f.hits.Load() < 3 {
-		t.Fatalf("%d requests", f.hits.Load())
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { c.Run(ctx); close(done) }()
+	for range 3 {
+		waitAsked(t, f)
 	}
+	cancel()
+	<-done
 }
 
 func TestAKeptAnswerThatIsDatedInTheFutureOrUnreadableIsNone(t *testing.T) {
