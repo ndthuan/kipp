@@ -6,7 +6,7 @@ versions follow Semantic Versioning (https://semver.org/): the job file,
 the HTTP API under `/api/v1`, the command line, the server's reload log
 lines and the data directory are the public surface.
 
-## Unreleased
+## [1.1.0] - 2026-11-08
 
 - The release signing key is in place: `internal/update/release.pub` holds
   the public half of the key that signs each release's `SHA256SUMS`
