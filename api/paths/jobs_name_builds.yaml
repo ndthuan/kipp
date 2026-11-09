@@ -28,7 +28,11 @@ post:
   summary: Start a build of a job
   description: |
     Needs the `build` permission on the job. A job that is disabled, or that
-    drops builds while one runs, refuses.
+    drops builds while one runs, refuses. A build's own token (`KIPP_TOKEN`)
+    may start a build of another job it has `build` on, recorded as started
+    by `build <job>#<number>`, and never one of its own job, or of the
+    multibranch job it is a child of: that is 403 `forbidden`, saying a build
+    cannot start its own job.
   x-kipp-package: api
   security:
     - bearerToken: []

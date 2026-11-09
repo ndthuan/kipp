@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ndthuan/kipp/internal/auth"
 	"github.com/ndthuan/kipp/internal/cachesrv"
 	"github.com/ndthuan/kipp/internal/config"
 	"github.com/ndthuan/kipp/internal/runner"
@@ -101,6 +102,10 @@ type Options struct {
 	Cache     *cachesrv.Service
 	CacheURL  string
 	RunnerURL string
+	// BuildTokens makes the KIPP_TOKEN every build is given, a token of
+	// the build with the grants its job's permissions: name; nil gives
+	// none.
+	BuildTokens *auth.BuildTokens
 	// Status says a state of a child's build to the host of its repo. It
 	// is called for the children of a multibranch job that names a token,
 	// and its error is a line in the build's hooks log and nothing more.

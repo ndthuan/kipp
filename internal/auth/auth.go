@@ -21,6 +21,9 @@ type Service struct {
 	// deviceKey signs the device values a login hands out.
 	deviceKey []byte
 	throttle  *Throttle
+	// builds are the tokens of the builds that run; nil on a service that
+	// serves none.
+	builds *BuildTokens
 }
 
 // New makes a Service whose sessions last ttl, whose device values are
@@ -28,6 +31,10 @@ type Service struct {
 func New(st *store.Store, ttl time.Duration, deviceKey []byte) *Service {
 	return &Service{st: st, ttl: ttl, deviceKey: deviceKey, throttle: NewThrottle(time.Now)}
 }
+
+// UseBuildTokens has the service accept the tokens of the builds in bt as
+// bearer tokens, each as the build it was made for.
+func (s *Service) UseBuildTokens(bt *BuildTokens) { s.builds = bt }
 
 // SetThrottleClock makes the wrong-password throttle tell time by now, so
 // that a test can hold a wait still instead of racing the wall clock. It
@@ -269,8 +276,16 @@ func (s *Service) UserFromSession(ctx context.Context, id string) (*store.User, 
 	return u, sess, nil
 }
 
-// UserFromToken resolves a bearer token.
+// UserFromToken resolves a bearer token: a build's token is the build, a
+// principal who is never an admin and holds its grants and nothing else;
+// any other is a user's.
 func (s *Service) UserFromToken(ctx context.Context, plain string) (*store.User, error) {
+	if isBuildToken(plain) {
+		if s.builds == nil {
+			return nil, store.ErrNotFound
+		}
+		return s.builds.user(plain)
+	}
 	return s.st.UserByTokenHash(ctx, HashToken(plain))
 }
 
@@ -284,7 +299,7 @@ func (s *Service) Can(ctx context.Context, u *store.User, job, action string) (b
 	if u.Admin {
 		return true, nil
 	}
-	perms, err := s.st.Permissions(ctx, u.ID)
+	perms, err := s.grants(ctx, u)
 	if err != nil {
 		return false, err
 	}
@@ -311,6 +326,15 @@ func (s *Service) Can(ctx context.Context, u *store.User, job, action string) (b
 	return false, nil
 }
 
+// grants are what u may do by job: a build's token holds what it was made
+// with, and a user what the store grants them.
+func (s *Service) grants(ctx context.Context, u *store.User) (map[string]store.Perm, error) {
+	if u.Build != nil {
+		return u.Build.Perms, nil
+	}
+	return s.st.Permissions(ctx, u.ID)
+}
+
 // mayView: whoever may build or cancel a job may see it.
 func mayView(p store.Perm) bool { return p.View || p.Build || p.Cancel }
 
@@ -319,7 +343,7 @@ func (s *Service) Visible(ctx context.Context, u *store.User, names []string) ([
 	if u.Admin {
 		return append([]string{}, names...), nil
 	}
-	perms, err := s.st.Permissions(ctx, u.ID)
+	perms, err := s.grants(ctx, u)
 	if err != nil {
 		return nil, err
 	}

@@ -8,6 +8,29 @@ lines and the data directory are the public surface.
 
 ## Unreleased
 
+Added:
+
+- Every build is given `KIPP_TOKEN`, a token of its own (`kippb_...`) that
+  calls the server's API and `/mcp` back, as GitHub's `GITHUB_TOKEN` does:
+  it is made when the build starts, held in memory, masked in every log and
+  revoked when the build ends or the server stops. By default it may `view`
+  its own job and nothing else; it is never an admin and never reaches
+  accounts, tokens, secrets, the admin routes, the runner protocol or the
+  cache.
+- `permissions:` in a job file, one action or a list of `view`, `build` and
+  `cancel` (or `read` and `write`) for each job by name, `self` for the
+  build's own job; `permissions: none` for a build with no token. `kipp
+  check` refuses an unknown action or job and `build` on the job's own
+  name, and warns about a job that lists a secret named `KIPP_TOKEN`, which
+  the build's token now hides.
+- `max_permissions:` on a `source`, multibranch or owner job: the ceiling for
+  the `permissions:` the repo's stages file or `.kipp.yml` may ask for. A
+  file over it fails its build before the first stage, naming what is over
+  and the job that would have to allow it.
+- A build's token may start a build of a job it has `build` on, recorded as
+  started by `build <job>#<number>`, and never one of its own job (403
+  `forbidden`). `api/` describes build tokens as bearer tokens.
+
 ## [1.2.0] - 2026-11-09
 
 - A build's log is easier to read: the text is larger, the page scrolls

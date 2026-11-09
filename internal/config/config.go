@@ -76,6 +76,12 @@ type Job struct {
 	// default namespace, which all builds read: its owner vouches that each
 	// build runs default-branch code.
 	CacheWritesDefault bool
+	// Permissions is what the build's KIPP_TOKEN may reach; nil is the
+	// default, view on the job itself. MaxPermissions is the ceiling the
+	// permissions: of a stages file in a repo must stay within; nil is the
+	// default too. A child does not inherit Permissions, only the ceiling.
+	Permissions    *Permissions
+	MaxPermissions *Permissions
 	// Multibranch is a job built through its children, one per branch and
 	// pull request of its repo; a child keeps its parent's.
 	Multibranch *Multibranch
@@ -289,12 +295,15 @@ type file struct {
 	Multibranch *multibranchFile  `yaml:"multibranch"`
 	Owner       *ownerFile        `yaml:"owner"`
 
-	CacheWritesDefault bool `yaml:"cache_writes_default"`
+	CacheWritesDefault bool         `yaml:"cache_writes_default"`
+	Permissions        *Permissions `yaml:"permissions"`
+	MaxPermissions     *Permissions `yaml:"max_permissions"`
 }
 
 type stagesFile struct {
-	Env    map[string]string `yaml:"env"`
-	Stages ordered[Stage]    `yaml:"stages"`
+	Env         map[string]string `yaml:"env"`
+	Stages      ordered[Stage]    `yaml:"stages"`
+	Permissions *Permissions      `yaml:"permissions"`
 }
 
 // StageFile is a stages file: a source job's, or a multibranch job's
@@ -302,6 +311,9 @@ type stagesFile struct {
 type StageFile struct {
 	Env    map[string]string
 	Stages []*Stage
+	// Permissions is what the file asks its build's token for; nil asks
+	// for nothing beyond what the job gives.
+	Permissions *Permissions
 }
 
 // DefaultKeepBuilds is how many builds a job keeps when it has no keep rule.
@@ -365,6 +377,7 @@ func ParseJob(filename string, data []byte) (*Job, error) {
 		Concurrency: Concurrency(f.Concurrency), Locks: f.Locks, Env: f.Env, Secrets: f.Secrets,
 		Workdir: f.Workdir, Source: f.Source, OnFailure: f.OnFailure, OnSuccess: f.OnSuccess,
 		Metrics: f.Metrics, Keep: Keep{Builds: DefaultKeepBuilds}, CacheWritesDefault: f.CacheWritesDefault,
+		Permissions: f.Permissions, MaxPermissions: f.MaxPermissions,
 	}
 	if j.Concurrency == "" {
 		j.Concurrency = Queue
@@ -382,6 +395,7 @@ func ParseJob(filename string, data []byte) (*Job, error) {
 		func() error { return j.setStages(f.Stages) },
 		j.checkHooks,
 		j.checkMetrics,
+		j.checkPermissions,
 	}
 	for _, step := range steps {
 		if err := step(); err != nil {
@@ -660,7 +674,7 @@ func (j *Job) checkHooks() error {
 func ParseStageFile(data []byte) (*StageFile, error) {
 	var f stagesFile
 	if err := decodeDoc(data, &f); err != nil {
-		return nil, fmt.Errorf("a source file holds stages and an env and nothing else: %w", err)
+		return nil, fmt.Errorf("a source file holds stages, an env and permissions and nothing else: %w", err)
 	}
 	if len(f.Stages.items) == 0 {
 		return nil, errors.New("a source file needs stages")
@@ -672,7 +686,7 @@ func ParseStageFile(data []byte) (*StageFile, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &StageFile{Env: f.Env, Stages: stages}, nil
+	return &StageFile{Env: f.Env, Stages: stages, Permissions: f.Permissions}, nil
 }
 
 func toStages(o ordered[Stage]) ([]*Stage, error) {

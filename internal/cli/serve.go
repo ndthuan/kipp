@@ -405,6 +405,7 @@ type server struct {
 	// a stage on this machine reaches them, and runnerURLSet whether
 	// --runner-url was given, which a stage on a runner needs to reach them.
 	cache        *cachesrv.Service
+	buildTokens  *auth.BuildTokens
 	cacheURL     string
 	runnerURLSet bool
 	// publicURL is --base-url as it was given, empty when it was not.
@@ -607,6 +608,7 @@ func (s *server) listen(ctx context.Context, snap *config.Snapshot) (net.Listene
 	s.cache = cachesrv.New(cachesrv.Options{
 		Dir: filepath.Join(s.f.data, "cache"), Store: s.st, Max: int64(s.f.cacheMax), Log: s.log,
 	})
+	s.buildTokens = auth.NewBuildTokens()
 	var runnerURL string // only what the operator gave: the default is no address runners are known to reach
 	if s.runnerURLSet {
 		runnerURL = s.f.runnerURL
@@ -621,7 +623,7 @@ func (s *server) listen(ctx context.Context, snap *config.Snapshot) (net.Listene
 		Secrets: s.secrets, Retain: retain.Job, Logger: s.log, PassEnv: s.f.passEnv,
 		Hub: s.hub, Engines: s.pool, DefaultRunsOn: s.f.defaultRunsOn, RunnerEnv: s.f.runnerEnv,
 		ArtifactsMax: int64(s.f.artifactsMax),
-		Cache:        s.cache, CacheURL: s.cacheURL, RunnerURL: runnerURL,
+		Cache:        s.cache, CacheURL: s.cacheURL, RunnerURL: runnerURL, BuildTokens: s.buildTokens,
 		Status: index.PostStatusFor(s.f.githubAPI, s.secret, s.appClient), PublicURL: s.publicURL,
 	})
 	s.upgrades = s.newUpgrades()
@@ -804,6 +806,7 @@ func (s *server) reloadError() string {
 
 func (s *server) handler() http.Handler {
 	au := auth.New(s.st, s.f.sessionTTL, s.deviceKey)
+	au.UseBuildTokens(s.buildTokens)
 	a := api.New(s.deps(au))
 	mux := http.NewServeMux()
 	mux.Handle("/api/", a.Handler())

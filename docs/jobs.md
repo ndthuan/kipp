@@ -17,6 +17,7 @@ for that file.
 - [Variables](#variables)
 - [The variables kipp sets](#the-variables-kipp-sets)
 - [Secrets in a stage](#secrets-in-a-stage)
+- [The build's token: permissions](#the-builds-token-permissions)
 - [Reloading](#reloading)
 
 Two more kinds of job have pages of their own:
@@ -581,6 +582,11 @@ same, but for the ones under Where it runs, which are the runner's.
   ([Cache](builds.md#cache)), and in a hook `KIPP_STATUS`. `KIPP_MARK` is
   kipp's own: a random value for each stage, not a secret, by which a
   server started after a crash knows the stage's processes.
+- **The build's token**: `KIPP_TOKEN`, a token of the build that calls the
+  server's API back within the job's `permissions:`
+  ([below](#the-builds-token-permissions)); not set for `permissions:
+  none`. It is set after every variable a job, a secret or a param gives,
+  so those cannot replace it.
 
 ## Secrets in a stage
 
@@ -610,6 +616,68 @@ Every value is masked as `***` in every log where it appears as it is,
 byte for byte. A stage that prints it encoded, changed or a piece at a
 time prints what it printed, so a stage that handles a secret should not
 print it at all ([Masking](accounts.md#masking)).
+
+## The build's token: permissions
+
+Every build is given `KIPP_TOKEN`, next to `KIPP_URL`: a token of that
+build, with which a stage calls the server's API as the `kipp` command does
+(`kipp run`, `kipp ls`, ... read `KIPP_URL` and `KIPP_TOKEN` when no flag or
+`--token` says otherwise), and `/mcp`. It is the way for a build to start
+another job without a user's long-lived token stored as a secret.
+
+- **By default** the token may `view` the build's own job, which by the
+  rules of every grant covers a multibranch or owner job's children, and
+  nothing else: any other job is 404 for it as for a user without the
+  grant, `build` and `cancel` are 403.
+- **`permissions:`** names more, per job, with kipp's own actions `view`,
+  `build` and `cancel`, one or a list, or an alias: `read` is `view`,
+  `write` is all three. `self` is the job the build belongs to (for a
+  child, the child). `view` on `self` is always there.
+
+  ```yaml
+  permissions:
+    self: [view, cancel]      # the build's own job
+    app-e2e: [view, build]    # another job, by name
+    app-deploy: read          # alias
+  ```
+
+  An unknown action or job is an error for `kipp check`. `permissions:
+  none` is the one way to a build with no `KIPP_TOKEN` at all, for a job
+  that runs code that should never reach the API.
+- **A build never starts its own job**: `kipp check` refuses `build` or
+  `write` on `self` or on the job's own name, and the API refuses it at run
+  time (403 `forbidden`; for a child, its multibranch job too, which builds
+  the default branch's child). A build another build started records
+  `build <job>#<number>` as `started_by`, which is `KIPP_STARTED_BY` and
+  what the build page shows.
+- **Lifetime**: made when the build starts, held in memory and stored as a
+  hash only, revoked when the build ends however it ends (success,
+  failure, unstable, cancelled, lost), after its hook has run, and gone with the server: a stale
+  one is 401. Every build has its own; its stages share it. Its value is
+  masked in every log like a secret, and it starts with `kippb_` so that
+  one found somewhere is told from a user's `kipp_`, a runner's `kippa_` and
+  a cache's `kippc_`.
+- **What it reaches**: the routes of `/api/v1` and `/mcp` that take a
+  bearer token, as a principal that is never an admin, with exactly its
+  grants. Never accounts, tokens, secrets, admin or server routes, the
+  runner protocol or the cache (which has its own `KIPP_CACHE_TOKEN`). A
+  stage on a runner gets the same `KIPP_TOKEN` and the `KIPP_URL` it gets
+  today (`--base-url`); `--runner-listen` serves the runner protocol and
+  the cache and no API, so the stage reaches the API at `--base-url`.
+- **From a repo**: a `permissions:` in the stages file of a `source` job or
+  a multibranch or owner job's `.kipp.yml` (anyone who can push may write
+  it) is bounded by the ceiling the server's job file declares with
+  `max_permissions:`, written like `permissions:`
+  ([Multibranch jobs](multibranch.md#the-builds-token),
+  [Organization folders](organization-folders.md#jobs)). A file that asks for
+  more than the ceiling fails its build before the first stage, naming
+  each permission over it and the job whose `max_permissions:` would have
+  to allow it; nothing is cut back silently. For a `source` job the file's
+  permissions add to the job's own. `max_permissions:` is refused on a job
+  that reads no stages file from a repo, and `none` and `build` on `self`
+  are not a ceiling.
+- A job that lists a secret named `KIPP_TOKEN` gets a warning from `kipp
+  check`: the build's token hides it.
 
 ## Reloading
 

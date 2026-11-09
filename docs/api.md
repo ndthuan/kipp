@@ -32,6 +32,16 @@ fails them, and so does a route it leaves out.
 - **A token**: `Authorization: Bearer kipp_...`, made on the Account page
   or with `kipp token create` ([Tokens](accounts.md#tokens)). It acts as
   its user, with that user's grants.
+- **A build's token**: `Authorization: Bearer kippb_...`, the
+  `KIPP_TOKEN` every build is given ([The build's
+  token](jobs.md#the-builds-token-permissions)). It acts as no user and is
+  never an admin: it holds the grants its job's `permissions:` name (by
+  default `view` on the build's own job) and nothing else, on every route
+  that takes a bearer token. It never reaches an admin, account, token or
+  secret route (403), the runner protocol or the cache. It may start a build
+  of a job it has `build` on, recorded as started by `build <job>#<number>`,
+  never one of its own job (403 `forbidden`). It is 401 once its build has
+  ended, and for a server that was restarted.
 - **A browser session**: the session cookie of a login. A request that
   changes something carries the session's CSRF token in `X-CSRF-Token`.
 

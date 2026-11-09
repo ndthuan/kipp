@@ -332,6 +332,14 @@ An HTML file opened as a page of the server would run with its origin,
 with the session of whoever opened it; to view a report in the browser,
 download it and open the file.
 
+## The build's token
+
+A build is given `KIPP_TOKEN`, a token of its own that calls the API back
+within the job's `permissions:`, by default `view` on the job alone, ending
+with the build. A build another build started is recorded as started by
+`build <job>#<number>`. See
+[The build's token](jobs.md#the-builds-token-permissions).
+
 ## Cache
 
 A stage that names `cache_scopes` keeps files from one build to the next

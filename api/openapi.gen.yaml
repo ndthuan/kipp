@@ -505,7 +505,8 @@ paths:
         The new build's trigger is `api` and its `trigger_detail` is `again #`
         and the original's number. A build that has not ended, a job that is
         disabled or drops builds while one runs, and a server that is quiet
-        refuse.
+        refuse. A build's own token never builds again a build of its own job
+        (403 `forbidden`).
       operationId: buildAgain
       parameters:
         - $ref: "#/components/parameters/BuildId"
@@ -1398,7 +1399,11 @@ paths:
     post:
       description: |
         Needs the `build` permission on the job. A job that is disabled, or that
-        drops builds while one runs, refuses.
+        drops builds while one runs, refuses. A build's own token (`KIPP_TOKEN`)
+        may start a build of another job it has `build` on, recorded as started
+        by `build <job>#<number>`, and never one of its own job, or of the
+        multibranch job it is a child of: that is 403 `forbidden`, saying a build
+        cannot start its own job.
       operationId: triggerBuild
       parameters:
         - $ref: "#/components/parameters/JobName"
@@ -4756,7 +4761,15 @@ components:
       type: object
   securitySchemes:
     bearerToken:
-      description: A user's API token, made on the account page.
+      description: |
+        A user's API token, made on the account page, or the `KIPP_TOKEN` a
+        build is given (`kippb_...`). A build's token acts as no user and
+        never as an admin: it holds the grants its job's `permissions:` name
+        (by default `view` on the build's own job) and nothing else, on
+        every route that takes a bearer token. It is 401 once the build has
+        ended. It may start a build of a job it has `build` on, never of its
+        own job: that is 403 `forbidden`, and the build it starts records
+        `build <job>#<number>` as `started_by`.
       scheme: bearer
       type: http
     cacheToken:

@@ -21,6 +21,9 @@ func cmdCheck(args []string, _ io.Reader, stdout, stderr io.Writer) int {
 		say(stderr, "%v", err)
 		return 1
 	}
+	for _, w := range snap.Warnings {
+		say(stderr, "warning: %s", w)
+	}
 	say(stdout, "ok: %s", jobCount(len(snap.Names)))
 	return 0
 }

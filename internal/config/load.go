@@ -13,6 +13,8 @@ type Snapshot struct {
 	Names []string // sorted
 	Vars  *Vars    // from VarsFile; nil when there is none
 	Hash  string   // of every file's content; changes when any file does
+	// Warnings are what Load accepted and the author should still read.
+	Warnings []string
 }
 
 // Errors is every problem Load found, one per file.
@@ -66,6 +68,7 @@ func Load(dir string) (*Snapshot, error) {
 	errs.Items = append(errs.Items, checkAfter(snap)...)
 	errs.Items = append(errs.Items, checkChildNames(snap)...)
 	errs.Items = append(errs.Items, checkApps(snap)...)
+	errs.Items = append(errs.Items, checkPermissionNames(snap)...)
 	if len(errs.Items) == 0 {
 		errs.Items = append(errs.Items, checkAfterCycles(snap)...)
 	}
@@ -74,6 +77,7 @@ func Load(dir string) (*Snapshot, error) {
 		return nil, &errs
 	}
 	snap.Hash = hashOf(contents...)
+	snap.Warnings = checkTokenSecrets(snap)
 	return snap, nil
 }
 

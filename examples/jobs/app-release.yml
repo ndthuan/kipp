@@ -2,6 +2,9 @@
 # matches v* (secret GITHUB_WEBHOOK_APP_RELEASE) builds the commit the tag
 # names. A push to a branch builds nothing here; app-ci checks main.
 # KIPP_TAG is the tag, KIPP_COMMIT its commit, KIPP_BRANCH empty.
+# permissions: is what the build's KIPP_TOKEN may do besides viewing this
+# job: here the last stage starts the end-to-end suite, with
+# `kipp run app-e2e`, which the token may build but not cancel.
 name: app-release
 group: deploy
 description: Deploy the app to production when a v* tag is pushed.
@@ -10,8 +13,11 @@ triggers:
 concurrency: queue
 locks: [app-cache]
 keep: {builds: 50}
+permissions:
+  app-e2e: [view, build]
 workdir: /srv/app
 stages:
   checkout: {run: 'git fetch --tags origin && git checkout --detach "${KIPP_COMMIT:?a release builds from a pushed tag}"'}
   build: {needs: [checkout], run: 'make build VERSION="$KIPP_TAG"'}
   deploy: {needs: [build], run: 'make deploy VERSION="$KIPP_TAG"'}
+  verify: {needs: [deploy], run: kipp run app-e2e -p SUITE=smoke}

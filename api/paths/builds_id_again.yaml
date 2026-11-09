@@ -11,7 +11,8 @@ post:
     The new build's trigger is `api` and its `trigger_detail` is `again #`
     and the original's number. A build that has not ended, a job that is
     disabled or drops builds while one runs, and a server that is quiet
-    refuse.
+    refuse. A build's own token never builds again a build of its own job
+    (403 `forbidden`).
   x-kipp-package: api
   security:
     - bearerToken: []

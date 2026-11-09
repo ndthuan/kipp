@@ -32,6 +32,11 @@ import (
 var (
 	ErrNotFound  = errors.New("not found")
 	ErrForbidden = errors.New("forbidden")
+	// ErrSelfStart is a build's token starting a build of its own job, or
+	// of the multibranch job it is a child of, which builds its default
+	// branch's child: a build cannot start itself again. It is an
+	// ErrForbidden.
+	ErrSelfStart = fmt.Errorf("%w: a build cannot start its own job", ErrForbidden)
 	ErrBadInput  = errors.New("bad input")
 	ErrConflict  = errors.New("conflict")
 	// ErrNoScanner is a scan asked of a server that has none; it is an
@@ -260,6 +265,9 @@ func (s *Service) buildable(ctx context.Context, u *store.User, name string) err
 	job := s.deps.Dispatch.Snapshot().Jobs[name]
 	if job == nil {
 		return ErrNotFound
+	}
+	if own := u.Build; own != nil && (name == own.Job || name == own.Parent) {
+		return ErrSelfStart
 	}
 	if err := s.allowed(ctx, u, name, "build", ErrForbidden); err != nil {
 		return err

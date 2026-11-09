@@ -10,6 +10,11 @@
 #     test: {run: make test, junit: "reports/*.xml"}
 #     deploy: {needs: [test], when: {default_branch: true}, run: ./deploy.sh}
 #
+# A build's KIPP_TOKEN views its own job and nothing else. The repo's
+# .kipp.yml may ask for more with a permissions: key, up to what
+# max_permissions: below allows, here to build site-check and no further;
+# a file that asks for more fails its build before its first stage.
+#
 # The webhook is POST /api/v1/hooks/github/site-multibranch, signed with
 # GITHUB_WEBHOOK_SITE_MULTIBRANCH, for the events push and pull_request.
 name: site-multibranch
@@ -31,3 +36,5 @@ locks: [site-ports]
 triggers:
   cron: "H 3 * * *"
 keep: {builds: 50}
+max_permissions:
+  site-check: [view, build]

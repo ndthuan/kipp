@@ -156,6 +156,8 @@ func (a *API) fail(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, ErrNotFound):
 		problem.Write(w, problem.NotFound, "not found")
+	case errors.Is(err, ErrSelfStart):
+		problem.Write(w, problem.Forbidden, "a build cannot start its own job")
 	case errors.Is(err, ErrForbidden):
 		problem.Write(w, problem.Forbidden, "not allowed")
 	case errors.Is(err, dispatch.ErrNoDefaultChild):

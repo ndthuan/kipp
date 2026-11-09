@@ -47,7 +47,7 @@ The session or token the request (or a stream it opened) was made with is gone o
 Status: 403
 Title: Not allowed
 
-The caller is known but may not do this: not an admin, or a job without the permission the call needs. A job the caller may not see is `not_found`, never this.
+The caller is known but may not do this: not an admin, or a job without the permission the call needs. A job the caller may not see is `not_found`, never this. A build's token (`KIPP_TOKEN`) that starts a build of its own job gets it too, with a detail saying so.
 
 ## csrf
 

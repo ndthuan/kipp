@@ -323,6 +323,8 @@ func (s *Server) refusal(err error) error {
 		return nil
 	case errors.Is(err, api.ErrNotFound):
 		return errors.New("not found")
+	case errors.Is(err, api.ErrSelfStart):
+		return errors.New("not allowed: a build cannot start its own job")
 	case errors.Is(err, api.ErrForbidden):
 		return errors.New("not allowed: your token's user lacks the grant this needs")
 	case errors.Is(err, api.ErrBadInput):

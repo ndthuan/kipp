@@ -29,6 +29,10 @@ func (d *Dispatcher) finish(ctx context.Context, b *store.Build, job *config.Job
 	if d.opts.Cache != nil {
 		d.opts.Cache.Revoke(b.ID)
 	}
+	if d.opts.BuildTokens != nil {
+		// After the hook, which runs with the token as the stages did.
+		defer d.opts.BuildTokens.Revoke(b.ID)
+	}
 	d.readJunit(ctx, b, e)
 	d.remember(ctx, b, job, e, status)
 	if status != store.Lost {

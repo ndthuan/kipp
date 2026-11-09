@@ -102,6 +102,10 @@ be looked for this time keeps the state it had.
   `cron` builds the default branch of every repo.
 - A grant on the owner job is a grant on every repo and every child of
   it, the gone ones too; the grants editor lists owner jobs only.
+- A `max_permissions:` on the owner job is the ceiling for the `permissions:`
+  of the `.kipp.yml` of every repo and child under it, as it is for a
+  multibranch job ([the build's token](multibranch.md#the-builds-token));
+  `self` is each child itself.
 - A commit status says `kipp/<owner job>` (`kipp/<owner job>/head`), for
   the commit of its repo.
 

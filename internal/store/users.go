@@ -21,6 +21,21 @@ type User struct {
 	// DeviceEpoch is signed into the user's device cookies; a new password
 	// starts a new one, and the cookies of the one before count no more.
 	DeviceEpoch int64
+	// Build is set on the principal of a build's token, who is no row of
+	// the users table: its ID is the build's, negated, it is never an
+	// admin, and what it may do is Build.Perms and nothing else.
+	Build *BuildPrincipal
+}
+
+// BuildPrincipal is who a build's token acts as.
+type BuildPrincipal struct {
+	// Job and Number name the build: Job is the job the build belongs to,
+	// which a child's own name, and Parent is a child's multibranch job.
+	Job    string
+	Number int
+	Parent string
+	// Perms are the token's grants by job name.
+	Perms map[string]Perm
 }
 
 // Perm is what a user may do on one job.

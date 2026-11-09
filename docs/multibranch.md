@@ -249,6 +249,29 @@ git fetch origin "$KIPP_BASE_COMMIT" "$KIPP_COMMIT" &&
 under whatever identity the runner's git has; kipp's is
 `-c user.name=kipp -c user.email=kipp@localhost`.)
 
+## The build's token
+
+A child's `KIPP_TOKEN` views the child and nothing else unless its
+`.kipp.yml` asks for more with `permissions:`, written as in
+[a job file](jobs.md#the-builds-token-permissions); `self` is the child
+itself. Anyone who can push can write that file, so the job file keeps a
+ceiling:
+
+```yaml
+max_permissions:
+  site-deploy: [view, build]
+  self: cancel
+```
+
+A `.kipp.yml` that asks for a permission outside it fails the build before
+its first stage, with the permissions over the ceiling and `job site would
+have to allow them in max_permissions`. With no `max_permissions:` the
+ceiling is the default, `view` on the child itself. The job's own
+`permissions:` is not inherited by the children; only `max_permissions:`
+concerns them. Grants are compared by job name and action as written, so a
+job the child would inherit through its parent's grant is not inside the
+ceiling unless it is named.
+
 ## Webhook
 
 The parent's webhook is `POST /api/v1/hooks/github/<parent>`, signed

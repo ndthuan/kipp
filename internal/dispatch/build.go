@@ -67,6 +67,8 @@ type buildEnv struct {
 	// build with one, and of its latest earlier successful build, as of the
 	// moment the build prepared.
 	previous, previousOK string
+	// token is the build's KIPP_TOKEN, empty for a build that has none.
+	token string
 }
 
 // runBuild carries one build from running to a terminal status.
@@ -169,7 +171,8 @@ func (d *Dispatcher) newEnv(b *store.Build, job *config.Job) *buildEnv {
 	}
 	e.cacheNS = cache.NamespaceOf(b.Pushed(), b.TriggerBranch, b.TriggerDefaultBranch, job.Name, job.CacheWritesDefault)
 	e.vars, e.varsErr = d.Snapshot().Vars.For(job)
-	e.env, e.remoteEnv, _ = d.environment(b, job, e, nil)
+	e.token = d.mintToken(b, job)
+	e.env, e.remoteEnv, e.secrets = d.environment(b, job, e, nil)
 	return e
 }
 
@@ -243,6 +246,9 @@ func (d *Dispatcher) repoStages(ctx context.Context, b *store.Build, job *config
 		return err
 	}
 	e.stages, e.fileEnv = file.Stages, file.Env
+	if err := d.grantRepoPermissions(b, job, e, path, file.Permissions); err != nil {
+		return err
+	}
 	if err := checkFile(job, e, secrets, path); err != nil {
 		return err
 	}
@@ -331,7 +337,11 @@ func (d *Dispatcher) environment(b *store.Build, job *config.Job, e *buildEnv, s
 	vars := d.buildVars(b, job, e, secrets)
 	local = slices.Concat(PassEnv(os.Environ(), pass), vars, []string{"KIPP_WORKSPACE=" + e.workspace, "KIPP_OS=" + runtime.GOOS, "KIPP_ARCH=" + runtime.GOARCH})
 	remote = slices.Concat(RunnerEnv(os.Environ(), d.opts.RunnerEnv), vars)
-	return local, remote, secretMasks(secrets)
+	masks := secretMasks(secrets)
+	if e.token != "" {
+		masks = append(masks, e.token)
+	}
+	return local, remote, masks
 }
 
 // useSecrets makes the build's environment again with the secrets in it.
@@ -392,6 +402,10 @@ func (d *Dispatcher) buildVars(b *store.Build, job *config.Job, e *buildEnv, sec
 		if b.UpstreamStatus != "" {
 			add("KIPP_UPSTREAM_STATUS", string(b.UpstreamStatus))
 		}
+	}
+	// Last, so that it wins over a KIPP_TOKEN a secret or an env gave.
+	if e.token != "" {
+		add("KIPP_TOKEN", e.token)
 	}
 	return env
 }

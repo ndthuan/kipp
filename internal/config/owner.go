@@ -280,6 +280,7 @@ func (j *Job) Node(rec RepoRecord) *Job {
 	n.Name = rec.Name()
 	n.Folder = j.Name
 	n.Owner = nil
+	n.Permissions = nil
 	n.Triggers = Triggers{Cron: o.Cron}
 	n.Gone = j.Gone || rec.State == RepoGone
 	n.Disabled = j.Disabled || n.Gone
