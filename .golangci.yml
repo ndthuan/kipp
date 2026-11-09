@@ -55,6 +55,14 @@ linters:
       - path: ^internal/index/scanner_test\.go$
         linters:
           - forbidigo
+      # The demo tool's tests read the job files the tool just wrote into a
+      # temporary directory.
+      - path: ^internal/devtools/demo/main_test\.go$
+        text: "G304"
+      # The demo tool's random numbers make made-up builds from a seed, so that
+      # one seed makes one store; nothing there is secret.
+      - path: ^internal/devtools/demo/main\.go$
+        text: "G404"
       # The launcher runs the data directory's binary, which is its subject:
       # the file an upgrade put there, checked by version before it is run.
       - path: ^internal/upgrade/launch/(launch|supervise)\.go$
