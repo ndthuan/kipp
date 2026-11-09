@@ -64,6 +64,22 @@ docs/ are the user's view: the job file, the commands, the data directory.
   one that fails one time in three is a bug.
 - Dependencies are pinned in `go.mod`; check for the newest version before
   a bump.
+- The flake hunt (`.github/workflows/flake-hunt.yml`, weekly and by hand)
+  runs every package under `-race -shuffle=on` with two busy loops, as
+  parallel shards so no job runs much over 30 minutes: the slowest packages
+  are named in the hunt step, a shard each, and the shard `rest` is every
+  package not named, so a new package needs no change there. It runs at
+  `-cpu 1` on Linux and macOS and at `-cpu 4` on Linux only. It is not a
+  gate, and a normal run does not find what it finds. Keep it cheap by
+  these rules, which people apply (nothing automates them):
+  - The count is the `HUNT_COUNT` repository variable, else 20, and a
+    dispatch can set it once. It is never below 10, which the job enforces.
+  - After four green weekly runs in a row, set `HUNT_COUNT` to 10. After a
+    run that finds a flaky test, set it back to 20 (delete the variable)
+    until four runs in a row are green again.
+  - When a package's shard grows past about 30 minutes, give it a shard of
+    its own (a line in `named` and in the matrix); when a shard named there
+    no longer holds a package, the job fails, so remove it.
 
 ## Commit messages
 

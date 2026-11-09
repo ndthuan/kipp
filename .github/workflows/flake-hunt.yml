@@ -5,7 +5,14 @@ name: flake-hunt
 # run in a hundred before a push or a release finds them. Never on a push
 # or a pull request, and nothing waits for it: it is not part of the gate.
 #
-# A failing test turns the job red and is listed in the job summary with
+# The suite is cut into shards of packages that run as jobs side by side,
+# so the wall clock is that of the slowest shard and no job runs long
+# (the cut is in the hunt step; AGENTS.md says how to keep it). Every
+# package still runs under -race, -shuffle=on and two busy loops on both
+# systems, at -cpu 1 on both and at -cpu 4 on Linux only (-cpu 1 is where
+# most of the finds were, and macOS runners are the slow, scarce ones).
+#
+# A failing test turns its job red and is listed in the job summary with
 # how often it failed, its -cpu value, the shuffle seed and its first
 # lines. Nothing else is told; GitHub's note of a failed scheduled run is
 # the alert.
@@ -13,6 +20,11 @@ on:
   schedule:
     - cron: "17 2 * * 0" # Sundays, 02:17 UTC
   workflow_dispatch:
+    inputs:
+      count:
+        description: "Repeats of every test, 10 or more (default: the HUNT_COUNT repository variable, else 20)"
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -28,10 +40,16 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
         cpu: ["1", "4"]
+        shard: [web, api, dispatch, cli, rest]
+        exclude:
+          - os: macos-latest
+            cpu: "4"
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 240
+    timeout-minutes: 90
     env:
       CPU: ${{ matrix.cpu }}
+      SHARD: ${{ matrix.shard }}
+      COUNT: ${{ inputs.count || vars.HUNT_COUNT || '20' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -44,13 +62,50 @@ jobs:
       # the packages run side by side, which is the load the flakes seen so
       # far showed up under. -timeout is for one package's binary, which
       # runs all of its repeats.
+      #
+      # The slowest packages are named below, a shard each (the small ones
+      # with a partner); "rest" is every other package, so a package added
+      # later is hunted without a change here. A name that matches no
+      # package fails the job rather than hunting nothing.
       - name: hunt
+        shell: bash
         run: |
+          case "$COUNT" in
+            ''|*[!0-9]*) echo "count $COUNT is not a number"; exit 2 ;;
+          esac
+          if [ "$COUNT" -lt 10 ]; then
+            echo "count $COUNT is below 10, the least a hunt repeats"
+            exit 2
+          fi
+          named() {
+            case "$1" in
+              web) echo ./internal/web/... ;;
+              api) echo ./internal/api/... ./internal/auth/... ;;
+              dispatch) echo ./internal/dispatch/... ./internal/upgrade/launch/... ;;
+              cli) echo ./internal/cli/... ;;
+            esac
+          }
+          if [ "$SHARD" = rest ]; then
+            others="$(for s in web api dispatch cli; do
+              # shellcheck disable=SC2046 # patterns, word by word
+              go list $(named "$s")
+            done | sort)"
+            pkgs="$(go list ./... | sort | comm -23 - <(echo "$others"))"
+          else
+            # shellcheck disable=SC2046 # patterns, word by word
+            pkgs="$(go list $(named "$SHARD"))"
+          fi
+          if [ -z "$pkgs" ]; then
+            echo "shard $SHARD has no package"
+            exit 2
+          fi
+          echo "$pkgs"
           burn() { while :; do :; done; }
           burn & burn &
           burners="$(jobs -p)"
           status=0
-          go test -race -json -count=20 -shuffle=on -cpu "$CPU" -timeout 120m ./... > "$RUNNER_TEMP/hunt.json" || status=$?
+          # shellcheck disable=SC2086 # import paths, word by word
+          go test -race -json -count="$COUNT" -shuffle=on -cpu "$CPU" -timeout 60m $pkgs > "$RUNNER_TEMP/hunt.json" || status=$?
           # shellcheck disable=SC2086 # pids, word by word
           kill $burners
           echo "go test exited $status"
