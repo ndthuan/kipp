@@ -8,6 +8,10 @@ lines and the data directory are the public surface.
 
 ## Unreleased
 
+- `/mcp` answered `403 invalid Host header` to a request that a reverse
+  proxy or tunnel on the same machine forwarded with the public `Host`. A
+  request on a loopback connection now passes with a loopback `Host` or the
+  host of `--base-url`, and any other `Host` is still refused.
 - A queued build ended before it started (its job disabled or removed) was
   reported done by a wait, and by the API's build view, a moment before the
   line saying why had reached the job's activity. It stays busy until the

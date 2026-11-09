@@ -33,6 +33,14 @@ requests, so a restart or a revoked token never leaves one behind. A
 reverse proxy in front must pass the `Authorization` header and `POST`
 through, as it does for the API ([Operations](operations.md)).
 
+Behind a reverse proxy or tunnel on the same machine, kipp sees every
+request arrive on a loopback address. As a guard against DNS rebinding,
+such a request must carry a `Host` of `localhost`, a loopback address or
+the host of `--base-url`; any other `Host` is answered `403 Forbidden:
+invalid Host header`. Give `--base-url` the public address, and the proxy
+passes `Host` on as it is (or sets it to that host). A connection that is
+not on loopback is not held to this, and the token is checked either way.
+
 ## What a caller may do
 
 A caller authenticates with `Authorization: Bearer kipp_...`, an

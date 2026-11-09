@@ -13,7 +13,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -151,13 +153,53 @@ const callerKey = "kipp.caller"
 // read at all.
 func (s *Server) Handler() http.Handler {
 	srv := s.newServer()
-	h := sdk.NewStreamableHTTPHandler(func(*http.Request) *sdk.Server { return srv }, &sdk.StreamableHTTPOptions{Stateless: true})
+	h := sdk.NewStreamableHTTPHandler(func(*http.Request) *sdk.Server { return srv }, &sdk.StreamableHTTPOptions{Stateless: true, DisableLocalhostProtection: true})
 	var opts *auth.RequireBearerTokenOptions
 	if s.cfg.ResourceMetadataURL != "" {
 		opts = &auth.RequireBearerTokenOptions{ResourceMetadataURL: s.cfg.ResourceMetadataURL}
 	}
-	authed := auth.RequireBearerToken(s.verify, opts)(s.scopeGate(h))
+	authed := auth.RequireBearerToken(s.verify, opts)(s.scopeGate(s.hostGuard(h)))
 	return http.MaxBytesHandler(challenging(authed), api.MaxBody)
+}
+
+// hostGuard is the SDK's DNS-rebinding guard with one more name allowed. A
+// request that reaches a loopback listener must name a loopback host or the
+// host of --base-url: a reverse proxy or tunnel on the same machine
+// forwards the public name, and the SDK's own check refuses that. A
+// connection that is not on loopback is not held to it, as in the SDK.
+func (s *Server) hostGuard(next http.Handler) http.Handler {
+	public := ""
+	if u, err := url.Parse(s.cfg.BaseURL); err == nil {
+		public = strings.ToLower(u.Hostname())
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if local, ok := r.Context().Value(http.LocalAddrContextKey).(net.Addr); ok && local != nil && onLoopback(local.String()) {
+			if h := hostName(r.Host); !onLoopback(h) && (public == "" || h != public) {
+				http.Error(w, fmt.Sprintf("Forbidden: invalid Host header %q", r.Host), http.StatusForbidden)
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// hostName is a Host header or address without its port, in lower case.
+func hostName(hostport string) string {
+	h, _, err := net.SplitHostPort(hostport)
+	if err != nil {
+		h = hostport
+	}
+	return strings.ToLower(strings.Trim(h, "[]"))
+}
+
+// onLoopback is whether an address or Host header names this machine.
+func onLoopback(hostport string) bool {
+	h := hostName(hostport)
+	if h == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(h)
+	return ip != nil && ip.IsLoopback()
 }
 
 // verify is the SDK's token check, with the caller carried in its result.

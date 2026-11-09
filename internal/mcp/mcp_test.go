@@ -759,3 +759,37 @@ func TestA401PointsToTheResourceMetadataOnlyWhenOAuthIsOn(t *testing.T) {
 		}
 	}
 }
+
+func TestALoopbackConnectionMustNameLoopbackOrTheBaseURLsHost(t *testing.T) {
+	e := newEnv(t, nil)
+	for host, want := range map[string]int{
+		"ci.example.com":       http.StatusOK,
+		"CI.Example.com:443":   http.StatusOK,
+		"localhost:8086":       http.StatusOK,
+		"127.0.0.1:8086":       http.StatusOK,
+		"[::1]:8086":           http.StatusOK,
+		"evil.example.net":     http.StatusForbidden,
+		"ci.example.com.evil":  http.StatusForbidden,
+		"192.168.0.5:8086":     http.StatusForbidden,
+		"example.com:8086":     http.StatusForbidden,
+		"notci.example.com":    http.StatusForbidden,
+		"ci.example.com@evil.": http.StatusForbidden,
+	} {
+		req, err := http.NewRequest(http.MethodPost, e.srv.URL+Path, strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Host = host
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json, text/event-stream")
+		req.Header.Set("Authorization", "Bearer "+e.admin)
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = res.Body.Close()
+		if res.StatusCode != want {
+			t.Errorf("Host %q: %d, want %d", host, res.StatusCode, want)
+		}
+	}
+}
