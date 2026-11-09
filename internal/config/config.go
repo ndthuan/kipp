@@ -46,6 +46,10 @@ type Job struct {
 	// Disabled keeps the file and the history and takes the job out of
 	// use: its triggers are ignored and nobody builds it.
 	Disabled bool
+	// Gone is a multibranch child whose branch or pull request is gone, or
+	// a repo of an owner job that is gone, and everything under it. It is
+	// disabled too, but it is not a job anybody turned off.
+	Gone     bool
 	Params   []Param
 	Triggers Triggers
 	// TimeZone is the zone the job's cron is read in; nil is the

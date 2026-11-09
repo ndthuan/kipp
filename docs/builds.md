@@ -159,7 +159,7 @@ builds more than 100 times a week needs a larger `keep.builds` for the
 week's graphs to be whole. A user sees only the jobs they may view.
 `GET /api/v1/overview?window=24h|7d` gives the same as JSON ([API](api.md)).
 
-![The overview: a strip of graphs (builds over time, slots and queue, pass rate by group), then running and coming up on the left and failing, unstable, flaky and failed on the right, then the groups](screenshots/overview.png)
+![The overview: a strip of graphs (builds over time, slots and queue, pass rate by group), then running and coming up on the left and failing, unstable, flaky and failed on the right; a group's row of the pass-rate graph says how many of its jobs are never built or disabled](screenshots/overview.png)
 
 ## The queue
 

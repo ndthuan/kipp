@@ -42,12 +42,15 @@ func jobFile(t *testing.T, dir, name string) *config.Job {
 func TestTheDemoMakesJobFilesTheServerReads(t *testing.T) {
 	dir, _ := demoIn(t)
 	files, err := filepath.Glob(filepath.Join(dir, "jobs", "*.yml"))
-	if err != nil || len(files) != 30 {
+	if err != nil || len(files) != 31 {
 		t.Fatalf("%d job files: %v", len(files), err)
 	}
 	groups := map[string]bool{}
 	for _, f := range files {
 		groups[jobFile(t, dir, strings.TrimSuffix(filepath.Base(f), ".yml")).Group] = true
+	}
+	if mb := jobFile(t, dir, multibranch); !mb.IsParent() {
+		t.Fatalf("the multibranch job is %+v", mb)
 	}
 	if len(groups) < 4 || !groups[""] {
 		t.Fatalf("groups %v: several, and the jobs with none", groups)
@@ -92,6 +95,13 @@ func kindOf(b *store.Build) string {
 	return "other"
 }
 
+// groupOf is the group of a job, a child's being its parent's.
+func groupOf(t *testing.T, dir, name string) string {
+	t.Helper()
+	parent, _, _ := strings.Cut(name, ".")
+	return jobFile(t, dir, parent).Group
+}
+
 func TestTheOverviewOfTheDemoHasSomethingInEveryGraph(t *testing.T) {
 	dir, _ := demoIn(t)
 	st, err := store.Open(filepath.Join(dir, "data", "db.sqlite"))
@@ -115,7 +125,7 @@ func TestTheOverviewOfTheDemoHasSomethingInEveryGraph(t *testing.T) {
 	}
 	var jobs []overview.Job
 	for name, h := range hist {
-		j := overview.Job{Name: name, Group: jobFile(t, dir, name).Group, History: h, Before: before[name]}
+		j := overview.Job{Name: name, Group: groupOf(t, dir, name), History: h, Before: before[name]}
 		for _, b := range ended {
 			if b.Job == name {
 				j.Builds = append(j.Builds, b)
@@ -135,6 +145,41 @@ func TestTheOverviewOfTheDemoHasSomethingInEveryGraph(t *testing.T) {
 	if len(o.Failing) == 0 || len(o.Unstable) == 0 || len(o.Flaky) == 0 {
 		t.Fatalf("%d failing, %d unstable, %d flaky", len(o.Failing), len(o.Unstable), len(o.Flaky))
 	}
+}
+
+func TestTheMultibranchJobHasLiveAndGoneChildrenAndTheGoneOnesAreNoDisabledJob(t *testing.T) {
+	dir, _ := demoIn(t)
+	st, err := store.Open(filepath.Join(dir, "data", "db.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	kids, err := st.Children(context.Background(), multibranch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parent := jobFile(t, dir, multibranch)
+	var jobs []overview.Job
+	live, gone := 0, 0
+	for _, c := range kids {
+		child := parent.Child(config.ChildRecord{Parent: c.Parent, Key: c.Key, Kind: c.Kind, State: c.State})
+		live, gone = live+1-btoi(child.Gone), gone+btoi(child.Gone)
+		jobs = append(jobs, overview.Job{Name: child.Name, Group: child.Group, Disabled: child.Disabled, Gone: child.Gone, Child: true})
+	}
+	if live < 2 || gone < 2 {
+		t.Fatalf("%d live and %d gone children", live, gone)
+	}
+	g := overview.Compute(jobs, overview.Config{}, at0).Groups[0]
+	if g.Disabled != 0 || g.NeverBuilt != live {
+		t.Fatalf("%+v", g)
+	}
+}
+
+func btoi(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 func TestTheSameSeedAndTimeMakeTheSameStore(t *testing.T) {

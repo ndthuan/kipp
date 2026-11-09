@@ -163,20 +163,15 @@ func (s *Site) home(w http.ResponseWriter, r *http.Request, u *store.User) {
 	for _, c := range []overview.Range{overview.Day, overview.Week} {
 		d.Ranges = append(d.Ranges, rangeLink{Label: c.Label, Href: windowHref(overview.Day, c), Current: c == rg})
 	}
-	for _, g := range o.Groups {
-		h := &group{Name: g.Name}
-		d.Groups = append(d.Groups, groupRow{Group: g, Href: h.href(), Label: h.label()})
-	}
 	s.render(w, r, "overview", http.StatusOK, page{Title: "Overview", Data: d, Here: "/", Queue: q})
 }
 
-// overviewData is the overview page: the queue, the graphs, the sections,
-// and the groups with the address of their lists. Self is the page's own
-// address, which its refresh asks for again, so that a week stays a week.
+// overviewData is the overview page: the queue, the graphs and the sections. Self is
+// the page's own address, which its refresh asks for again, so that a week
+// stays a week.
 type overviewData struct {
 	Queue    queueData
 	Overview *overview.Overview
-	Groups   []groupRow
 	Range    overview.Range
 	Ranges   []rangeLink
 	Charts   []*chart
@@ -197,11 +192,6 @@ func windowHref(def, rg overview.Range) string {
 		return "/"
 	}
 	return "/?window=" + rg.Name
-}
-
-type groupRow struct {
-	overview.Group
-	Href, Label string
 }
 
 func (s *Site) jobs(w http.ResponseWriter, r *http.Request, u *store.User) {

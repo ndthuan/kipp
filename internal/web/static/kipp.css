@@ -291,6 +291,7 @@
   .plot { display: block; width: 100%; height: auto; }
   .plot text { fill: var(--fg-subtle); font-size: var(--size-xs); font-family: inherit; }
   .plot text.caption { fill: var(--fg-muted); }
+  .plot a text.count { fill: var(--accent-text); text-decoration: underline; }
   .plot .grid { stroke: var(--line); stroke-width: 1; }
   .plot .limit { stroke: var(--bad); stroke-width: 1.5; stroke-dasharray: 5 3; }
   .bar-success { fill: var(--ok); }

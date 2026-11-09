@@ -235,3 +235,27 @@ func TestTheUnstableSectionHoldsTheJobsWhoseNewestBuildIsUnstableAndSaysSince(t 
 	eq(t, "the build", unstable[0]["build"].(map[string]any)["status"], "unstable")
 	eq(t, "a job unstable and then failed is failing only", jobsOf(rowsOf(t, o, "failing"), "job"), "slow")
 }
+
+func TestAGoneBranchAndAGoneRepoAreInNoCountOfAGroupButALiveChildOfADisabledParentIs(t *testing.T) {
+	e := newEnv(t)
+	parent, err := config.ParseJob("site.yml", []byte("name: site\ngroup: web\nmultibranch: {repo: acme/site}\n"))
+	must(t, err)
+	off, err := config.ParseJob("old.yml", []byte("name: old\ngroup: web\ndisabled: true\nmultibranch: {repo: acme/old}\n"))
+	must(t, err)
+	live := func(p *config.Job, key string) *config.Job {
+		return p.Child(config.ChildRecord{Parent: p.Name, Key: key, Kind: config.KindBranch, Branch: key, State: config.ChildLive})
+	}
+	gone := parent.Child(config.ChildRecord{Parent: parent.Name, Key: "pr-7", Kind: config.KindPR, PR: 7, State: config.ChildGone})
+	e.api.deps.Dispatch.SetSnapshot(e.api.deps.Dispatch.Snapshot().WithJobs(parent, off, live(parent, "main"), gone, live(off, "main")))
+	o := e.object(t, http.StatusOK, e.admin, "GET", "/api/v1/overview", "")
+	var web map[string]any
+	for _, g := range rowsOf(t, o, "groups") {
+		if g["name"] == "web" {
+			web = g
+		}
+	}
+	// site.main never built; old.main is turned off through its parent; the
+	// gone pull request is in neither count.
+	eq(t, "web", fmt.Sprint(web["never_built"], web["disabled"]), "1 1")
+	eq(t, "the API's rates stay the groups that built", len(rowsOf(t, o["charts"].(map[string]any), "groups")), 0)
+}

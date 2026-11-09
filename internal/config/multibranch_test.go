@@ -180,8 +180,8 @@ func TestAChildInheritsItsParentButCronAfterAndWebhook(t *testing.T) {
 		t.Fatal("making a child changed its parent")
 	}
 	gone := j.Child(ChildRecord{Parent: "site", Key: "main", Kind: KindBranch, Branch: "main", State: ChildGone})
-	if !gone.Disabled {
-		t.Fatal("a gone child can still be built")
+	if !gone.Disabled || !gone.Gone || c.Gone {
+		t.Fatal("a gone child can still be built, or is not told apart from a job turned off")
 	}
 	gone.DefaultBranch = "main"
 	snap := (&Snapshot{Jobs: map[string]*Job{"site": j}, Names: []string{"site"}}).WithJobs(c, gone)

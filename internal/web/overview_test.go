@@ -3,10 +3,12 @@ package web
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/ndthuan/kipp/internal/overview"
 	"github.com/ndthuan/kipp/internal/store"
 )
 
@@ -45,8 +47,8 @@ func TestTheFrontPageIsTheOverviewAndSaysSoInEverySectionWhenThereIsNothingToSho
 		`hx-get="/" hx-select="#overview"`, `hx-trigger="kipp-changed from:body, every 60s"`,
 		// The one job with a cron.
 		`<code>0 3 * * *</code>`, `<a class="link" href="/jobs/nightly">nightly</a>`,
-		// A group is a line with its counts and a link to its list.
-		`<a class="link" href="/jobs?group=backend">backend</a>`, `<a class="link" href="/jobs?only=ungrouped">No group</a>`)
+		// A group that built nothing is a line with what it holds, each count a link to its list.
+		`<a href="/jobs?group=backend"><text class="count"`, `<a href="/jobs?only=ungrouped"><text class="count"`)
 	lacks(t, page, `<table class="jobs">`, `id="jobs"`, "Removed from the job files")
 }
 
@@ -91,7 +93,7 @@ func TestTheOverviewKeepsToWhatTheViewerMayView(t *testing.T) {
 	_, err := e.st.CreateUser(ctx, "carol", hashOnce(), false)
 	must(t, err)
 	page = e.overviewPage(t, "carol")
-	contains(t, page, "Nothing is failing.", "There is no job you may see.")
+	contains(t, page, "Nothing is failing.")
 	lacks(t, page, `href="/jobs/smoke"`)
 }
 
@@ -215,10 +217,43 @@ func TestTheOverviewHoldsItsSectionsInTwoColumnsAndTheQueueDoesNotRefreshTwice(t
 	contains(t, cols[0], `<section id="queue" class="stack">`, "<h2>Coming up</h2>")
 	lacks(t, cols[0], "Failing now", "Flaky", "Failed in the last")
 	contains(t, cols[1], "<h2>Failing now</h2>", `Unstable now</h2>`, "<h2>Flaky</h2>", "<h2>Failed in the last 24 hours</h2>")
-	_, groups, _ := strings.Cut(cols[1], "<h2>Groups</h2>")
-	contains(t, groups, `href="/jobs?group=backend"`)
+	lacks(t, page, "<h2>Groups</h2>")
 	// The queue's own page and the job list still refresh it themselves.
 	_, jobs := get(t, e.login(t, "admin"), e.srv.URL+"/jobs")
 	contains(t, jobs, `<section id="queue" class="stack" hx-get="/queue"`)
 	lacks(t, page, `<section id="queue" class="stack" hx-get="/queue"`)
+}
+
+func TestTheGroupsAreInThePassRateGraphWithTheirNeverBuiltAndDisabledCountsAsLinks(t *testing.T) {
+	e := site(t)
+	e.finishedAgo(t, "smoke", store.Success, time.Hour)
+	page := e.overviewAt(t, "")
+	lacks(t, page, "<h2>Groups</h2>", "<th>Running</th>")
+	// Smoke built, and no other job has: the ungrouped ones are listed by
+	// the count alone, with no builds.
+	contains(t, page, "No group no builds, ", " never built", `<a href="/jobs?only=ungrouped"><text class="count"`, "<th>Never built</th><th>Disabled</th>")
+	lacks(t, page, `<a href="/jobs?group=backend"><text`)
+}
+
+func TestACountThatIncludesBranchesAndPullRequestsSaysSoInItsTitleAndAZeroCountIsNotShown(t *testing.T) {
+	c := &overview.Charts{Range: overview.Day, Groups: []overview.GroupRate{
+		{Name: "backend", Now: store.Tally{Green: 9, Red: 1}, Disabled: 3, DisabledChildren: 2},
+		{Name: "web", Now: store.Tally{Green: 1}, NeverBuilt: 1},
+		{Name: "quiet", Now: store.Tally{Green: 1}},
+	}}
+	ch := ratesChart(c)
+	var got []string
+	for _, l := range ch.Labels {
+		if l.Href != "" {
+			got = append(got, l.Href+" "+l.Text+" | "+l.Title)
+		}
+	}
+	want := []string{
+		"/jobs?group=backend 3 disabled | 3 disabled (includes branches and pull requests)",
+		"/jobs?group=web 1 never built | 1 never built",
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("%q\nwant %q", got, want)
+	}
+	eq(t, "tooltip words", ch.Rows[0][1], "90% of 10, 3 disabled")
 }

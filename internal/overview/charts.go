@@ -77,8 +77,9 @@ type Charts struct {
 	// none.
 	BuildsLimit int
 	// Groups is the pass rate of every group that finished a build in the
-	// last Range.Length or the one before it, the named ones by name and
-	// the jobs with no group (Name empty) last.
+	// last Range.Length or the one before it, or has a job never built or
+	// disabled, the named ones by name and the jobs with no group (Name
+	// empty) last.
 	Groups []GroupRate
 }
 
@@ -101,9 +102,15 @@ func (b Bucket) Finished() int { return b.Success + b.Unstable + b.Failed + b.Ca
 // GroupRate is how often the builds of a group ended green in the last
 // Range.Length (Now) and in the one before it (Before). Cancelled builds
 // are in neither.
+//
+// NeverBuilt and Disabled are the group's counts of Group, and the
+// ...Children how many of them are branches and pull requests: a group that
+// built nothing in either range is still here when it has one of them.
 type GroupRate struct {
-	Name        string
-	Now, Before store.Tally
+	Name                                 string
+	Now, Before                          store.Tally
+	NeverBuilt, Disabled                 int
+	NeverBuiltChildren, DisabledChildren int
 }
 
 // Delta is the change in whole percent from Before to Now, with false when
@@ -142,10 +149,37 @@ func chartsOf(jobs []Job, cfg Config, now time.Time) *Charts {
 			c.Groups = append(c.Groups, *r)
 		}
 	}
+	c.sortGroups()
+	return c
+}
+
+func (c *Charts) sortGroups() {
 	slices.SortFunc(c.Groups, func(a, b GroupRate) int {
 		return cmp.Or(cmp.Compare(btoi(a.Name == ""), btoi(b.Name == "")), cmp.Compare(a.Name, b.Name))
 	})
-	return c
+}
+
+// addCounts puts the never built and disabled counts of gs onto the rows of
+// the groups, and adds a row for a group that has one and no build.
+func (c *Charts) addCounts(gs []Group) {
+	at := map[string]int{}
+	for i, r := range c.Groups {
+		at[r.Name] = i
+	}
+	for _, g := range gs {
+		if g.NeverBuilt+g.Disabled == 0 {
+			continue
+		}
+		i, ok := at[g.Name]
+		if !ok {
+			i = len(c.Groups)
+			c.Groups = append(c.Groups, GroupRate{Name: g.Name})
+		}
+		r := &c.Groups[i]
+		r.NeverBuilt, r.Disabled = g.NeverBuilt, g.Disabled
+		r.NeverBuiltChildren, r.DisabledChildren = g.NeverBuiltChildren, g.DisabledChildren
+	}
+	c.sortGroups()
 }
 
 // addJob counts the builds of j into the columns and into its group's rate,

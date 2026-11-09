@@ -284,7 +284,8 @@ func (j *Job) Child(rec ChildRecord) *Job {
 	c.Origin = &rec
 	c.Triggers = Triggers{}
 	c.TimeZone = nil
-	c.Disabled = j.Disabled || rec.State == ChildGone
+	c.Gone = j.Gone || rec.State == ChildGone
+	c.Disabled = j.Disabled || c.Gone
 	if rec.Kind != KindBranch && rec.Title != "" {
 		c.Description = rec.Title
 	}

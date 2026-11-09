@@ -6,7 +6,7 @@
 <desc id="chart-{{.Key}}-desc">{{.Desc}}</desc>
 {{range .Lines}}<line class="{{.Class}}" x1="{{.X1}}" y1="{{.Y1}}" x2="{{.X2}}" y2="{{.Y2}}"/>{{end}}
 {{range .Rects}}<rect class="{{.Class}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}">{{with .Title}}<title>{{.}}</title>{{end}}</rect>{{end}}
-{{range .Labels}}<text class="{{.Class}}" x="{{.X}}" y="{{.Y}}" text-anchor="{{.Anchor}}">{{.Text}}{{with .Title}}<title>{{.}}</title>{{end}}</text>{{end}}
+{{range .Labels}}{{if .Href}}<a href="{{.Href}}">{{end}}<text class="{{.Class}}" x="{{.X}}" y="{{.Y}}" text-anchor="{{.Anchor}}">{{.Text}}{{with .Title}}<title>{{.}}</title>{{end}}</text>{{if .Href}}</a>{{end}}{{end}}
 </svg>
 <ul class="legend">{{range .Legend}}<li><span class="swatch swatch-{{.Class}}" aria-hidden="true"></span>{{.Text}}</li>{{end}}</ul>
 <div class="sr-only"><table>
@@ -120,24 +120,5 @@
 {{end}}</section>
 </div>
 </div>
-<section>
-<h2>Groups</h2>
-{{with .Data.Groups}}<div class="scroll">
-<table class="rows">
-<thead><tr><th>Group</th><th>Green</th><th>Red</th><th>Never built</th><th>Running</th><th>Disabled</th></tr></thead>
-<tbody>
-{{range .}}<tr>
-<td><a class="link" href="{{.Href}}">{{.Label}}</a></td>
-<td>{{.Green}}</td>
-<td>{{.Red}}</td>
-<td>{{.NeverBuilt}}</td>
-<td>{{.Running}}</td>
-<td>{{.Disabled}}</td>
-</tr>
-{{end}}</tbody>
-</table>
-</div>
-{{else}}<p class="sub">There is no job you may see.</p>
-{{end}}</section>
 </div>
 {{end}}

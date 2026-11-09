@@ -281,7 +281,8 @@ func (j *Job) Node(rec RepoRecord) *Job {
 	n.Folder = j.Name
 	n.Owner = nil
 	n.Triggers = Triggers{Cron: o.Cron}
-	n.Disabled = j.Disabled || rec.State == RepoGone
+	n.Gone = j.Gone || rec.State == RepoGone
+	n.Disabled = j.Disabled || n.Gone
 	m := o.Settings
 	m.Repo, m.Clone, m.Token, m.App = rec.Repo, fmt.Sprintf(o.Clone, rec.Repo), o.Token, o.App
 	n.Multibranch = &m

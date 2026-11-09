@@ -97,7 +97,7 @@ func TestANodeIsAMultibranchJobMadeFromTheOwnerJob(t *testing.T) {
 		t.Fatalf("making a node changed the owner: %+v", j.Owner.Settings)
 	}
 	gone := j.Node(RepoRecord{Owner: "acme", Key: "site", Repo: "acme/site", State: RepoGone})
-	if !gone.Disabled || gone.Child(ChildRecord{Parent: gone.Name, Key: "main", Kind: KindBranch, State: ChildLive}).Name != "acme.site.main" ||
+	if !gone.Disabled || !gone.Gone || !gone.Child(ChildRecord{Parent: gone.Name, Key: "main", State: ChildLive}).Gone || gone.Child(ChildRecord{Parent: gone.Name, Key: "main", Kind: KindBranch, State: ChildLive}).Name != "acme.site.main" ||
 		!gone.Child(ChildRecord{Parent: gone.Name, Key: "main", State: ChildLive}).Disabled {
 		t.Fatal("the children of a gone repo build no more")
 	}

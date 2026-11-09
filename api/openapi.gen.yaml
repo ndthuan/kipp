@@ -1930,7 +1930,7 @@ paths:
         The data of the front page, over the jobs the caller may view that
         build themselves: a multibranch job is represented by its children, an
         owner job by the children of its repos, and a job removed from the job
-        files or disabled is in no section but the counts of `groups`. A build
+        files or disabled is in no section but the counts of `groups`; a branch, pull request or repo that is gone is not counted there either. A build
         is green when it ended `success` or `unstable`, red when it ended
         `failed`, `timeout` or `lost`; other builds are not looked at. Each
         job is judged by its last 20 builds that ended green or red. The queue
@@ -3646,7 +3646,9 @@ components:
         How the enabled jobs of a group stand. A job that is running is counted
         as `running` and also by the colour of its last finished build, so the
         counts need not add up to the group's jobs; a disabled job is only
-        `disabled`.
+        `disabled`. A branch or pull request that is gone, and a repo that is
+        gone with its branches and pull requests, are in no count. Branches and
+        pull requests that are live are counted like any job.
       properties:
         disabled:
           type: integer

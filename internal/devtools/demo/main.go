@@ -33,6 +33,7 @@ import (
 
 	_ "modernc.org/sqlite" // the driver the store uses
 
+	"github.com/ndthuan/kipp/internal/config"
 	"github.com/ndthuan/kipp/internal/store"
 )
 
@@ -71,6 +72,7 @@ func run(args []string, out io.Writer, now time.Time) error {
 	d := &demo{rng: rand.New(rand.NewPCG(*seed, *seed^0x9e3779b97f4a7c15)), now: now.UTC()}
 	d.makeJobs(*jobs)
 	n := d.makeBuilds(*days, *perDay)
+	d.makeChildren()
 	if err := d.write(*dir); err != nil {
 		return err
 	}
@@ -103,6 +105,8 @@ type build struct {
 	status                 store.Status
 	queued, started, ended time.Time
 	trigger                string
+	// parent is the multibranch job of a build of one of its children.
+	parent string
 }
 
 type demo struct {
@@ -110,6 +114,45 @@ type demo struct {
 	now    time.Time
 	jobs   []*job
 	builds []*build
+	// children are the branches and pull requests of the multibranch job.
+	children []store.Child
+}
+
+// multibranch is the one multibranch job of the demo, in the group backend.
+const multibranch = "monorepo"
+
+// makeChildren gives the multibranch job a live branch and pull requests
+// and several pull requests that are gone, some of which built before they
+// went: the dashboard counts none of the gone ones, and one live pull
+// request that never built.
+func (d *demo) makeChildren() {
+	kids := []struct {
+		key, state string
+		pr, builds int
+	}{
+		{"main", config.ChildLive, 0, 6}, {"pr-41", config.ChildLive, 41, 2}, {"pr-44", config.ChildLive, 44, 0},
+		{"pr-12", config.ChildGone, 12, 3}, {"pr-19", config.ChildGone, 19, 1}, {"pr-23", config.ChildGone, 23, 0},
+		{"pr-27", config.ChildGone, 27, 2}, {"pr-30", config.ChildGone, 30, 0}, {"pr-33", config.ChildGone, 33, 1},
+	}
+	for i, k := range kids {
+		c := store.Child{Parent: multibranch, Key: k.key, Kind: config.KindBranch, Branch: k.key, State: k.state,
+			HeadSHA: fmt.Sprintf("%040x", i+1), LastSeenAt: d.now}
+		if k.pr > 0 {
+			c.Kind, c.Branch, c.PR = config.KindPR, "feature-"+k.key, k.pr
+			c.Title, c.Author = fmt.Sprintf("Change %d", k.pr), "dev"
+		}
+		if k.state == config.ChildGone {
+			gone := d.now.Add(-time.Duration(i) * time.Hour)
+			c.GoneAt = &gone
+		}
+		d.children = append(d.children, c)
+		j := &job{name: multibranch + "." + k.key}
+		for n := range k.builds {
+			end := d.now.Add(-time.Duration(2*(n+i)+1) * time.Hour)
+			d.builds = append(d.builds, &build{job: j, parent: multibranch, status: store.Success, trigger: "webhook",
+				queued: end.Add(-3 * time.Minute), started: end.Add(-2 * time.Minute), ended: end})
+		}
+	}
 }
 
 var (
@@ -374,6 +417,10 @@ func (d *demo) write(dir string) error {
 			return err
 		}
 	}
+	file := "name: " + multibranch + "\ngroup: backend\ndescription: A made-up multibranch job of the demo.\nmultibranch: {repo: acme/" + multibranch + "}\n"
+	if err := os.WriteFile(filepath.Join(jobs, multibranch+".yml"), []byte(file), 0o600); err != nil {
+		return err
+	}
 	for _, j := range d.jobs {
 		if err := os.WriteFile(filepath.Join(jobs, j.name+".yml"), []byte(j.file()), 0o600); err != nil {
 			return err
@@ -385,6 +432,11 @@ func (d *demo) write(dir string) error {
 	st, err := store.Open(path)
 	if err != nil {
 		return err
+	}
+	for _, c := range d.children {
+		if err := st.PutChild(context.Background(), c); err != nil {
+			return err
+		}
 	}
 	if err := st.Close(); err != nil {
 		return err
@@ -428,14 +480,14 @@ func (d *demo) insert(path string) error {
 	defer func() { _ = tx.Rollback() }()
 	slices.SortFunc(d.builds, func(a, b *build) int { return a.queued.Compare(b.queued) })
 	numbers := map[string]int{}
-	ins, err := tx.PrepareContext(ctx, `INSERT INTO builds (job, number, status, trigger, queued_at, started_at, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+	ins, err := tx.PrepareContext(ctx, `INSERT INTO builds (job, parent, number, status, trigger, queued_at, started_at, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = ins.Close() }()
 	for _, b := range d.builds {
 		numbers[b.job.name]++
-		if _, err := ins.ExecContext(ctx, b.job.name, numbers[b.job.name], b.status, b.trigger, at(b.queued), nullAt(b.started), nullAt(b.ended)); err != nil {
+		if _, err := ins.ExecContext(ctx, b.job.name, b.parent, numbers[b.job.name], b.status, b.trigger, at(b.queued), nullAt(b.started), nullAt(b.ended)); err != nil {
 			return err
 		}
 	}

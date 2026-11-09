@@ -224,6 +224,45 @@ func TestGroupsCountGreenRedNeverBuiltRunningAndDisabledNamedFirstThenNoGroup(t 
 	}
 }
 
+func TestAGoneJobIsInNoCountOfAGroupAndADisabledChildIsCountedAsOne(t *testing.T) {
+	gone := Job{Name: "p.pr-1", Group: "b", Disabled: true, Gone: true, Child: true}
+	goneNeverBuilt := Job{Name: "p.pr-2", Group: "b", Gone: true, Child: true}
+	off := Job{Name: "p.pr-3", Group: "b", Disabled: true, Child: true}
+	never := Job{Name: "p.pr-4", Group: "b", Child: true}
+	o := compute([]Job{gone, goneNeverBuilt, off, never, {Name: "top", Group: "b", Disabled: true}}, 4, now)
+	want := Group{Name: "b", NeverBuilt: 1, NeverBuiltChildren: 1, Disabled: 2, DisabledChildren: 1}
+	if len(o.Groups) != 1 || o.Groups[0] != want {
+		t.Fatalf("%+v\nwant %+v", o.Groups, want)
+	}
+}
+
+func TestTheRatesCarryTheNeverBuiltAndDisabledCountsOnlyWhenNotZeroEvenWithoutBuilds(t *testing.T) {
+	jobs := []Job{
+		job("a1", "ss"), {Name: "a2", Group: "a", Disabled: true},
+		{Name: "idle", Group: "b", Child: true}, {Name: "gone", Group: "c", Disabled: true, Gone: true},
+		{Name: "ok", Group: "d", History: history("ok", "s", now)},
+	}
+	jobs[0].Group = "a"
+	o := compute(jobs, 4, now)
+	var names []string
+	for _, g := range o.Charts.Groups {
+		names = append(names, g.Name)
+	}
+	if fmt.Sprint(names) != "[a b d]" {
+		t.Fatalf("groups %v: a gone job alone makes no row", names)
+	}
+	a, b, d := o.Charts.Groups[0], o.Charts.Groups[1], o.Charts.Groups[2]
+	if a.Disabled != 1 || a.NeverBuilt != 0 || a.Now.Total() == 0 {
+		t.Fatalf("%+v", a)
+	}
+	if b.NeverBuilt != 1 || b.NeverBuiltChildren != 1 || b.Now.Total()+b.Before.Total() != 0 {
+		t.Fatalf("%+v", b)
+	}
+	if d.NeverBuilt != 0 || d.Disabled != 0 {
+		t.Fatalf("%+v", d)
+	}
+}
+
 func TestADotRunIsTheFiveNewestBuilds(t *testing.T) {
 	o := compute([]Job{job("a", "ffffffffff")}, 4, now)
 	if len(o.Failing[0].Dots) != Dots {

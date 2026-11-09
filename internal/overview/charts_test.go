@@ -189,14 +189,14 @@ func TestPassRateOfAGroupIsThisWindowAgainstTheOneBefore(t *testing.T) {
 	} else if _, ok := g.Delta(); ok {
 		t.Fatal("a delta with nothing now")
 	}
-	if _, ok := rate(c, "idle"); ok {
-		t.Fatal("a group with no build in either window is left out")
+	if g, ok := rate(c, "idle"); !ok || g.NeverBuilt != 1 || g.Now.Total()+g.Before.Total() != 0 {
+		t.Fatalf("a group with no build but a job never built is listed for that: %+v %v", g, ok)
 	}
 	var names []string
 	for _, g := range c.Groups {
 		names = append(names, g.Name)
 	}
-	if !slices.Equal(names, []string{"ci", "old", ""}) {
+	if !slices.Equal(names, []string{"ci", "idle", "old", ""}) {
 		t.Fatalf("named first by name, no group last: %q", names)
 	}
 }

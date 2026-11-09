@@ -8,6 +8,10 @@ lines and the data directory are the public surface.
 
 ## Unreleased
 
+- The dashboard no longer counts pull requests and branches that are gone as
+  disabled jobs, and the Groups table is folded into the pass-rate graph: a
+  group's row there says how many of its jobs were never built or are
+  disabled, each a link to the group's list.
 - On a loaded machine a stage's leader in the middle of an exec could be
   read as having dropped its environment, and so be left alone when the
   stage was stopped. The wait for an exec to settle is now two seconds, not

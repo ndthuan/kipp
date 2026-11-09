@@ -32,8 +32,13 @@ const (
 // neither a multibranch job, an owner job nor a repo's node.
 type Job struct {
 	Name, Group string
-	Disabled    bool
-	Cron        string
+	// Disabled is a job turned off, in its file or through its parent, and
+	// Gone a branch, pull request or repo that no longer exists: it is
+	// Disabled as well, but no count of a group has it.
+	Disabled, Gone bool
+	// Child is a branch or pull request of a multibranch job.
+	Child bool
+	Cron  string
 	// Next is when the cron fires next, nil for none.
 	Next *time.Time
 	// Running: the job's newest build is queued or running.
@@ -105,19 +110,23 @@ type Upcoming struct {
 
 // Group is how the jobs of a group stand, Name "" being the jobs with no
 // group. A running job is also counted by its colour, so the counts of one
-// group do not add up to its jobs; a disabled job is only disabled.
+// group do not add up to its jobs; a disabled job is only disabled. A gone
+// job is in no count. NeverBuiltChildren and DisabledChildren are how many
+// of NeverBuilt and Disabled are branches and pull requests.
 type Group struct {
 	Name                                      string
 	Green, Red, NeverBuilt, Running, Disabled int
+	NeverBuiltChildren, DisabledChildren      int
 }
 
 // Compute is the overview of jobs at now.
 func Compute(jobs []Job, cfg Config, now time.Time) *Overview {
 	o := &Overview{Groups: groups(jobs), Charts: chartsOf(jobs, cfg, now)}
+	o.Charts.addCounts(o.Groups)
 	flips := cfg.Flips
 	var reds []Failure
 	for _, j := range jobs {
-		if j.Disabled {
+		if j.Disabled || j.Gone {
 			continue
 		}
 		h := j.History
@@ -254,8 +263,11 @@ func groups(jobs []Job) []Group {
 
 func (g *Group) count(j Job) {
 	switch {
+	case j.Gone:
+		return
 	case j.Disabled:
 		g.Disabled++
+		g.DisabledChildren += btoi(j.Child)
 		return
 	case j.Running:
 		g.Running++
@@ -267,6 +279,7 @@ func (g *Group) count(j Job) {
 		g.Green++
 	case !j.Running:
 		g.NeverBuilt++
+		g.NeverBuiltChildren += btoi(j.Child)
 	}
 }
 

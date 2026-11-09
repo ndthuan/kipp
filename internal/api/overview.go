@@ -52,7 +52,7 @@ func (s *Service) Overview(ctx context.Context, u *store.User, rg overview.Range
 	for _, n := range names {
 		j := snap.Jobs[n]
 		running := last[n] != nil && !last[n].Status.Terminal()
-		jobs = append(jobs, overview.Job{Name: n, Group: j.Group, Disabled: j.Disabled, Cron: j.Triggers.Cron,
+		jobs = append(jobs, overview.Job{Name: n, Group: j.Group, Disabled: j.Disabled, Gone: j.Gone, Child: j.Parent != "", Cron: j.Triggers.Cron,
 			Next: nextFire(j, now, s.deps.Dispatch.Zone(j)), Running: running, History: history[n],
 			Builds: byJob[n], Before: before[n]})
 	}
@@ -185,6 +185,9 @@ func toChartsV1(c *overview.Charts) chartsV1 {
 			int(b.WaitMedian.Round(time.Second).Seconds()), int(b.WaitMax.Round(time.Second).Seconds())})
 	}
 	for _, g := range c.Groups {
+		if g.Now.Total()+g.Before.Total() == 0 {
+			continue
+		}
 		r := groupRateV1{Name: g.Name, Now: tallyOf(g.Now), Before: tallyOf(g.Before)}
 		if d, ok := g.Delta(); ok {
 			r.Change = &d

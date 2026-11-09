@@ -126,7 +126,8 @@ Others read these, so a change to one is a decision, not a refactor:
 `go run ./internal/devtools/demo -dir <new dir>` fills a data and a jobs
 directory with about 70 jobs in four groups and none, 14 days of builds that
 overlap and queue on four slots, jobs that fail, flap or end unstable, and a
-few that sleep so that builds are running and waiting. Add a user with
+few that sleep so that builds are running and waiting, and one multibranch job
+with live and gone branches and pull requests. Add a user with
 `kipp user add <name> --admin --data <dir>/data`, then `kipp serve --data
 <dir>/data --jobs <dir>/jobs --builds 4`. It times the overview on a store of
 a realistic size and takes the screenshots in `docs/screenshots` with a

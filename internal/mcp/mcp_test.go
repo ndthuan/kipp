@@ -823,3 +823,26 @@ func TestTheOverviewToolListsTheUnstableJobsAndSummarisesTheGraphsOfAWindow(t *t
 	}
 	refused(t, s, "overview", map[string]any{"window": "30d"}, "window is 24h or 7d")
 }
+
+func TestTheOverviewsGroupCountsLeaveOutAGoneBranchOrPullRequest(t *testing.T) {
+	e := newEnv(t, nil)
+	parent, err := config.ParseJob("site.yml", []byte("name: site\ngroup: web\nmultibranch: {repo: acme/site}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := func(key, state string) *config.Job {
+		return parent.Child(config.ChildRecord{Parent: "site", Key: key, Kind: config.KindBranch, Branch: key, State: state})
+	}
+	e.d.SetSnapshot(e.d.Snapshot().WithJobs(parent, rec("main", config.ChildLive), rec("old", config.ChildGone)))
+	var ov overviewOut
+	ok(t, e.session(t, e.admin), "overview", nil, &ov)
+	for _, g := range ov.Groups {
+		if g.Name == "web" {
+			if g.NeverBuilt != 1 || g.Disabled != 0 {
+				t.Fatalf("one live branch never built and a gone one: %+v", g)
+			}
+			return
+		}
+	}
+	t.Fatalf("no web group in %+v", ov.Groups)
+}

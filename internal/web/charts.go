@@ -37,6 +37,8 @@ type glabel struct {
 	Anchor string // start, middle or end
 	Class  string
 	Title  string
+	// Href makes the text a link.
+	Href string
 }
 
 type legendItem struct{ Class, Text string }
@@ -250,23 +252,29 @@ const (
 	rateName  = 92
 	rateBar   = 150
 	rateNameN = 14
+	// rateCounts is the extra height of a row with a line of counts under
+	// its bar.
+	rateCounts = 13
 )
 
 func ratesChart(c *overview.Charts) *chart {
-	ch := &chart{Key: "rates", Heading: "Pass rate by group", W: chartW, H: rateRow*len(c.Groups) + 4,
+	ch := &chart{Key: "rates", Heading: "Pass rate by group", W: chartW,
 		Title: "Pass rate by group: how many of the builds that ended in the last " + c.Range.Label + " ended green",
-		Head:  []string{"Group", "Pass rate", "Builds", "Change", "Before"}}
+		Head:  []string{"Group", "Pass rate", "Builds", "Change", "Before", "Never built", "Disabled"}}
 	ch.Legend = []legendItem{{"success", "green"}, {"failed", "red"}}
 	var parts []string
-	for i, g := range c.Groups {
+	top := 2
+	for _, g := range c.Groups {
 		name := groupName(g.Name)
-		y := px(2 + i*rateRow)
+		y := px(top)
+		top += rateRow
 		text, change := rateText(g)
 		before := "no builds"
 		if g.Before.Total() > 0 {
 			before = fmt.Sprintf("%d%% of %d", g.Before.Percent(), g.Before.Total())
 		}
-		ch.Rows = append(ch.Rows, []string{name, rateWords(g), strconv.Itoa(g.Now.Total()), change, before})
+		ch.Rows = append(ch.Rows, []string{name, rateWords(g), strconv.Itoa(g.Now.Total()), change, before,
+			strconv.Itoa(g.NeverBuilt), strconv.Itoa(g.Disabled)})
 		parts = append(parts, name+" "+rateWords(g))
 		short := name
 		if r := []rune(name); len(r) > rateNameN {
@@ -275,6 +283,10 @@ func ratesChart(c *overview.Charts) *chart {
 		ch.Labels = append(ch.Labels,
 			glabel{X: 0, Y: y + 15, Text: short, Anchor: "start", Title: name},
 			glabel{X: rateName + rateBar + 8, Y: y + 15, Text: text, Anchor: "start"})
+		if links := countLinks(g, y+rateRow+4); len(links) > 0 {
+			ch.Labels = append(ch.Labels, links...)
+			top += rateCounts
+		}
 		tip := name + ": " + rateWords(g)
 		ch.Rects = append(ch.Rects, grect{X: rateName, Y: y + 4, W: rateBar, H: 14, Class: "bar bar-track", Title: tip})
 		if t := g.Now.Total(); t > 0 {
@@ -283,11 +295,38 @@ func ratesChart(c *overview.Charts) *chart {
 				grect{X: rateName + gw, Y: y + 4, W: rateBar - gw, H: 14, Class: "bar bar-failed", Title: tip})
 		}
 	}
+	ch.H = top + 2
 	ch.Desc = "In the last " + c.Range.Label + ", " + strings.Join(parts, "; ") + "."
 	if len(parts) == 0 {
 		ch.Desc = "No build ended in the last " + c.Range.Label + " or in the " + c.Range.Label + " before."
 	}
 	return ch
+}
+
+// countLinks is the line under a group's bar with the jobs it has never
+// built and the jobs turned off, each a link to the group's list, only when
+// not zero. A count that includes branches and pull requests says so, since
+// the list shows the jobs that build themselves on top only.
+func countLinks(g overview.GroupRate, y px) []glabel {
+	href := (&group{Name: g.Name}).href()
+	var out []glabel
+	x := px(rateName)
+	for _, c := range []struct {
+		n, nested int
+		what      string
+	}{{g.NeverBuilt, g.NeverBuiltChildren, "never built"}, {g.Disabled, g.DisabledChildren, "disabled"}} {
+		if c.n == 0 {
+			continue
+		}
+		text := fmt.Sprintf("%d %s", c.n, c.what)
+		title := text
+		if c.nested > 0 {
+			title += " (includes branches and pull requests)"
+		}
+		out = append(out, glabel{X: x, Y: y + 8, Text: text, Anchor: "start", Class: "count", Title: title, Href: href})
+		x += px(len([]rune(text))*6 + 14)
+	}
+	return out
 }
 
 func groupName(n string) string {
@@ -305,10 +344,12 @@ func rateText(g overview.GroupRate) (text, change string) {
 	if ok {
 		change = fmt.Sprintf("%+d", d)
 	}
-	if g.Now.Total() == 0 {
+	switch {
+	case g.Now.Total() == 0 && g.Before.Total() == 0:
+		return "no builds", change
+	case g.Now.Total() == 0:
 		return fmt.Sprintf("none (was %d%%)", g.Before.Percent()), change
-	}
-	if ok {
+	case ok:
 		return fmt.Sprintf("%d%% (%s) of %d", g.Now.Percent(), change, g.Now.Total()), change
 	}
 	return fmt.Sprintf("%d%% of %d", g.Now.Percent(), g.Now.Total()), change
@@ -317,5 +358,11 @@ func rateText(g overview.GroupRate) (text, change string) {
 // rateWords is the same for a screen reader.
 func rateWords(g overview.GroupRate) string {
 	text, _ := rateText(g)
+	if g.NeverBuilt > 0 {
+		text += fmt.Sprintf(", %d never built", g.NeverBuilt)
+	}
+	if g.Disabled > 0 {
+		text += fmt.Sprintf(", %d disabled", g.Disabled)
+	}
 	return text
 }
