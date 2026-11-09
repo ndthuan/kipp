@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -118,6 +119,12 @@ func TestAV1QueryThatDoesNotParseIsRefusedNotReadAsADefault(t *testing.T) {
 	// A cursor that is no other list's, and one that is not a number.
 	e.asProblem(t, 400, "bad_input", e.admin, "GET", "/api/v1/jobs/gc/builds?cursor="+cursorFor("builds", 1, 2), "")
 	e.asProblem(t, 400, "bad_input", e.admin, "GET", "/api/v1/admin/audit?cursor="+cursorFor("builds", 3), "")
+	// A build number a 32-bit int cannot hold, and one below the first, are
+	// refused before they are converted.
+	for _, n := range []int64{math.MaxInt32 + 1, math.MaxInt64, 0, -1, math.MinInt64} {
+		e.asProblem(t, 400, "bad_input", e.admin, "GET", "/api/v1/jobs/gc/builds?cursor="+cursorFor("builds", n), "")
+	}
+	e.call(t, 200, e.admin, "GET", "/api/v1/jobs/gc/builds?cursor="+cursorFor("builds", math.MaxInt32), "")
 	// before is not a v1 parameter, and unknown ones are ignored.
 	e.call(t, 200, e.admin, "GET", "/api/v1/jobs/gc/builds?before=abc&color=blue", "")
 }

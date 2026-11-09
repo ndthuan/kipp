@@ -365,7 +365,14 @@ func Before(r *http.Request) (int, error) {
 // for those below, paged by cursor.
 func buildsQuery(r *http.Request) (limit, before int, err error) {
 	limit, at, err := pageArgs(r, "builds", 1)
-	return limit, int(firstOf(at)), err
+	if err != nil {
+		return 0, 0, err
+	}
+	n := firstOf(at)
+	if at != nil && (n < 1 || n > math.MaxInt32) {
+		return 0, 0, fmt.Errorf("%w: cursor is not one this server gave for this list", ErrBadInput)
+	}
+	return limit, int(n), nil
 }
 
 func (a *API) builds(w http.ResponseWriter, r *http.Request, u *store.User) {

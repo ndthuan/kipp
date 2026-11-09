@@ -106,7 +106,7 @@ func formAction(redirectURI string) string {
 }
 
 func (s *Site) authorize(w http.ResponseWriter, r *http.Request, u *store.User) {
-	req, e := s.oauth.ParseAuthorize(r.Context(), r.URL.Query())
+	req, e := s.oauth.ParseAuthorize(s.oauth.WithSource(r.Context(), r), r.URL.Query())
 	if e != nil {
 		s.authFailed(w, r, e)
 		return
@@ -128,7 +128,7 @@ func (s *Site) decide(w http.ResponseWriter, r *http.Request, u *store.User) {
 		s.fail(w, r, errors.Join(api.ErrBadInput, err))
 		return
 	}
-	req, e := s.oauth.ParseAuthorize(r.Context(), r.PostForm)
+	req, e := s.oauth.ParseAuthorize(s.oauth.WithSource(r.Context(), r), r.PostForm)
 	if e != nil {
 		s.authFailed(w, r, e)
 		return

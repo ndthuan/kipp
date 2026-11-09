@@ -8,6 +8,13 @@ lines and the data directory are the public surface.
 
 ## Unreleased
 
+- A `?cursor=` on a job's builds list that names a build number below 1 or
+  above 2147483647 is refused as bad input. A source that makes kipp fetch
+  many different OAuth client metadata documents is slowed after the first
+  few, as wrong passwords are.
+- Security: `kipp cache restore` no longer recreates a symbolic link that
+  points outside the restored paths (an absolute target, or one that climbs
+  out of them), so a later step cannot be led out through a cached link.
 - The dashboard no longer counts pull requests and branches that are gone as
   disabled jobs, and the Groups table is folded into the pass-rate graph: a
   group's row there says how many of its jobs were never built or are

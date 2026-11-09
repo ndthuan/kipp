@@ -308,6 +308,12 @@ line = send("\x1b[2Kcleared\x1b[?25l\x1b]0;a title\x07 and\x1b]8;;http://x\x1b\\
 check(line.textContent === "cleared and more!\n", "other sequences are removed from the shown text, got " + JSON.stringify(line.textContent));
 line = send("abc\x1b[3");
 check(line.textContent === "abc[3\n", "a sequence broken at the line's end loses its ESC and keeps the rest, got " + JSON.stringify(line.textContent));
+line = send("a\x1b=b\x1b\\c\x1b^d\x1b~e");
+check(line.textContent === "abcde\n", "ESC and one final byte from 0 to Z, backslash or ^ to ~ is a two-byte sequence, got " + JSON.stringify(line.textContent));
+line = send("p\x1b]q");
+check(line.textContent === "p]q\n", "ESC ] with no terminator is no two-byte sequence: only the ESC goes, got " + JSON.stringify(line.textContent));
+line = send("p\x1b[");
+check(line.textContent === "p[\n", "ESC [ with no final byte is no two-byte sequence: only the ESC goes, got " + JSON.stringify(line.textContent));
 line = send("abc\x1b");
 check(line.textContent === "abc\n", "a lone ESC is removed");
 

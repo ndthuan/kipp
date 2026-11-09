@@ -211,6 +211,11 @@ func (s *Server) fetchClient(ctx context.Context, id string) (*Client, *Error) {
 	if err != nil {
 		return nil, fail(http.StatusUnauthorized, "invalid_client", "client_id: %v", err)
 	}
+	if src, ok := ctx.Value(sourceKey{}).(string); ok {
+		if _, ok := s.limit.Reserve("fetch\x00" + src); !ok {
+			return nil, fail(http.StatusTooManyRequests, "temporarily_unavailable", "too many new clients from this address; try again later")
+		}
+	}
 	doc, ttl, err := s.getDocument(ctx, u)
 	if err != nil {
 		s.cfg.Logger.Warn("oauth: a client's metadata document was refused", "client_id", id, "err", err)
@@ -227,6 +232,17 @@ func (s *Server) fetchClient(ctx context.Context, id string) (*Client, *Error) {
 	}
 	s.cimd.put(c, ttl, now)
 	return c, nil
+}
+
+type sourceKey struct{}
+
+// WithSource is ctx marked with where r comes from, so that a client
+// document kipp is made to fetch for it is counted against that source:
+// anybody may name any public https URL as a client_id, and an unmarked
+// context (a token request, whose code was already made through a marked
+// one) is not counted.
+func (s *Server) WithSource(ctx context.Context, r *http.Request) context.Context {
+	return context.WithValue(ctx, sourceKey{}, s.cfg.Client(r))
 }
 
 // docProblem is the part of a fetch error that is safe to say back: what

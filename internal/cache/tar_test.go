@@ -173,3 +173,75 @@ func TestAPathThatClimbsOutOfTheDirectoryIsRefused(t *testing.T) {
 		t.Fatal("unpacked into a path that climbs out of the stage's directory")
 	}
 }
+
+func TestALinkThatPointsOutOfThePathsIsRefusedAndNotWritten(t *testing.T) {
+	for _, target := range []string{"/etc", "../../x", "a/../../x", "..", "/"} {
+		dir := t.TempDir()
+		err := Unpack(craft(t, tar.Header{Name: "mods/l", Typeflag: tar.TypeSymlink, Linkname: target}),
+			[]string{"mods"}, "", dir)
+		if err == nil {
+			t.Errorf("link to %q: unpacked", target)
+		}
+		if _, statErr := os.Lstat(filepath.Join(dir, "mods/l")); statErr == nil {
+			t.Errorf("link to %q: written", target)
+		}
+	}
+}
+
+func TestALinkToASiblingInsideThePathsIsKept(t *testing.T) {
+	dir := t.TempDir()
+	members := []tar.Header{
+		{Name: "mods/sub/", Typeflag: tar.TypeDir, Mode: 0o755},
+		{Name: "mods/sib", Typeflag: tar.TypeSymlink, Linkname: "sub"},
+		{Name: "mods/sub/up", Typeflag: tar.TypeSymlink, Linkname: "../sib"},
+		{Name: "mods/self", Typeflag: tar.TypeSymlink, Linkname: "."},
+	}
+	if err := Unpack(craft(t, members...), []string{"mods"}, "", dir); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.Readlink(filepath.Join(dir, "mods/sub/up")); got != "../sib" {
+		t.Fatalf("link kept as %q", got)
+	}
+}
+
+func TestAChainOfLinksCannotLeadOutOfThePaths(t *testing.T) {
+	dir := t.TempDir()
+	members := []tar.Header{
+		{Name: "mods/a", Typeflag: tar.TypeSymlink, Linkname: "b"},
+		{Name: "mods/b", Typeflag: tar.TypeSymlink, Linkname: "../../out"},
+	}
+	if err := Unpack(craft(t, members...), []string{"mods"}, "", dir); err == nil {
+		t.Fatal("a chain of links led out of the paths")
+	}
+	if _, err := os.Lstat(filepath.Join(dir, "mods/b")); err == nil {
+		t.Fatal("the link that leaves the paths was written")
+	}
+}
+
+func TestMembersThatEscapeAreRefusedAndNothingIsWritten(t *testing.T) {
+	for _, name := range []string{"../x", "/etc/x", "a/../../x", "mods/../../x"} {
+		dir := t.TempDir()
+		if err := Unpack(craft(t, tar.Header{Name: name}), []string{"mods"}, "", dir); err == nil {
+			t.Errorf("%q: unpacked", name)
+		}
+		if _, err := os.Lstat(filepath.Join(dir, "..", "x")); err == nil {
+			t.Errorf("%q: wrote outside the directory", name)
+		}
+	}
+}
+
+func TestAFileBelowALinkToTheOutsideIsRefused(t *testing.T) {
+	dir, outside := t.TempDir(), t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "mods"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(dir, "mods/lnk")); err != nil {
+		t.Fatal(err)
+	}
+	if err := Unpack(craft(t, tar.Header{Name: "mods/lnk/f"}), []string{"mods"}, "", dir); err == nil {
+		t.Fatal("unpacked a file below a link")
+	}
+	if _, err := os.Lstat(filepath.Join(outside, "f")); err == nil {
+		t.Fatal("wrote through the link")
+	}
+}

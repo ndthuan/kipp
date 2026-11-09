@@ -196,6 +196,9 @@ func unpackMember(r io.Reader, h *tar.Header, ts []target) error {
 	case tar.TypeReg:
 		return writeFileMember(dest, perm, r)
 	case tar.TypeSymlink:
+		if err := linkStaysInside(root, dest, h.Linkname); err != nil {
+			return err
+		}
 		if err := os.MkdirAll(filepath.Dir(dest), 0o750); err != nil {
 			return err
 		}
@@ -206,6 +209,25 @@ func unpackMember(r io.Reader, h *tar.Header, ts []target) error {
 	}
 	return fmt.Errorf("a member of type %q is not kept", h.Typeflag)
 }
+
+// linkStaysInside refuses a link whose target is absolute or, read lexically
+// from the link's own directory, leaves root: a restored link that points out
+// of the cached paths would let a later step, or a save of them, follow it.
+// A relative link to somewhere inside root is kept; a chain of such links
+// cannot leave either, as each one is held to root.
+func linkStaysInside(root, dest, linkname string) error {
+	if filepath.IsAbs(linkname) || strings.HasPrefix(linkname, "/") {
+		return errLinkOutside
+	}
+	target := filepath.Join(filepath.Dir(dest), filepath.FromSlash(linkname))
+	rel, err := filepath.Rel(root, target)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return errLinkOutside
+	}
+	return nil
+}
+
+var errLinkOutside = errors.New("is a link that points outside the paths asked for")
 
 // locate is where a member goes: under the path that names it, and that
 // path's directory, which the member must not leave.

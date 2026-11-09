@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"fmt"
 	"maps"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -242,4 +243,61 @@ func TestAGuardedFetchOfAClientAtALoopbackAddressIsAnInvalidClient(t *testing.T)
 	if strings.Contains(e.Description, "127.0.0.1") {
 		t.Fatalf("the refusal tells what the guard saw: %q", e.Description)
 	}
+}
+
+func TestFetchingNewClientDocumentsIsSlowedPerSource(t *testing.T) {
+	h := newClientHost(t)
+	f := newFixture(t, withFetch(h))
+	from := func(src string) context.Context { return context.WithValue(context.Background(), sourceKey{}, src) }
+	ask := func(ctx context.Context, n int) *AuthError {
+		_, e := f.srv.ParseAuthorize(ctx, f.query(fmt.Sprintf("%s/c%d.json", h.URL, n), nil))
+		return e
+	}
+	refused := 0
+	for n := 0; n < 12 && refused == 0; n++ {
+		if e := ask(from("a"), n); e != nil && e.Code == "temporarily_unavailable" {
+			refused = n + 1
+		}
+	}
+	if refused == 0 || refused > 8 {
+		t.Fatalf("the source was refused at fetch %d, want a few free ones and then a wait", refused)
+	}
+	hits := h.hits.Load()
+	if e := ask(from("a"), 100); e == nil || e.Code != "temporarily_unavailable" {
+		t.Errorf("a refused source got through: %+v", e)
+	}
+	eq(t, "a refused source is not fetched for", h.hits.Load(), hits)
+	if e := ask(from("b"), 100); e != nil && e.Code == "temporarily_unavailable" {
+		t.Errorf("another source was slowed: %+v", e)
+	}
+	if e := ask(context.Background(), 101); e != nil && e.Code == "temporarily_unavailable" {
+		t.Errorf("a request with no source was slowed: %+v", e)
+	}
+}
+
+func TestAFetchRedirectedToAPrivateAddressIsRefusedAtTheConnection(t *testing.T) {
+	h := newClientHost(t)
+	h.status = http.StatusFound
+	h.headers.Set("Location", "https://10.1.2.3/client.json")
+	guarded := GuardedClient()
+	tr := guarded.Transport.(*http.Transport)
+	pool := x509.NewCertPool()
+	pool.AddCert(h.Certificate())
+	tr.TLSClientConfig = &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}
+	// The first host stands in for a public one; every other address keeps
+	// the guarded dialer.
+	guard := tr.DialContext
+	first := strings.TrimPrefix(h.URL, "https://")
+	tr.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		if addr == first {
+			return (&net.Dialer{}).DialContext(ctx, network, addr)
+		}
+		return guard(ctx, network, addr)
+	}
+	f := newFixture(t, func(c *Config) { c.Fetch = guarded })
+	_, e := f.srv.ParseAuthorize(context.Background(), f.query(h.id(), nil))
+	if e == nil || e.Code != "invalid_client" || e.RedirectURI != "" {
+		t.Fatalf("%+v", e)
+	}
+	eq(t, "calls", h.hits.Load(), 1)
 }
