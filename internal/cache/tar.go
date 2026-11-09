@@ -221,10 +221,45 @@ func linkStaysInside(root, dest, linkname string) error {
 	}
 	target := filepath.Join(filepath.Dir(dest), filepath.FromSlash(linkname))
 	rel, err := filepath.Rel(root, target)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+	if err != nil || escapes(rel) {
+		return errLinkOutside
+	}
+	// Then again with the links already on disk followed, so a target that
+	// runs through one cannot lead out either.
+	realRoot, err := resolveExisting(root)
+	if err != nil {
+		return err
+	}
+	realTarget, err := resolveExisting(target)
+	if err != nil {
+		return err
+	}
+	if rel, err = filepath.Rel(realRoot, realTarget); err != nil || escapes(rel) {
 		return errLinkOutside
 	}
 	return nil
+}
+
+func escapes(rel string) bool {
+	return rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// resolveExisting follows every link in p up to the deepest part that exists
+// and appends the rest as written: a link may point at what is not yet there.
+func resolveExisting(p string) (string, error) {
+	rest := ""
+	for {
+		r, err := filepath.EvalSymlinks(p)
+		if err == nil {
+			return filepath.Join(r, rest), nil
+		}
+		parent := filepath.Dir(p)
+		if !errors.Is(err, fs.ErrNotExist) || parent == p {
+			return "", err
+		}
+		rest = filepath.Join(filepath.Base(p), rest)
+		p = parent
+	}
 }
 
 var errLinkOutside = errors.New("is a link that points outside the paths asked for")

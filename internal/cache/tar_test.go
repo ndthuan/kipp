@@ -218,6 +218,24 @@ func TestAChainOfLinksCannotLeadOutOfThePaths(t *testing.T) {
 	}
 }
 
+func TestALinkThroughALinkAlreadyOnDiskThatLeavesIsRefused(t *testing.T) {
+	dir, outside := t.TempDir(), t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "mods"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(dir, "mods/out")); err != nil {
+		t.Fatal(err)
+	}
+	err := Unpack(craft(t, tar.Header{Name: "mods/l", Typeflag: tar.TypeSymlink, Linkname: "out/x"}),
+		[]string{"mods"}, "", dir)
+	if err == nil {
+		t.Fatal("a link through a link that leaves the paths was unpacked")
+	}
+	if _, statErr := os.Lstat(filepath.Join(dir, "mods/l")); statErr == nil {
+		t.Fatal("the link was written")
+	}
+}
+
 func TestMembersThatEscapeAreRefusedAndNothingIsWritten(t *testing.T) {
 	for _, name := range []string{"../x", "/etc/x", "a/../../x", "mods/../../x"} {
 		dir := t.TempDir()

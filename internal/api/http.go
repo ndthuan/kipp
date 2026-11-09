@@ -368,8 +368,11 @@ func buildsQuery(r *http.Request) (limit, before int, err error) {
 	if err != nil {
 		return 0, 0, err
 	}
+	if at == nil {
+		return limit, 0, nil
+	}
 	n := firstOf(at)
-	if at != nil && (n < 1 || n > math.MaxInt32) {
+	if n < 1 || n > math.MaxInt32 {
 		return 0, 0, fmt.Errorf("%w: cursor is not one this server gave for this list", ErrBadInput)
 	}
 	return limit, int(n), nil
