@@ -96,8 +96,22 @@ func add[In, Out any](s *Server, srv *sdk.Server, name, desc string, ann *sdk.To
 		})
 }
 
+// implementation names the server to a client. A client such as a Claude
+// connector otherwise guesses an icon from the host's registrable domain,
+// which is another site's when kipp runs on a subdomain.
+func (s *Server) implementation() *sdk.Implementation {
+	impl := &sdk.Implementation{Name: "kipp", Title: "kipp", Version: s.cfg.Version}
+	if s.cfg.BaseURL == "" {
+		return impl
+	}
+	base := strings.TrimSuffix(s.cfg.BaseURL, "/")
+	impl.WebsiteURL = base
+	impl.Icons = []sdk.Icon{{Source: base + "/static/favicon.svg", MIMEType: "image/svg+xml", Sizes: []string{"any"}}}
+	return impl
+}
+
 func (s *Server) newServer() *sdk.Server {
-	srv := sdk.NewServer(&sdk.Implementation{Name: "kipp", Version: s.cfg.Version}, &sdk.ServerOptions{
+	srv := sdk.NewServer(s.implementation(), &sdk.ServerOptions{
 		Instructions: "kipp is a CI server. Start with overview to see what is red; read_log with a build's number shows why. " +
 			"What you can see and do is what the token's user may.",
 	})

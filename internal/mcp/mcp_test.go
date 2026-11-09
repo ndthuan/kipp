@@ -219,6 +219,17 @@ func (e *env) built(t *testing.T, job string, params map[string]any) *store.Buil
 	return e.ended(t, job, b.Number)
 }
 
+func TestTheServerNamesItsOwnIconAndSite(t *testing.T) {
+	e := newEnv(t, nil)
+	info := e.session(t, e.admin).InitializeResult().ServerInfo
+	if info.Name != "kipp" || info.Title != "kipp" || info.WebsiteURL != "https://ci.example.com" {
+		t.Fatalf("server info = %+v", info)
+	}
+	if len(info.Icons) != 1 || info.Icons[0].Source != "https://ci.example.com/static/favicon.svg" || info.Icons[0].MIMEType != "image/svg+xml" {
+		t.Fatalf("icons = %+v", info.Icons)
+	}
+}
+
 func TestToolsListIsExactlyTheDocumentedSetWithAnnotations(t *testing.T) {
 	e := newEnv(t, nil)
 	res, err := e.session(t, e.admin).ListTools(context.Background(), nil)
