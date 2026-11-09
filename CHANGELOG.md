@@ -8,6 +8,8 @@ lines and the data directory are the public surface.
 
 ## Unreleased
 
+## [1.2.0] - 2026-11-09
+
 - A build's log is easier to read: the text is larger, the page scrolls
   instead of each log, and times start hidden on a narrow screen (unless you
   chose). "Previous problem" and "Next problem" buttons, with a count, jump

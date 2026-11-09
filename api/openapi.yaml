@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: kipp API
-  version: 1.1.1
+  version: 1.2.0
   summary: The HTTP API of a kipp server, version 1.
   description: |
     Everything a machine calls on a kipp server lives under `/api/v1`: the
