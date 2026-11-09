@@ -641,21 +641,33 @@ func escapeAll(s, format string) string {
 func TestARequestBodyIsBounded(t *testing.T) {
 	e := newEnv(t)
 	big := `{"params": {"TIER": "` + strings.Repeat("a", 2*MaxBody) + `"}}`
-	post := func(body io.Reader) (int, string) {
+	// Straight into the handler: over a socket the server answers and closes
+	// while the client is still sending, and the client may then see the
+	// connection reset instead of the answer.
+	h := e.api.Handler()
+	send := func(method, path string, body io.Reader, hdr ...string) (int, string) {
 		t.Helper()
-		code, text, _ := e.send(t, e.request(context.Background(), t, e.admin, "POST", "/api/v1/jobs/smoke/builds", body))
-		return code, text
+		req := httptest.NewRequest(method, path, body)
+		req.Header.Set("Authorization", "Bearer "+e.admin)
+		for i := 0; i+1 < len(hdr); i += 2 {
+			req.Header.Set(hdr[i], hdr[i+1])
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec.Code, rec.Body.String()
 	}
 	// io.MultiReader hides the length, so the body goes out chunked.
 	for name, body := range map[string]io.Reader{"sized": strings.NewReader(big), "chunked": io.MultiReader(strings.NewReader(big))} {
-		code, text := post(body)
+		code, text := send("POST", "/api/v1/jobs/smoke/builds", body)
 		eq(t, name+" body over the limit", code, 413)
 		contains(t, text, `"too_large"`)
 	}
 	eq(t, "builds", len(e.list(t, e.admin, "/api/v1/jobs/smoke/builds")), 0)
 	id := e.started(t, "slow")
-	e.call(t, 413, e.admin, "GET", "/api/v1/builds/"+id+"?wait=true", big)
-	e.call(t, 413, e.admin, "GET", "/api/v1/builds/"+id+"/stages/s/log/events", big, "Accept", sseAccept)
+	code, _ := send("GET", "/api/v1/builds/"+id+"?wait=true", strings.NewReader(big))
+	eq(t, "a wait with a body over the limit", code, 413)
+	code, _ = send("GET", "/api/v1/builds/"+id+"/stages/s/log/events", strings.NewReader(big), "Accept", sseAccept)
+	eq(t, "a stream with a body over the limit", code, 413)
 }
 
 func TestATriggerBodyIsReadStrictly(t *testing.T) {
