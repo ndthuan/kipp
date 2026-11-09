@@ -8,6 +8,12 @@ lines and the data directory are the public surface.
 
 ## Unreleased
 
+- A GitHub webhook that arrives while the server is quiet before a restart is
+  kept, not answered 503: a verified delivery is stored (202), handled in
+  arrival order when quiet ends or the server starts, and built once however
+  often it is sent. GitHub never sends a webhook again by itself, so a push
+  or a tag that came during a safe restart was lost. Other triggers are still
+  refused while quiet. The database gains a table for the kept deliveries.
 - A `?cursor=` on a job's builds list that names a build number below 1 or
   above 2147483647 is refused as bad input. A source that makes kipp fetch
   many different OAuth client metadata documents is slowed after the first

@@ -66,6 +66,20 @@ func serverDispatch(t *testing.T, o Options) (*httptest.Server, *store.Store, *d
 // serverWrapped is serverDispatch with the webhook handler wrapped by wrap.
 func serverWrapped(t *testing.T, o Options, wrap func(http.Handler) http.Handler) (*httptest.Server, *store.Store, *dispatch.Dispatcher) {
 	t.Helper()
+	return serverBuilt(t, o, wrap, true)
+}
+
+// keeping is the options with the store's place for a delivery that arrives
+// while quiet, as the server wires it.
+func keeping(o Options, st *store.Store) Options {
+	o.Keep, o.Pending, o.Done = st.KeepDelivery, st.PendingDeliveries, st.DeletePendingDelivery
+	return o
+}
+
+// serverBuilt is serverWrapped, with the store keeping deliveries only if
+// keep says so.
+func serverBuilt(t *testing.T, o Options, wrap func(http.Handler) http.Handler, keep bool) (*httptest.Server, *store.Store, *dispatch.Dispatcher) {
+	t.Helper()
 	dir := t.TempDir()
 	jobs := filepath.Join(dir, "jobs")
 	must(t, os.MkdirAll(jobs, 0o750))
@@ -83,6 +97,9 @@ func serverWrapped(t *testing.T, o Options, wrap func(http.Handler) http.Handler
 	d.SetSnapshot(snap)
 	if o.Record == nil {
 		o.Record = func(ctx context.Context, id, job string) error { return st.RecordDelivery(ctx, id, job, time.Now()) }
+	}
+	if keep {
+		o = keeping(o, st)
 	}
 	h := GitHub(d, o)
 	mux := http.NewServeMux()
@@ -654,8 +671,8 @@ func TestAPushKeepsTheRepoDefaultBranchItNames(t *testing.T) {
 	}
 }
 
-func TestAQuietServerAnswers503AndKeepsNoRecordSoTheDeliverySentAgainBuilds(t *testing.T) {
-	srv, st, d := serverDispatch(t, Options{Secret: func(context.Context, string) (string, error) { return "topsecret", nil }})
+func TestAQuietServerWithNoPlaceToKeepADeliveryAnswers503(t *testing.T) {
+	srv, st, d := serverBuilt(t, Options{Secret: func(context.Context, string) (string, error) { return "topsecret", nil }}, func(h http.Handler) http.Handler { return h }, false)
 	ctx := context.Background()
 	_, err := d.SetQuiet(ctx, true)
 	must(t, err)
@@ -665,15 +682,6 @@ func TestAQuietServerAnswers503AndKeepsNoRecordSoTheDeliverySentAgainBuilds(t *t
 	}
 	if bs, err := st.Builds(ctx, "smoke", 5); err != nil || len(bs) != 0 {
 		t.Fatalf("%+v %v", bs, err)
-	}
-	// Unsigned, it learns nothing of the quiet.
-	if code, _, _ := send(t, srv.URL+"/api/v1/hooks/github/smoke", "push", sign("nope", push), "d-q2", push); code != 401 {
-		t.Fatal(code)
-	}
-	_, err = d.SetQuiet(ctx, false)
-	must(t, err)
-	if code, body, _ := send(t, srv.URL+"/api/v1/hooks/github/smoke", "push", sign("topsecret", push), "d-q", push); code != 202 {
-		t.Fatalf("the same delivery sent again: %d %s", code, body)
 	}
 }
 

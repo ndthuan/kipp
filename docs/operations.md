@@ -71,13 +71,26 @@ kipp quiet status                   # quiet off: 0 running, 0 queued
 
 While quiet, no build starts and every new trigger is refused with
 `kipp is quiet: restarting once running builds end`: the API, a Build
-button, `kipp run`, a cron fire, a scan and an `after` trigger. A webhook
-is answered 503 with `Retry-After: 60` and its delivery is not kept, so
-it can be sent again (GitHub's Redeliver) once the server is back; a scan reads
-nothing, and the next one finds the commits it missed. A build that was
+button, `kipp run`, a cron fire, a scan and an `after` trigger. A person or a
+schedule can try again, and a scan reads nothing (the next one finds the
+commits it missed). A GitHub webhook is the exception, since GitHub never
+sends one again by itself: a delivery whose signature checks out is answered
+202 `{"kept": ...}` and stored in the database with its id, event and body,
+and nothing starts. When quiet ends, and at the server's start after a
+restart, the stored deliveries are handled in the order they arrived, exactly
+as if they had just arrived, and then forgotten. The delivery id (and the
+body's sum) is recorded when it is stored, so a delivery is built once
+whether GitHub sends it again while quiet, after the restart or by Redeliver.
+One stored for longer than a quiet lasts (more than two hours and ten
+minutes) is handled all the same and logged with its age. The log says
+`delivery kept while quiet` and `delivery replayed after quiet` for each. A
+delivery with a bad signature is refused as always. A build that was
 already queued is accepted work and still runs, and a running one ends by
 itself. A cron fire that was refused runs once, for its job, when quiet
 ends.
+
+A kipp that predates this still answers 503 to a webhook that arrives while
+it is quiet, so the restart that upgrades to this version may still lose one.
 
 Quiet is held in memory only, so a restart ends it. `--wait` returns
 once nothing runs or waits; at `--timeout` (default 2 hours) it turns

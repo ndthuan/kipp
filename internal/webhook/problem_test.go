@@ -80,12 +80,12 @@ func TestUnderV1AFailingSecretLookupIsAnInternalProblemThatHidesTheCause(t *test
 	}
 }
 
-func TestUnderV1ASlowBodyIs408AndAQuietServerIs503WithRetryAfter(t *testing.T) {
+func TestUnderV1ASlowBodyIs408AndAQuietServerThatKeepsNothingIs503WithRetryAfter(t *testing.T) {
 	slow, _ := serverOpts(t, Options{Secret: func(context.Context, string) (string, error) { return "topsecret", nil }, ReadTimeout: 100 * time.Millisecond})
 	c := head(t, slow.URL, sign("topsecret", push), len(push))
 	eq(t, "answer", status(t, c), "HTTP/1.1 408")
 
-	srv, _, d := serverDispatch(t, Options{Secret: func(context.Context, string) (string, error) { return "topsecret", nil }})
+	srv, _, d := serverBuilt(t, Options{Secret: func(context.Context, string) (string, error) { return "topsecret", nil }}, func(h http.Handler) http.Handler { return h }, false)
 	_, err := d.SetQuiet(context.Background(), true)
 	must(t, err)
 	code, body, h := send(t, srv.URL+v1Smoke, "push", sign("topsecret", push), newDelivery(), push)

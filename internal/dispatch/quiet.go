@@ -12,8 +12,10 @@ import (
 // that comes meanwhile is refused with ErrQuiet. A build that was queued
 // before the server went quiet is accepted work and still runs. A cron fire
 // that was refused is kept by job and runs once when quiet ends; the other
-// triggers are their callers' to repeat (a webhook is answered 503, and the
-// next scan finds the commit).
+// triggers are their callers' to repeat (a scan finds the commit it missed);
+// a webhook is the exception, since its sender never repeats it: the webhook
+// package keeps one that arrives meanwhile and runs it when quiet ends (see
+// OnQuietEnd).
 
 // QuietState is what the server says of its quiet.
 type QuietState struct {
@@ -49,6 +51,14 @@ func (d *Dispatcher) refusedQuiet(req TriggerRequest) bool {
 	return true
 }
 
+// OnQuietEnd sets what is called, once and after the cron fires are queued,
+// each time quiet is turned off.
+func (d *Dispatcher) OnQuietEnd(f func()) {
+	d.mu.Lock()
+	d.quietEnded = f
+	d.mu.Unlock()
+}
+
 // SetQuiet turns quiet on or off, and reports it as it is then. Turning it
 // off triggers once each job whose cron fired while it was on, and wakes
 // the loop. Turning on what is on, or off what is off, changes nothing.
@@ -56,6 +66,7 @@ func (d *Dispatcher) SetQuiet(ctx context.Context, on bool) (QuietState, error) 
 	d.mu.Lock()
 	was := !d.quiet.IsZero()
 	var again []string
+	var ended func()
 	switch {
 	case on && !was:
 		d.quiet = time.Now()
@@ -66,6 +77,7 @@ func (d *Dispatcher) SetQuiet(ctx context.Context, on bool) (QuietState, error) 
 			again = append(again, name)
 		}
 		d.skipped = nil
+		ended = d.quietEnded
 		d.log.Info("quiet ends", "cron fires to run", len(again))
 	}
 	d.mu.Unlock()
@@ -74,6 +86,9 @@ func (d *Dispatcher) SetQuiet(ctx context.Context, on bool) (QuietState, error) 
 		if _, err := d.Trigger(ctx, TriggerRequest{Job: name, Kind: "cron", By: "kipp"}); err != nil {
 			d.log.Info("a cron fire kept through quiet was not queued", "job", name, "err", err)
 		}
+	}
+	if ended != nil {
+		ended()
 	}
 	return d.QuietState(ctx)
 }

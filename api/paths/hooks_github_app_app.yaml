@@ -8,7 +8,9 @@ post:
     GitHub event" as GitHub sends it
     (https://docs.github.com/en/webhooks/webhook-events-and-payloads). A
     `ping` and an event kipp does not act on are answered 200 and ignored; an
-    installation event asks for a scan (202).
+    installation event asks for a scan (202). While the server is quiet before
+    a restart, a verified delivery is kept and answered 202 `kept`, and handled
+    when quiet ends (or at the next start).
   x-kipp-package: webhook
   security:
     - webhookSignature: []

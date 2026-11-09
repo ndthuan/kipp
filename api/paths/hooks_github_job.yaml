@@ -7,7 +7,9 @@ post:
     (https://docs.github.com/en/webhooks/webhook-events-and-payloads); kipp
     reads the repository and the push or pull request in it. The delivery is
     checked with the job's secret and recorded by `X-GitHub-Delivery`, so a
-    delivery sent twice is built once.
+    delivery sent twice is built once. While the server is quiet before a
+    restart, a verified delivery is kept and answered 202 `kept`, and handled
+    when quiet ends (or at the next start), never refused.
   x-kipp-package: webhook
   security:
     - webhookSignature: []
@@ -45,7 +47,7 @@ post:
           schema:
             $ref: ../schemas/WebhookIgnored.yaml
     "202":
-      description: The build, or the builds, queued.
+      description: The build, or the builds, queued; or the delivery kept while the server is quiet.
       content:
         application/json:
           schema:

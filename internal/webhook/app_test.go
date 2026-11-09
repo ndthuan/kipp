@@ -30,6 +30,7 @@ const appSecret = "the-app-webhook-secret"
 type appHooks struct {
 	srv     *httptest.Server
 	st      *store.Store
+	d       *dispatch.Dispatcher
 	mu      sync.Mutex
 	rescans []string
 	rescan  func(string) error
@@ -77,7 +78,8 @@ func newAppHooks(t *testing.T, withRescan bool) *appHooks {
 			return nil
 		}
 	}
-	h := New(d, o)
+	h := New(d, keeping(o, st))
+	f.d = d
 	mux := http.NewServeMux()
 	mux.Handle("POST /api/v1/hooks/github/{job}", h.Job())
 	mux.Handle("POST /api/v1/hooks/github-app/{app}", h.App())

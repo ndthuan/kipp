@@ -63,6 +63,15 @@ type Options struct {
 	// Record keeps an id for the job, a delivery's or its body's sum;
 	// one kept before is store.ErrSeen.
 	Record func(ctx context.Context, id, job string) error
+	// Keep, Pending and Done keep a verified delivery that arrives while
+	// the server is quiet, and hand it back when quiet ends: Keep records
+	// the ids and keeps the delivery in one step (store.ErrSeen when an id
+	// was recorded before), Pending lists the kept ones oldest first, Done
+	// forgets one that was handled. Without them a delivery that arrives
+	// while quiet is answered 503.
+	Keep    func(ctx context.Context, p store.PendingDelivery, ids []string, job string) error
+	Pending func(ctx context.Context) ([]store.PendingDelivery, error)
+	Done    func(ctx context.Context, seq int64) error
 	// Readers is how many bodies are read at once (default 2), and
 	// ReadTimeout how long one may take to arrive (default 30 s).
 	Readers     int
@@ -83,7 +92,7 @@ const (
 	// sending again.
 	busyRetry = "10"
 	// quietRetry is the same for a delivery refused while the server is
-	// quiet before a restart.
+	// quiet and keeps none (Options without Keep).
 	quietRetry = "60"
 )
 
@@ -105,7 +114,11 @@ func New(d *dispatch.Dispatcher, o Options) *Hooks {
 	if o.ReadTimeout <= 0 {
 		o.ReadTimeout = defaultReadTimeout
 	}
-	return &Hooks{h: &hook{d: d, o: o, readers: make(chan struct{}, o.Readers)}}
+	h := &hook{d: d, o: o, readers: make(chan struct{}, o.Readers)}
+	if d != nil && o.Pending != nil {
+		d.OnQuietEnd(func() { h.replay(context.Background()) })
+	}
+	return &Hooks{h: h}
 }
 
 // Hooks are the routes GitHub delivers to.
@@ -164,6 +177,9 @@ type hook struct {
 	// queueing is held from the look at what is queued to the queueing of
 	// a build, so that two deliveries of one commit cannot both find none.
 	queueing sync.Mutex
+	// replaying keeps two replays of the kept deliveries from handling one
+	// twice.
+	replaying sync.Mutex
 }
 
 func (h *hook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -174,7 +190,22 @@ func (h *hook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	job := h.d.Snapshot().Jobs[name]
-	if !h.verified(w, r, job, name, body, sig) || h.quiet(w) || !recorded(w, r, h.o.Record, r.Header.Get("X-GitHub-Delivery"), name, body) {
+	if !h.verified(w, r, job, name, body, sig) {
+		return
+	}
+	event, id := r.Header.Get("X-GitHub-Event"), r.Header.Get("X-GitHub-Delivery")
+	if h.kept(w, r, store.PendingDelivery{Route: routeJob, Name: name, Event: event, ID: id, Body: body}) ||
+		!recorded(w, r, h.o.Record, id, name, body) {
+		return
+	}
+	h.handleJob(w, r, name, event, body)
+}
+
+// handleJob answers a verified and recorded delivery to a job.
+func (h *hook) handleJob(w http.ResponseWriter, r *http.Request, name, event string, body []byte) {
+	job := h.d.Snapshot().Jobs[name]
+	if job == nil { // a reload removed it while the delivery was kept
+		writeJSON(w, http.StatusOK, map[string]string{"ignored": "job " + name + " is gone"})
 		return
 	}
 	if job.Disabled { // said only to whoever signed: nobody else learns the job is there
@@ -182,14 +213,14 @@ func (h *hook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if job.IsParent() {
-		h.multibranch(w, r, name, r.Header.Get("X-GitHub-Event"), body)
+		h.multibranch(w, r, name, event, body)
 		return
 	}
 	if job.IsOwner() {
-		h.owner(w, r, name, r.Header.Get("X-GitHub-Event"), body)
+		h.owner(w, r, name, event, body)
 		return
 	}
-	p, why, bad := parse(job.Triggers.Webhook, r.Header.Get("X-GitHub-Event"), body)
+	p, why, bad := parse(job.Triggers.Webhook, event, body)
 	switch {
 	case bad != "":
 		problem.Write(w, problem.BadInput, bad)
@@ -202,18 +233,6 @@ func (h *hook) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // read takes the signature and the body, in a reader's place; it answers
 // and reports false when it cannot.
-// quiet answers 503 and reports true while the server is quiet. It is asked
-// after the signature and before the delivery is kept, so that a delivery
-// sent again once the server is back is not taken for one received before.
-func (h *hook) quiet(w http.ResponseWriter) bool {
-	if !h.d.Quiet() {
-		return false
-	}
-	w.Header().Set("Retry-After", quietRetry)
-	problem.Write(w, problem.Quiet, dispatch.ErrQuiet.Error())
-	return true
-}
-
 func (h *hook) read(w http.ResponseWriter, r *http.Request, name string) (body, sig []byte, ok bool) {
 	sig, ok = signature(r.Header.Get("X-Hub-Signature-256"))
 	if !ok {

@@ -27,3 +27,13 @@ oneOf:
         type: array
         items:
           type: string
+  - type: object
+    additionalProperties: false
+    description: |
+      The delivery arrived while the server was quiet before a restart: it is
+      kept and handled, as if it had just arrived, once quiet ends or the
+      server has restarted.
+    required: [kept]
+    properties:
+      kept:
+        type: string

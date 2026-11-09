@@ -60,10 +60,16 @@ func (h *hook) serveApp(w http.ResponseWriter, r *http.Request) {
 		refuse(w, who, reason)
 		return
 	}
-	if h.quiet(w) || !recorded(w, r, h.o.Record, r.Header.Get("X-GitHub-Delivery"), "app:"+app, body) {
+	event, id := r.Header.Get("X-GitHub-Event"), r.Header.Get("X-GitHub-Delivery")
+	if h.kept(w, r, store.PendingDelivery{Route: routeApp, Name: app, Event: event, ID: id, Body: body}) ||
+		!recorded(w, r, h.o.Record, id, "app:"+app, body) {
 		return
 	}
-	event := r.Header.Get("X-GitHub-Event")
+	h.handleApp(w, r, app, event, body)
+}
+
+// handleApp answers a verified and recorded delivery to an App.
+func (h *hook) handleApp(w http.ResponseWriter, r *http.Request, app, event string, body []byte) {
 	if event == "ping" {
 		writeJSON(w, http.StatusOK, map[string]string{"ignored": "ping"})
 		return

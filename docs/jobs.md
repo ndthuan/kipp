@@ -213,8 +213,10 @@ Each delivery is built once: its `X-GitHub-Delivery` id and a SHA-256 of
 the job's name and the body are kept for 30 days, and either one again is
 answered 409, GitHub's Redeliver button included. To build that commit
 again, use Build again on the build's page ([Builds](builds.md#building-again)).
-A delivery kipp answered 503 (busy or quiet), 408 or 401 was not kept and
-may be sent again. What the endpoint does with an unsigned or oversized
+A delivery kipp answered 503 (busy), 408 or 401 was not kept and may be sent
+again. One that arrives while the server is quiet before a restart is kept
+and answered 202, and built when quiet ends
+([Restarting](operations.md#restarting-without-losing-builds)). What the endpoint does with an unsigned or oversized
 request is in [Security](accounts.md#security).
 
 A webhook build does not clone anything by itself: a `stages` job's

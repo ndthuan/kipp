@@ -171,6 +171,8 @@ type Dispatcher struct {
 	// ends. Both are memory only: a restart ends quiet.
 	quiet   time.Time
 	skipped map[string]bool
+	// quietEnded is told, once, each time quiet is turned off.
+	quietEnded func()
 }
 
 // run is a build between leaving the queue and releasing what it holds: its

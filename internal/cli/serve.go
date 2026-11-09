@@ -391,6 +391,9 @@ type server struct {
 	// scanner reads the multibranch jobs' repos, now and then; it is made
 	// when the server runs, and ends with its work.
 	scanner *index.Scanner
+	// hooks are the webhook routes, made with the handler; the deliveries
+	// kept while the last server was quiet are handled at start.
+	hooks *webhook.Hooks
 	// apps signs in as the GitHub Apps the owner jobs name.
 	apps *github.Apps
 	// hub is the agents, and pool the engines, a stage may be placed on;
@@ -804,10 +807,13 @@ func (s *server) handler() http.Handler {
 	a := api.New(s.deps(au))
 	mux := http.NewServeMux()
 	mux.Handle("/api/", a.Handler())
-	hooks := webhook.New(s.d, webhook.Options{
-		Secret: s.secret,
-		Record: func(ctx context.Context, id, job string) error { return s.st.RecordDelivery(ctx, id, job, time.Now()) },
-		Index:  s.ix,
+	s.hooks = webhook.New(s.d, webhook.Options{
+		Secret:  s.secret,
+		Record:  func(ctx context.Context, id, job string) error { return s.st.RecordDelivery(ctx, id, job, time.Now()) },
+		Keep:    s.st.KeepDelivery,
+		Pending: s.st.PendingDeliveries,
+		Done:    s.st.DeletePendingDelivery,
+		Index:   s.ix,
 		Rescan: func(job string) error {
 			if s.scanner == nil {
 				return nil
@@ -815,7 +821,7 @@ func (s *server) handler() http.Handler {
 			return s.scanner.Rescan(job)
 		},
 	})
-	mux.Handle(webhook.Prefix, hooks.Handler())
+	mux.Handle(webhook.Prefix, s.hooks.Handler())
 	var oauthServer *oauth.Server
 	if s.f.mcp {
 		cfg := mcp.Config{Service: a.Service(), Auth: au, Version: version.Version, BaseURL: s.f.baseURL, Logger: s.log}
@@ -964,6 +970,7 @@ func (s *server) run(ctx context.Context, ln net.Listener, stdout io.Writer) int
 	s.startWork(work, hup, &wg)
 	failed := make(chan error, 2)
 	go func() { failed <- srv.Serve(ln) }()
+	wg.Go(func() { s.hooks.Replay(work) })
 	agentSrv := s.serveAgents(failed)
 	say(stdout, "kipp %s listening on http://%s, %s from %s, data in %s",
 		version.Version, ln.Addr(), jobCount(len(s.d.Snapshot().Names)), s.f.jobs, s.f.data)
