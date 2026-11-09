@@ -5,41 +5,41 @@ files in a directory; builds run as shell commands on the server's
 machine, on runners that dial in, or in containers on Docker engines;
 everything else (builds, users, secrets) is kept in one SQLite file.
 
-It runs cron jobs with a history, a log and a page per build, stages
-that form a DAG, builds from GitHub pushes, tags and pull requests, and
-has a JSON API and a command line that can do all a browser can.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/home-dark.png">
+  <img alt="The overview: the jobs failing now with the stage each failed in and how long it has been red, the unstable and the flaky ones, the builds running on six of eight slots, and what runs next" src="docs/screenshots/home.png">
+</picture>
 
-![The overview: graphs of builds, slots and pass rates, what is running, failing, unstable and flaky, what failed lately, what runs next and how each group stands](docs/screenshots/overview.png)
+## Highlights
 
-![The job list: jobs by group, each with its last build, schedule and next run](docs/screenshots/job-list.png)
-
-![A build: its stages as a graph, their times, and the log of each, a secret masked as ***](docs/screenshots/build.png)
-
-## Features
-
-- **Jobs as files.** One `<name>.yml` per job in a directory, shared
+- **It says what is red, and why.** The overview lists what fails now,
+  since when and in which stage, what is unstable or flaky, what is
+  running and what comes next. A failed build opens on the lines that
+  broke it, and its log walks from one problem to the next.
+- **Jobs are files.** One `<name>.yml` per job in a directory, shared
   variables in `_vars.yml`, checked offline with `kipp check` and read
   again on `kipp reload` or `SIGHUP`. A directory with one bad file is
   refused whole, and the server keeps the jobs it had.
-- **Triggers.** Cron with Jenkins' `H` to spread jobs over the hour and a
-  time zone per job, GitHub webhooks on a push or a tag, a run after
-  another job, and by hand from the job's page, the API or `kipp run`,
+- **Pipelines, not only commands.** Stages form a DAG with `needs`,
+  conditions, retries, locks and timeouts, started by cron (Jenkins' `H`,
+  a time zone per job), a GitHub push or tag, another job, or by hand
   with typed parameters.
-- **Stages.** A DAG with `needs`, conditions (`when`), retries, exit codes
-  that mean unstable, locks, a timeout, and variables handed from one stage
-  to the next.
-- **Multibranch jobs and organization folders.** Every branch and pull
-  request of a repo, or every repo of a GitHub user or organization, built
-  from a `.kipp.yml` in the repo, with commit statuses, signed in with a
-  token or as a GitHub App.
-- **Runners and engines.** Standing runners on other machines and containers
-  on Docker engines (over a socket, TLS or ssh), chosen by label.
-- **Build results.** A live log with timestamps and colours, JUnit test
-  results, artifacts, a keyed cache shared between builds, and metrics
-  with guards that fail a build when a number falls.
-- **Accounts.** Users with per-job grants (view, build, cancel), API
-  tokens, secrets sealed in the database and masked in the logs, and an
-  audit of every change.
+- **It follows your repos.** Every branch and pull request of a repo, or
+  every repo of a GitHub user or organization, built from a `.kipp.yml`
+  in the repo, with commit statuses, by token or as a GitHub App.
+- **It remembers what builds measure.** JUnit results, artifacts and a
+  keyed cache come with a build; metrics (coverage, a bundle's size) are
+  kept per item, and a guard fails the build whose number fell.
+- **It runs where the work is.** On the server's machine, on runners
+  that dial in, or in containers on Docker engines, chosen by label.
+- **A script can do all a browser can.** A JSON API described by OpenAPI,
+  a command line, and an MCP endpoint for Claude and other clients.
+- **Careful with access.** Users with per-job grants (view, build,
+  cancel), API tokens, secrets sealed in the database and masked in the
+  logs, an audit of every change, and an upgrade that backs up first and
+  rolls back by itself.
+
+![A failed build: the lines that broke it at the top, its stages as a graph with the failed one in red and what it stopped skipped, the failed test case with its message, and the stage's log with Previous problem and Next problem](docs/screenshots/build.png)
 
 ## Install
 
@@ -92,7 +92,7 @@ kipp serve --data ./data --jobs ./jobs
 It prints where it listens:
 
 ```
-kipp v1.0.0 listening on http://127.0.0.1:8085, 1 job from ./jobs, data in /home/alice/data
+kipp v1.2.0 listening on http://127.0.0.1:8085, 1 job from ./jobs, data in /home/alice/data
 ```
 
 In a second terminal, in the same directory, make the first admin and a

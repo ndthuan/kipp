@@ -91,7 +91,9 @@ on_success: {run: ./notify.sh}
 
 [`examples/jobs/`](../examples/jobs) has more, each read by `kipp check`.
 
-![A job's page: its group and name, its description, the metrics store it reports into, a Build button, and its builds with status, trigger, start time and duration](screenshots/job.png)
+![The job list: the jobs of a group, each with its last build, its recent builds as dots, its schedule and next run](screenshots/job-list.png)
+
+![A job's page: its group and name, its description, its schedule and next build, the metrics store it reports into, a Build button, and its builds with status, trigger, start time and duration](screenshots/job.png)
 
 The top-level keys:
 

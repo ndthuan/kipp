@@ -97,7 +97,7 @@ An admin has more pages in the menu under their name:
 
 ![A user's page: what they may view, build and cancel on each job, set in one form](screenshots/user.png)
 
-![The Secrets page: a secret with its kind, scopes, when it was set and the job that names it, a note that only one job names a global secret, and its scopes editor open with each scope as a tag with an x and an Add a scope list](screenshots/secrets.png)
+![The Secrets page: a secret with its kind, its scope, when it was set and the job that names it, and under Missing a name a loaded job asks for that no secret holds](screenshots/secrets.png)
 
 The forms open from a button in the heading's row, and come back open
 when they were refused or prefilled. A token, a password or a value shown
