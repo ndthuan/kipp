@@ -56,9 +56,10 @@ func stillLeads(g Group) (bool, error) {
 // execSettles is how long an environment that reads as empty is read
 // again. Linux puts a process's new image in place before its environment
 // during an exec, and in between shows it with none; that lasts as long as
-// loading the binary, far less than this. One still empty after that was
-// emptied on purpose.
-const execSettles = 100 * time.Millisecond
+// loading the binary, which a machine under load can stretch to a few
+// hundred milliseconds, so this is well past that. One still empty after
+// that was emptied on purpose.
+const execSettles = 2 * time.Second
 
 // environOf is the process's environment, read again while it is empty
 // for as long as an exec takes to settle.

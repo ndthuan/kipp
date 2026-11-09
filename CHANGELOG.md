@@ -8,6 +8,10 @@ lines and the data directory are the public surface.
 
 ## Unreleased
 
+- On a loaded machine a stage's leader in the middle of an exec could be
+  read as having dropped its environment, and so be left alone when the
+  stage was stopped. The wait for an exec to settle is now two seconds, not
+  a tenth of one.
 - `/mcp` answered `403 invalid Host header` to a request that a reverse
   proxy or tunnel on the same machine forwarded with the public `Host`. A
   request on a loopback connection now passes with a loopback `Host` or the
