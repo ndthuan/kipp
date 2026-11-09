@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ndthuan/kipp/internal/api"
 	"github.com/ndthuan/kipp/internal/auth"
@@ -216,7 +217,10 @@ func TestThePasswordLeadsOnlyToAPathOnThisSite(t *testing.T) {
 }
 
 func TestWrongPasswordsForSudoAreThrottledAsALoginIs(t *testing.T) {
-	e := site(t)
+	// A frozen clock: the wait the page names is that of the sixth try
+	// made the instant after the fifth, however long the machine takes.
+	frozen := time.Now()
+	e := site(t, func(d *api.Deps) { d.Auth.SetThrottleClock(func() time.Time { return frozen }) })
 	c := e.login(t, "alice")
 	for range 5 {
 		res, _ := e.form(t, c, "/sudo", url.Values{"password": {"wrong"}, "next": {"/account"}})

@@ -29,6 +29,11 @@ func New(st *store.Store, ttl time.Duration, deviceKey []byte) *Service {
 	return &Service{st: st, ttl: ttl, deviceKey: deviceKey, throttle: NewThrottle(time.Now)}
 }
 
+// SetThrottleClock makes the wrong-password throttle tell time by now, so
+// that a test can hold a wait still instead of racing the wall clock. It
+// starts a new, empty count.
+func (s *Service) SetThrottleClock(now func() time.Time) { s.throttle = NewThrottle(now) }
+
 // Attempt is what a password check knows of where it comes from, beside
 // the name: the throttle counts it by these.
 type Attempt struct {
