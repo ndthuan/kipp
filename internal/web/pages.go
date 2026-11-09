@@ -158,7 +158,12 @@ func (s *Site) home(w http.ResponseWriter, r *http.Request, u *store.User) {
 		s.fail(w, r, err)
 		return
 	}
-	d := overviewData{Queue: queueData{Queue: q, CSRF: csrf(r), Next: thisPage(r), Full: true, Nested: true}, Overview: o, Range: rg,
+	why, err := s.whys(r.Context(), o)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	d := overviewData{Why: why, Queue: queueData{Queue: q, CSRF: csrf(r), Next: thisPage(r), Full: true, Nested: true}, Overview: o, Range: rg,
 		Charts: chartsOf(o.Charts, s.api.Zone()), Self: windowHref(overview.Day, rg)}
 	for _, c := range []overview.Range{overview.Day, overview.Week} {
 		d.Ranges = append(d.Ranges, rangeLink{Label: c.Label, Href: windowHref(overview.Day, c), Current: c == rg})
@@ -176,6 +181,8 @@ type overviewData struct {
 	Ranges   []rangeLink
 	Charts   []*chart
 	Self     string
+	// Why says, by build, where each failing job's newest build went wrong.
+	Why map[int64]*why
 }
 
 // rangeLink is one choice of the control that sets how far back the graphs
@@ -536,6 +543,8 @@ type buildData struct {
 	// kept or not, whether or not the job's file is still there.
 	CanKeep bool
 	Logs    []logView
+	// Notice says at the top why a red build is red; nil for any other.
+	Notice *notice
 	// Tests are the ones the page lists, the failed first: those that
 	// failed, or with AllTests every one. A build may have thousands, nearly
 	// all passed, so the rest are counted and loaded when asked for.
@@ -593,6 +602,9 @@ func guardViews(rows []store.GuardRow) []guardView {
 type logView struct {
 	Name string
 	Open bool
+	// Status is the stage's, drawn beside its name; empty for the logs
+	// kipp writes itself.
+	Status store.StageStatus
 }
 
 func (s *Site) buildPage(w http.ResponseWriter, r *http.Request, u *store.User) {
@@ -635,6 +647,7 @@ func (s *Site) buildData(r *http.Request, u *store.User) (*buildData, error) {
 		v.Stages = planned(v.Needs)
 	}
 	data := &buildData{View: v, Tests: tests, Counts: map[string]int{}, Logs: s.logs(ctx, u, v), Guards: guardViews(guards), Artifacts: artifactViews(id, kept)}
+	data.Notice = redNotice(v, data.Logs)
 	data.Live = !v.Complete
 	data.Waited, data.Exit = headline(v)
 	if !ended {
@@ -727,7 +740,7 @@ func (s *Site) logs(ctx context.Context, u *store.User, v *api.BuildView) []logV
 	for _, st := range v.Stages {
 		open := worthReading(st.Status)
 		anyOpen = anyOpen || open
-		out = append(out, logView{Name: st.Name, Open: open})
+		out = append(out, logView{Name: st.Name, Open: open, Status: st.Status})
 	}
 	// When none went wrong, how the build ended is what a reader came for.
 	if last := len(out) - 1; !anyOpen && last >= first && v.Build.Status.Terminal() {

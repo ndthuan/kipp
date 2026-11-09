@@ -570,7 +570,7 @@ var (
 func selfContained(t *testing.T, page string) {
 	t.Helper()
 	for _, m := range localRef.FindAllStringSubmatch(page, -1) {
-		if m[1] != "#main" && (!strings.HasPrefix(m[1], "/") || strings.HasPrefix(m[1], "//")) {
+		if m[1] != "#main" && !strings.HasPrefix(m[1], "#log-") && (!strings.HasPrefix(m[1], "/") || strings.HasPrefix(m[1], "//")) {
 			t.Fatalf("not a local reference: %s", m[0])
 		}
 	}
@@ -1905,8 +1905,8 @@ func TestAnUnstableBuildAndStageAreShownAsUnstableOnEveryPage(t *testing.T) {
 	contains(t, page,
 		`<span>#1</span> <span class="status unstable">unstable</span></h1>`,
 		`<g class="stage unstable" data-stage="lint">`, `<g class="stage success" data-stage="unit">`,
-		"<td>lint</td>\n<td><span class=\"status unstable\">unstable</span></td>\n<td>4</td>",
-		"<td>unit</td>\n<td><span class=\"status success\">success</span></td>",
+		"<td><a class=\"link\" href=\"#log-lint\">lint</a></td>\n<td><span class=\"status unstable\">unstable</span></td>\n<td>4</td>",
+		"<td><a class=\"link\" href=\"#log-unit\">unit</a></td>\n<td><span class=\"status success\">success</span></td>",
 		// What made the build unstable is the log a reader came for.
 		`<details class="log" id="log-lint" open>`, `<details class="log" id="log-unit">`,
 		// Nothing failed: the tests are a count, folded, and none is listed.

@@ -13,6 +13,14 @@ lines and the data directory are the public surface.
   cancels, then returns to the page you came from. A page the queue refreshes
   keeps its tab title (it was renamed "Queue - kipp"), and a cancelled,
   timed out or lost stage no longer shows "exit -1".
+- The overview answers what is broken before anything else: what is failing,
+  unstable, flaky or failed lately comes first, then what runs and what is
+  coming up, and the graphs come last, at every width. A failing job's row
+  names the stages that failed (or the one a timeout stopped) and links to
+  their logs. The page of a failed, timed out or lost build opens with a
+  notice that says which stage and how it ended, links to its log and shows
+  the log's last lines; the stage table links each stage to its log, and the
+  heading of each log carries the stage's status.
 - A GitHub webhook that arrives while the server is quiet before a restart is
   kept, not answered 503: a verified delivery is stored (202), handled in
   arrival order when quiet ends or the server starts, and built once however

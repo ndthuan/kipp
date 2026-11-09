@@ -506,6 +506,32 @@ func (s *Store) Stages(ctx context.Context, buildID int64) ([]*Stage, error) {
 	return collect(ctx, s.db, scanStage, `SELECT build_id, name, needs, status, exit_code, started_at, finished_at, ran_on, tries FROM stages WHERE build_id = ? ORDER BY seq`, buildID)
 }
 
+// StoppedStages are the stages of the builds that ended badly: the failed
+// ones, and those a timeout or a lost server stopped (cancelled, or still
+// running), by build id and in the order the stages were put. One query
+// serves every build of a page.
+func (s *Store) StoppedStages(ctx context.Context, buildIDs []int64) (map[int64][]*Stage, error) {
+	if len(buildIDs) == 0 {
+		return nil, nil
+	}
+	marks := strings.TrimSuffix(strings.Repeat("?,", len(buildIDs)), ",")
+	args := make([]any, 0, len(buildIDs)+3)
+	for _, id := range buildIDs {
+		args = append(args, id)
+	}
+	args = append(args, StageFailed, StageCancelled, StageRunning)
+	rows, err := collect(ctx, s.db, scanStage, `SELECT build_id, name, needs, status, exit_code, started_at, finished_at, ran_on, tries FROM stages
+		WHERE build_id IN (`+marks+`) AND status IN (?, ?, ?) ORDER BY build_id, seq`, args...)
+	if err != nil {
+		return nil, err
+	}
+	out := map[int64][]*Stage{}
+	for _, st := range rows {
+		out[st.BuildID] = append(out[st.BuildID], st)
+	}
+	return out, nil
+}
+
 func scanStage(row scanner) (*Stage, error) {
 	var st Stage
 	var needs string

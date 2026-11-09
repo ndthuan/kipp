@@ -214,9 +214,9 @@ func TestTheOverviewHoldsItsSectionsInTwoColumnsAndTheQueueDoesNotRefreshTwice(t
 	if len(cols) != 2 {
 		t.Fatalf("two columns expected in:\n%s", page)
 	}
-	contains(t, cols[0], `<section id="queue" class="stack">`, "<h2>Coming up</h2>")
-	lacks(t, cols[0], "Failing now", "Flaky", "Failed in the last")
-	contains(t, cols[1], "<h2>Failing now</h2>", `Unstable now</h2>`, "<h2>Flaky</h2>", "<h2>Failed in the last 24 hours</h2>")
+	contains(t, cols[1], `<section id="queue" class="stack">`, "<h2>Coming up</h2>")
+	lacks(t, cols[1], "Failing now", "Flaky", "Failed in the last")
+	contains(t, cols[0], "<h2>Failing now</h2>", `Unstable now</h2>`, "<h2>Flaky</h2>", "<h2>Failed in the last 24 hours</h2>")
 	lacks(t, page, "<h2>Groups</h2>")
 	// The queue's own page and the job list still refresh it themselves.
 	_, jobs := get(t, e.login(t, "admin"), e.srv.URL+"/jobs")

@@ -2,7 +2,7 @@
 {{define "content"}}
 {{with .Data}}
 {{$build := .View.Build}}{{$page := buildPath $build}}
-<section id="live" class="stack" data-logs="{{range .Logs}}{{.Name}} {{end}}" data-open="{{range .Logs}}{{if .Open}}{{.Name}} {{end}}{{end}}"{{if .Live}} hx-get="{{$page}}" hx-select="#live" hx-target="this" hx-swap="outerHTML" hx-trigger="every 2s"{{end}}>
+<section id="live" class="stack" data-logs="{{range .Logs}}{{.Name}} {{end}}" data-open="{{range .Logs}}{{if .Open}}{{.Name}} {{end}}{{end}}" data-states="{{range .Logs}}{{if .Status}}{{.Name}}={{.Status}} {{end}}{{end}}"{{if .Live}} hx-get="{{$page}}" hx-select="#live" hx-target="this" hx-swap="outerHTML" hx-trigger="every 2s"{{end}}>
 {{$group := crumb .View.Group .View.Removed}}<div class="head">
 <div class="title">
 <h1 class="crumbs"><a class="link-plain" href="{{$group.Href}}">{{$group.Label}}</a><span aria-hidden="true">/</span><a class="link-plain" href="/jobs/{{$build.Job}}">{{$build.Job}}</a><span aria-hidden="true">/</span><span>#{{$build.Number}}</span> <span class="status {{$build.Status}}">{{$build.Status}}</span></h1>
@@ -18,7 +18,11 @@
 <button class="action action-main">Build again</button>
 </form>
 {{end}}</div>
-{{if $build.Params}}<dl class="facts">
+{{with .Notice}}<div class="notice {{.Class}}">
+<p><strong>{{.Text}}</strong>{{with .Log}} <a class="link" href="#log-{{.}}">Go to the log</a>{{end}}</p>
+{{with .Log}}<pre class="notice-tail" data-tail-of="{{.}}" hidden></pre>{{end}}
+</div>
+{{end}}{{if $build.Params}}<dl class="facts">
 <div><dt>Params</dt><dd>{{range $name, $value := $build.Params}}{{if lines $value}}<code>{{$name}}</code><pre>
 {{$value}}</pre>{{else}}<code>{{$name}}={{$value}}</code> {{end}}{{end}}</dd></div>
 </dl>{{end}}
@@ -30,7 +34,7 @@
 <thead><tr><th>Stage</th><th>Status</th><th>Exit</th><th>Started</th><th>Took</th><th>On</th></tr></thead>
 <tbody>
 {{range .View.Stages}}<tr>
-<td>{{.Name}}</td>
+<td><a class="link" href="#log-{{.Name}}">{{.Name}}</a></td>
 <td><span class="status {{.Status}}">{{.Status}}</span>{{if gt .Tries 1}}<span class="sub">, {{.Tries}} tries</span>{{end}}</td>
 <td>{{exitText . $build}}</td>
 <td>{{clock .StartedAt}}</td>
@@ -108,7 +112,7 @@
 {{if .Logs}}
 <h2>Logs</h2>
 {{range .Logs}}<details class="log" id="log-{{.Name}}"{{if .Open}} open{{end}}>
-<summary>{{.Name}}</summary>
+<summary>{{.Name}}{{with .Status}}<span class="status {{.}}" data-chip>{{.}}</span>{{end}}</summary>
 {{$log := printf "/api/v1/builds/%d/stages/%s/log" $build.ID .Name}}<div class="sub log-note"><span data-cut hidden></span><span>Download the whole log: <a class="link" href="{{$log}}?download=true">as written</a>, <a class="link" href="{{$log}}?download=true&amp;timestamps=true">with times</a></span><label class="check"><input type="checkbox" data-times checked> Timestamps</label></div>
 <pre data-log="/api/v1/builds/{{$build.ID}}/stages/{{.Name}}/log" tabindex="0"></pre>
 </details>

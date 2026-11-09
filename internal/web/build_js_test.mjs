@@ -67,7 +67,8 @@ function fakeLog(name) {
     open: true,
     pre,
     cut,
-    querySelector: (sel) => (sel === "pre[data-log]" ? pre : sel === "[data-cut]" ? cut : null),
+    chip: { className: "", textContent: "" },
+    querySelector: (sel) => (sel === "pre[data-log]" ? pre : sel === "[data-cut]" ? cut : sel === "[data-chip]" ? details.chip : null),
     addEventListener() {},
   };
   return details;
@@ -94,6 +95,8 @@ globalThis.requestAnimationFrame = (fn) => fn();
 let afterSwap;
 let shown = [logs.s];
 globalThis.EventSource = FakeEventSource;
+// The places in the notice of a red build for the tail of a log, by stage.
+const tails = {};
 // The Timestamps boxes of the page.
 const boxes = [{ checked: false, addEventListener: (_, fn) => (boxes.changed = fn) }];
 const select = (selector) => {
@@ -102,6 +105,8 @@ const select = (selector) => {
   return shown;
 };
 globalThis.document = {
+  // The notice of a red build, which has a place for the tail of one log.
+  querySelector: (sel) => tails[/data-tail-of="(.*)"/.exec(sel)?.[1]] || null,
   createElement: () => fakeNode(),
   createTextNode: (text) => ({ textContent: text }),
   querySelectorAll: select,
@@ -330,5 +335,32 @@ feed.onmessage({ data: "\x1b[33m50%", lastEventId: String(id) });
 feed.onmessage({ data: "\x1b[33m60%", lastEventId: String(id) });
 check(held() - before === bytes("\x1b[33m60%\n"), "progress replaced counts only its last raw line, got " + (held() - before));
 check(shape(ansi.lastChild) === "[ansi-fg-yellow]60%|\n", "the replacement is drawn, got " + shape(ansi.lastChild));
+
+// The notice of a red build shows the last 5 lines that are not empty of
+// the log it points at, as the log grows, and the heading of each log
+// follows the state the refreshed summary carries.
+logs.red = fakeLog("red");
+sizes.red = 0;
+tails.red = { hidden: true, textContent: "" };
+shown = [logs.red];
+live.dataset.logs = "red";
+live.dataset.open = "red";
+live.dataset.states = "red=failed";
+afterSwap();
+await settle();
+check(tails.red.hidden, "the tail stays hidden while the log has no line");
+check(logs.red.chip.className === "status failed" && logs.red.chip.textContent === "failed", "the heading of a log carries its stage's state, got " + logs.red.chip.className);
+const red = opened[opened.length - 1];
+let seq = 0;
+for (const text of ["a", "", "b", "   ", "c", "d", "e", "f", "g", ""]) red.onmessage({ data: text, lastEventId: String(++seq) });
+check(!tails.red.hidden && tails.red.textContent === "c\nd\ne\nf\ng", "the tail is the last 5 lines that are not empty, got " + JSON.stringify(tails.red.textContent));
+red.onmessage({ data: "h", lastEventId: String(++seq) });
+check(tails.red.textContent === "d\ne\nf\ng\nh", "the tail follows the log as it grows, got " + JSON.stringify(tails.red.textContent));
+// A refresh draws the notice again, empty: it is filled from the log held.
+tails.red = { hidden: true, textContent: "" };
+live.dataset.states = "red=cancelled";
+afterSwap();
+check(!tails.red.hidden && tails.red.textContent === "d\ne\nf\ng\nh", "a refresh fills the notice again, got " + JSON.stringify(tails.red.textContent));
+check(logs.red.chip.className === "status cancelled", "the heading follows the state of a refresh");
 
 console.log("build.js: ok");

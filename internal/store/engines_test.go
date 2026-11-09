@@ -129,3 +129,31 @@ func TestAStageSaysHowManyTimesItsCommandRan(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestStoppedStagesAreTheFailedAndTheCancelledOfEveryBuildAskedForInOneQuery(t *testing.T) {
+	s := open(t)
+	var ids []int64
+	for range 3 {
+		b := &Build{Job: "a", Status: Running, Trigger: "cli"}
+		must(t, s.CreateBuild(ctx, b))
+		must(t, s.PutStages(ctx, b.ID, []string{"x", "y", "z"}, nil))
+		ids = append(ids, b.ID)
+	}
+	code := 2
+	must(t, s.SetStage(ctx, ids[0], "x", StageSuccess, nil, time.Now()))
+	must(t, s.SetStage(ctx, ids[0], "y", StageFailed, &code, time.Now()))
+	must(t, s.SetStage(ctx, ids[1], "z", StageCancelled, nil, time.Now()))
+	got, err := s.StoppedStages(ctx, ids)
+	must(t, err)
+	if len(got) != 2 || len(got[ids[0]]) != 1 || got[ids[0]][0].Name != "y" || *got[ids[0]][0].ExitCode != 2 {
+		t.Fatalf("%+v", got)
+	}
+	if len(got[ids[1]]) != 1 || got[ids[1]][0].Name != "z" || len(got[ids[2]]) != 0 {
+		t.Fatalf("%+v", got)
+	}
+	none, err := s.StoppedStages(ctx, nil)
+	must(t, err)
+	if len(none) != 0 {
+		t.Fatal(none)
+	}
+}

@@ -16,38 +16,10 @@
 </table></div>
 </figure>{{end}}
 {{define "content"}}
-{{$o := .Data.Overview}}{{$w := .Data.Range}}
+{{$o := .Data.Overview}}{{$w := .Data.Range}}{{$why := .Data.Why}}
 <h1 class="sr-only">Overview</h1>
 <div id="overview" class="stack" hx-get="{{.Data.Self}}" hx-select="#overview" hx-target="this" hx-swap="outerHTML" hx-trigger="kipp-changed from:body, every 60s">
-<section class="charts stack" aria-labelledby="charts-heading">
-<div class="charts-head">
-<h2 id="charts-heading">The last {{$w.Label}}</h2>
-<nav class="seg" aria-label="How far back the graphs look">{{range .Data.Ranges}}<a href="{{.Href}}"{{if .Current}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>
-</div>
-<div class="charts-strip">
-{{range .Data.Charts}}{{template "chart" .}}
-{{end}}</div>
-</section>
 <div class="columns">
-<div class="col">
-<div class="sec sec-now">{{template "queue" .Data.Queue}}</div>
-<section class="sec sec-coming">
-<h2>Coming up</h2>
-{{with $o.Upcoming}}<div class="scroll">
-<table class="rows">
-<thead><tr><th>When</th><th>Job</th><th>Schedule</th></tr></thead>
-<tbody>
-{{range .}}<tr>
-<td>{{clock .At}}</td>
-<td><a class="link" href="/jobs/{{.Job}}">{{.Job}}</a></td>
-<td><code>{{.Cron}}</code></td>
-</tr>
-{{end}}</tbody>
-</table>
-</div>
-{{else}}<p class="sub">Nothing is scheduled.</p>
-{{end}}</section>
-</div>
 <div class="col">
 <section class="sec sec-failing">
 <h2>Failing now</h2>
@@ -57,7 +29,7 @@
 <tbody>
 {{range .}}<tr>
 <td><a class="link" href="/jobs/{{.Job}}">{{.Job}}</a>{{if .Flaky}} <span class="tag">flaky</span>{{end}}</td>
-<td><a class="link" href="{{buildPath .Build}}">#{{.Build.Number}}</a> <span class="status {{.Build.Status}}">{{.Build.Status}}</span></td>
+<td><a class="link" href="{{buildPath .Build}}">#{{.Build.Number}}</a> <span class="status {{.Build.Status}}">{{.Build.Status}}</span>{{$b := .Build}}{{with index $why .Build.ID}}<div class="sub why">{{.Verb}}{{if .Stages}} in {{end}}{{range $i, $n := .Stages}}{{if $i}}, {{end}}<a class="link" href="{{buildPath $b}}#log-{{$n}}">{{$n}}</a>{{end}}</div>{{end}}</td>
 <td>{{template "since" (since .Since)}}</td>
 <td>{{template "dots" .Dots}}</td>
 </tr>
@@ -119,6 +91,34 @@
 {{end}}{{else}}<p class="sub">Nothing failed in the last {{$w.Label}}.</p>
 {{end}}</section>
 </div>
+<div class="col">
+<div class="sec sec-now">{{template "queue" .Data.Queue}}</div>
+<section class="sec sec-coming">
+<h2>Coming up</h2>
+{{with $o.Upcoming}}<div class="scroll">
+<table class="rows">
+<thead><tr><th>When</th><th>Job</th><th>Schedule</th></tr></thead>
+<tbody>
+{{range .}}<tr>
+<td>{{clock .At}}</td>
+<td><a class="link" href="/jobs/{{.Job}}">{{.Job}}</a></td>
+<td><code>{{.Cron}}</code></td>
+</tr>
+{{end}}</tbody>
+</table>
 </div>
+{{else}}<p class="sub">Nothing is scheduled.</p>
+{{end}}</section>
+</div>
+</div>
+<section class="charts stack" aria-labelledby="charts-heading">
+<div class="charts-head">
+<h2 id="charts-heading">The last {{$w.Label}}</h2>
+<nav class="seg" aria-label="How far back the graphs look">{{range .Data.Ranges}}<a href="{{.Href}}"{{if .Current}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>
+</div>
+<div class="charts-strip">
+{{range .Data.Charts}}{{template "chart" .}}
+{{end}}</div>
+</section>
 </div>
 {{end}}

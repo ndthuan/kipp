@@ -275,7 +275,7 @@
   .rows td:not(:first-child), .rows th:not(:first-child) { white-space: nowrap; }
   .rows td:first-child { min-width: calc(var(--space) * 40); overflow-wrap: anywhere; }
   .rows time { font-variant-numeric: tabular-nums; }
-  /* The overview: a strip of graphs, then two columns, then the groups. Under
+  /* The overview: two columns, then a strip of graphs. Under
      75rem the columns are one, and the sections take the order that puts
      what needs attention before what is coming up. */
   .charts-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: calc(var(--space) * 2) calc(var(--space) * 4); }
@@ -314,11 +314,11 @@
   .columns { display: grid; gap: calc(var(--space) * 4); min-width: 0; }
   .col { display: contents; }
   .col > *, .columns > * { min-width: 0; }
-  .sec-now { order: 1; }
-  .sec-failing { order: 2; }
-  .sec-unstable { order: 3; }
-  .sec-flaky { order: 4; }
-  .sec-failed { order: 5; }
+  .sec-failing { order: 1; }
+  .sec-unstable { order: 2; }
+  .sec-flaky { order: 3; }
+  .sec-failed { order: 4; }
+  .sec-now { order: 5; }
   .sec-coming { order: 6; }
   @media (min-width: 75rem) {
     .columns { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
@@ -412,7 +412,11 @@
   .dag .skipped rect, .dag .cancelled rect { stroke-dasharray: 4 3; }
 
   .log { border: 1px solid var(--line); border-radius: var(--radius-m); }
+  .log summary .status { margin-left: calc(var(--space) * 2); }
   .log summary { padding: calc(var(--space) * 2) calc(var(--space) * 3); font-size: var(--size-sm); font-weight: var(--weight-medium); cursor: pointer; }
+  /* The last lines of the log a red build's notice points at, in the
+     notice's own colours, so they read as part of it. */
+  .notice-tail { margin: calc(var(--space) * 2) 0 0; padding: calc(var(--space) * 2) calc(var(--space) * 3); font-family: var(--font-code); font-size: var(--size-xs); line-height: var(--leading-snug); white-space: pre-wrap; overflow-wrap: anywhere; background-color: var(--bg-raised); color: var(--fg); border-radius: var(--radius-s); }
   .log-note { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--space) * 1) calc(var(--space) * 4); padding: calc(var(--space) * 2) calc(var(--space) * 3); border-top: 1px solid var(--line); }
   .log-note .check { margin-left: auto; font-weight: var(--weight-normal); }
   .log pre {

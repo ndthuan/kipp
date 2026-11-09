@@ -143,6 +143,27 @@ function follow(details) {
     });
 }
 
+// The notice at the top of a red build's page has room for the last lines
+// of the log it points at, taken from the log the page already holds: the
+// last TAIL_LINES that are not empty, counted back from the end.
+const TAIL_LINES = 5;
+
+function showTail(details) {
+  const name = details.id.replace(/^log-/, "");
+  const box = document.querySelector('[data-tail-of="' + name + '"]');
+  const pre = details.querySelector("pre[data-log]");
+  if (!box || !pre) return;
+  const last = [];
+  const nodes = pre.childNodes;
+  for (let i = nodes.length - 1; i >= 0 && last.length < TAIL_LINES; i--) {
+    const text = nodes[i].textContent.replace(/\n$/, "");
+    if (text.trim() !== "") last.unshift(text);
+  }
+  if (last.length === 0) return;
+  box.textContent = last.join("\n");
+  box.hidden = false;
+}
+
 // Streams a log over SSE. A line is a span whose text is set as text,
 // never as markup: a log holds whatever a build printed. An event with a
 // new id ends a line; one without is a piece of a line that a carriage
@@ -180,6 +201,7 @@ function stream(details, pre, midLine) {
     if (ends) began = null;
     pre.progress = ends ? null : node;
     trim(details, pre);
+    showTail(details);
     if (atEnd) pre.scrollTop = pre.scrollHeight;
     reveal(details);
   };
@@ -265,6 +287,20 @@ function pause(details) {
   }
 }
 
+// The stage chips beside the names of the logs say how each stage stands;
+// the logs are not part of the refreshed summary, so the summary carries
+// the states as "name=status" and the chips follow it.
+function syncChips(live) {
+  (live.dataset.states || "").split(" ").filter(Boolean).forEach((pair) => {
+    const at = pair.indexOf("=");
+    const details = document.getElementById("log-" + pair.slice(0, at));
+    const chip = details && details.querySelector("[data-chip]");
+    if (!chip) return;
+    chip.className = "status " + pair.slice(at + 1);
+    chip.textContent = pair.slice(at + 1);
+  });
+}
+
 // The page is taken down to the end of the log a reader came for, the
 // last one open, and kept there as it grows, until the reader moves the
 // page themselves.
@@ -316,5 +352,8 @@ document.body.addEventListener("htmx:afterSwap", () => {
       focus = details;
     }
   });
+  syncChips(live);
   document.querySelectorAll("details.log[open]").forEach(follow);
+  // The refresh drew the notice again, empty.
+  document.querySelectorAll("details.log").forEach(showTail);
 });
