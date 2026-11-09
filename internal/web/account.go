@@ -277,6 +277,8 @@ type confirmData struct {
 	Action  string // where the form posts, the page's own address
 	Button  string
 	Back    string
+	// BackLabel is what the link back says, "Cancel" when empty.
+	BackLabel string
 	// Check is a box on the form, off unless ticked.
 	Check *checkBox
 	// Hidden are fields the form sends besides the token.

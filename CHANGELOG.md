@@ -8,6 +8,11 @@ lines and the data directory are the public surface.
 
 ## Unreleased
 
+- Cancel asks first: the queue's and the build page's button lead to a page
+  that names the build and how long it has run, and only the button there
+  cancels, then returns to the page you came from. A page the queue refreshes
+  keeps its tab title (it was renamed "Queue - kipp"), and a cancelled,
+  timed out or lost stage no longer shows "exit -1".
 - A GitHub webhook that arrives while the server is quiet before a restart is
   kept, not answered 503: a verified delivery is stored (202), handled in
   arrival order when quiet ends or the server starts, and built once however

@@ -870,7 +870,7 @@ func TestBuildPageShowsTestsLogsAndHistory(t *testing.T) {
 		`<details class="log" id="log-report" open>`, `data-log="/api/v1/builds/1/stages/report/log"`,
 		`<details class="log" id="log-hooks">`,
 	)
-	lacks(t, page, "/stages/clone/log", "/stages/prepare/log", `action="`+path+`/cancel"`)
+	lacks(t, page, "/stages/clone/log", "/stages/prepare/log", `href="`+path+`/cancel"`)
 	lacks(t, page, "<td>fine", "500ms")
 	_, all := get(t, c, e.srv.URL+path+"?results=all")
 	contains(t, all, `<details class="results" id="results" open>`, "<td>fine", "500ms", `href="`+path+`"`, "Show only the 1 that failed</a>")
@@ -1064,7 +1064,7 @@ func TestARunningBuildRefreshesAndCanBeCancelled(t *testing.T) {
 	})
 	code, page := get(t, admin, e.srv.URL+path)
 	eq(t, "running build", code, http.StatusOK)
-	contains(t, page, `hx-get="`+path+`"`, `hx-select="#live"`, `hx-trigger="every 2s"`, `action="`+path+`/cancel"`, `hx-headers="{&#34;X-CSRF-Token&#34;:&#34;`+csrfOf(t, page)+`&#34;}"`)
+	contains(t, page, `hx-get="`+path+`"`, `hx-select="#live"`, `hx-trigger="every 2s"`, `href="`+path+`/cancel"`, `hx-headers="{&#34;X-CSRF-Token&#34;:&#34;`+csrfOf(t, page)+`&#34;}"`)
 
 	// bob may view slow and nothing more.
 	bob := e.login(t, "bob")
@@ -1681,7 +1681,7 @@ func TestTheBuildButtonSitsInTheHeadingsRow(t *testing.T) {
 	// The build's own page has its Cancel in the same place.
 	id := e.build(t, c, "slow", nil)
 	_, page = get(t, c, e.srv.URL+e.at(t, id))
-	contains(t, page, `</p>`+"\n"+`</div>`+"\n"+`<form class="build" method="post" action="/jobs/slow/1/cancel">`)
+	contains(t, page, `</p>`+"\n"+`</div>`+"\n"+`<a class="build action action-small" href="/jobs/slow/1/cancel">Cancel...</a>`)
 	post(t, c, e.srv.URL+"/jobs/slow/1/cancel", url.Values{"csrf": {csrfOf(t, page)}})
 	e.wait(t, id)
 }
@@ -1914,7 +1914,7 @@ func TestAnUnstableBuildAndStageAreShownAsUnstableOnEveryPage(t *testing.T) {
 	)
 	// The build is over: nothing to cancel and nothing more to wait for.
 	// (The one hx-get left is the link that loads the tests, on a click.)
-	lacks(t, page, `action="`+path+`/cancel"`, `hx-trigger="every 2s"`, `hx-select="#live"`)
+	lacks(t, page, `href="`+path+`/cancel"`, `hx-trigger="every 2s"`, `hx-select="#live"`)
 
 	_, page = get(t, c, e.srv.URL+"/jobs")
 	contains(t, page, `<a class="link" href="`+path+`">#1</a> <span class="status unstable">unstable</span>`)
@@ -2138,7 +2138,7 @@ func TestABuildIsCancelledAtItsOwnAddress(t *testing.T) {
 	c := e.login(t, "admin")
 	id := e.build(t, c, "slow", nil)
 	_, page := get(t, c, e.srv.URL+"/jobs/slow/1")
-	contains(t, page, `action="/jobs/slow/1/cancel"`)
+	contains(t, page, `href="/jobs/slow/1/cancel"`)
 	res := post(t, c, e.srv.URL+"/jobs/slow/1/cancel", url.Values{"csrf": {csrfOf(t, page)}})
 	eq(t, "cancel", res.StatusCode, http.StatusSeeOther)
 	eq(t, "cancel leads back", res.Header.Get("Location"), "/jobs/slow/1")
@@ -2218,7 +2218,7 @@ func TestTheQueuePageSaysWhatRunsAndWhyTheRestWaits(t *testing.T) {
 		`<span class="status running">running</span> <span class="sub">s</span>`,
 		`<time class="since" datetime="`,
 		`<span class="status queued">queued</span> <span class="sub">waiting for lock <code>k</code>, held by <a class="link" href="/jobs/hold/1">hold #1</a></span>`,
-		`action="/jobs/wait/1/cancel"`, `action="/jobs/hold/1/cancel"`,
+		`href="/jobs/wait/1/cancel?next=`, `href="/jobs/hold/1/cancel?next=`,
 		`<script src="/static/queue.js?v=`)
 	contains(t, page, `id="queue-badge"`,
 		`aria-label="1 running, 1 queued" title="1 running, 1 queued"`,

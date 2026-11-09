@@ -158,7 +158,7 @@ func (s *Site) home(w http.ResponseWriter, r *http.Request, u *store.User) {
 		s.fail(w, r, err)
 		return
 	}
-	d := overviewData{Queue: queueData{Queue: q, CSRF: csrf(r), Full: true, Nested: true}, Overview: o, Range: rg,
+	d := overviewData{Queue: queueData{Queue: q, CSRF: csrf(r), Next: thisPage(r), Full: true, Nested: true}, Overview: o, Range: rg,
 		Charts: chartsOf(o.Charts, s.api.Zone()), Self: windowHref(overview.Day, rg)}
 	for _, c := range []overview.Range{overview.Day, overview.Week} {
 		d.Ranges = append(d.Ranges, rangeLink{Label: c.Label, Href: windowHref(overview.Day, c), Current: c == rg})
@@ -207,7 +207,7 @@ func (s *Site) jobs(w http.ResponseWriter, r *http.Request, u *store.User) {
 	}
 	all := groups(jobs)
 	d := shown(all, r.URL.Query())
-	d.Queue = queueData{Queue: q, CSRF: csrf(r)}
+	d.Queue = queueData{Queue: q, CSRF: csrf(r), Next: thisPage(r)}
 	s.render(w, r, "jobs", http.StatusOK, page{Title: d.Heading, Data: d, Here: d.Self, groups: all, Queue: q})
 }
 
@@ -216,7 +216,9 @@ func (s *Site) jobs(w http.ResponseWriter, r *http.Request, u *store.User) {
 type queueData struct {
 	Queue *api.QueueView
 	CSRF  string
-	Full  bool
+	// Next is the page the reader is on, where a cancel leads back to.
+	Next string
+	Full bool
 	// Nested: the queue is a part of a page that refreshes itself whole, so
 	// it does not ask for itself again.
 	Nested bool
@@ -228,16 +230,27 @@ func (s *Site) queue(w http.ResponseWriter, r *http.Request, u *store.User) {
 		s.fail(w, r, err)
 		return
 	}
-	s.render(w, r, "queue", http.StatusOK, page{Title: "Queue", Data: queueData{Queue: q, CSRF: csrf(r), Full: true}, Queue: q})
+	s.render(w, r, "queue", http.StatusOK, page{Title: "Queue", Data: queueData{Queue: q, CSRF: csrf(r), Next: thisPage(r), Full: true}, Queue: q})
 }
 
 // cancelForm is what a cancel button's form needs.
 type cancelForm struct {
 	Build *store.Build
-	CSRF  string
+	Next  string
 }
 
-func cancelOf(b *store.Build, csrf string) cancelForm { return cancelForm{b, csrf} }
+func cancelOf(b *store.Build, next string) cancelForm { return cancelForm{b, next} }
+
+// thisPage is the page the reader is on: the request's own address, or for
+// a part htmx refreshes, the address of the page that asked for it.
+func thisPage(r *http.Request) string {
+	if from := r.Header.Get("HX-Current-URL"); from != "" {
+		if u, err := url.Parse(from); err == nil {
+			return localPath(u.RequestURI())
+		}
+	}
+	return localPath(r.URL.RequestURI())
+}
 
 // csrf is the session's CSRF token, for a form a page holds.
 func csrf(r *http.Request) string {
@@ -657,11 +670,29 @@ func headline(v *api.BuildView) (waited, exit string) {
 		}
 	}
 	if len(v.Stages) == 1 {
-		if code := v.Stages[0].ExitCode; code != nil && *code != 0 {
+		if code := v.Stages[0].ExitCode; code != nil && *code != 0 && exitKnown(v.Stages[0], v.Build) {
 			exit = strconv.Itoa(*code)
 		}
 	}
 	return waited, exit
+}
+
+// exitKnown reports whether a stage's exit code says something: a stage the
+// kipp killed (cancelled, or in a build that timed out or was lost) has
+// the code of the signal, -1, and no exit of its own.
+func exitKnown(st *store.Stage, b *store.Build) bool {
+	if st.Status == store.StageCancelled {
+		return false
+	}
+	return st.ExitCode == nil || *st.ExitCode >= 0 || (b.Status != store.Timeout && b.Status != store.Lost)
+}
+
+// exitText is the exit code a stage's row shows, empty where it says nothing.
+func exitText(st *store.Stage, b *store.Build) string {
+	if st.ExitCode == nil || !exitKnown(st, b) {
+		return ""
+	}
+	return strconv.Itoa(*st.ExitCode)
 }
 
 // planned is the job file's stages as a build that has not recorded its
@@ -727,6 +758,38 @@ func exists(file string) bool {
 	return err == nil
 }
 
+// confirmCancel asks before a build is killed: a cancel cannot be undone.
+func (s *Site) confirmCancel(w http.ResponseWriter, r *http.Request, u *store.User) {
+	b, err := s.numbered(r, u)
+	if err == nil {
+		var ok bool
+		if ok, err = s.auth.Can(r.Context(), u, b.Job, "cancel"); err == nil && !ok {
+			err = api.ErrForbidden
+		}
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if b.Status.Terminal() {
+		redirect(w, r, buildPath(b), http.StatusSeeOther)
+		return
+	}
+	back := nextOr(r.URL.Query().Get("next"), buildPath(b))
+	line := fmt.Sprintf("%s #%d has run for %s.", b.Job, b.Number, took(b.StartedAt, nil))
+	if b.StartedAt == nil {
+		line = fmt.Sprintf("%s #%d has been queued for %s.", b.Job, b.Number, short(time.Since(b.QueuedAt)))
+	}
+	s.confirm(w, r, "", confirmData{
+		Heading:   fmt.Sprintf("Cancel %s #%d?", b.Job, b.Number),
+		Lines:     []string{line, "Its processes are stopped and it cannot be resumed."},
+		Button:    "Cancel the build",
+		Back:      back,
+		BackLabel: "Keep running",
+		Hidden:    []hiddenField{{"next", back}},
+	})
+}
+
 func (s *Site) cancel(w http.ResponseWriter, r *http.Request, u *store.User) {
 	b, err := s.numbered(r, u)
 	if err == nil {
@@ -736,7 +799,7 @@ func (s *Site) cancel(w http.ResponseWriter, r *http.Request, u *store.User) {
 		s.fail(w, r, err)
 		return
 	}
-	redirect(w, r, buildPath(b), http.StatusSeeOther)
+	redirect(w, r, nextOr(r.PostFormValue("next"), buildPath(b)), http.StatusSeeOther)
 }
 
 // again queues a build like a finished one and leads to it.

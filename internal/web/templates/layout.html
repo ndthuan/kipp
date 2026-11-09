@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false}'>
+<meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false,"ignoreTitle":true}'>
 <title>{{.Title}} - kipp</title>
 <link rel="icon" href="{{static "favicon.svg"}}" type="image/svg+xml">
 <link rel="stylesheet" href="{{static "tokens.css"}}">
@@ -84,13 +84,13 @@
 <td><a class="link" href="{{buildPath .Build}}">{{.Build.Job}} #{{.Build.Number}}</a></td>
 <td><span class="status running">running</span>{{with .Stages}} <span class="sub">{{join .}}</span>{{end}}{{range $stage, $why := .Waiting}}<br><span class="sub">{{$stage}}: {{$why}}</span>{{end}}</td>
 <td>{{template "since" (since .Build.StartedAt)}}</td>
-<td>{{if .CanCancel}}{{template "queue-cancel" (cancelOf .Build $.CSRF)}}{{end}}</td>
+<td>{{if .CanCancel}}{{template "queue-cancel" (cancelOf .Build $.Next)}}{{end}}</td>
 </tr>
 {{end}}{{range .Queued}}<tr>
 <td><a class="link" href="{{buildPath .Build}}">{{.Build.Job}} #{{.Build.Number}}</a></td>
 <td><span class="status queued">queued</span> <span class="sub">{{template "waiting" .}}</span></td>
 <td>{{template "since" (since .Build.QueuedAt)}}</td>
-<td>{{if .CanCancel}}{{template "queue-cancel" (cancelOf .Build $.CSRF)}}{{end}}</td>
+<td>{{if .CanCancel}}{{template "queue-cancel" (cancelOf .Build $.Next)}}{{end}}</td>
 </tr>
 {{end}}</tbody>
 </table>
@@ -100,10 +100,7 @@
 {{end}}
 {{define "since"}}{{with .}}<time class="since" datetime="{{.At}}">{{.Ago}}</time>{{end}}{{end}}
 {{define "dag"}}{{with .}}<svg class="dag" viewBox="0 0 {{.Width}} {{.Height}}" width="{{.Width}}" height="{{.Height}}" role="img" aria-label="Stages and what each one needs">{{range .Lines}}<line x1="{{.X1}}" y1="{{.Y1}}" x2="{{.X2}}" y2="{{.Y2}}"/>{{end}}{{range .Nodes}}<g class="stage {{.Status}}" data-stage="{{.Name}}"><title>{{.Name}}: {{.Status}}</title><rect x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}" rx="8"/><text x="{{.TextX}}" y="{{.TextY}}">{{.Label}}</text></g>{{end}}</svg>{{end}}{{end}}
-{{define "queue-cancel"}}<form method="post" action="{{buildPath .Build}}/cancel">
-<input type="hidden" name="csrf" value="{{.CSRF}}">
-<button class="action action-danger action-small">Cancel</button>
-</form>{{end}}
+{{define "queue-cancel"}}<a class="action action-small" href="{{buildPath .Build}}/cancel?next={{.Next}}">Cancel...</a>{{end}}
 {{define "waiting"}}{{$b := .Blocker}}{{if eq .Waiting "job"}}{{if not $b}}waiting for another build of this job{{else if eq $b.Status "queued"}}behind <a class="link" href="{{buildPath $b}}">#{{$b.Number}}</a> of this job{{else}}waiting for <a class="link" href="{{buildPath $b}}">#{{$b.Number}}</a> of this job to end{{end}}{{else if eq .Waiting "lock"}}waiting for lock <code>{{.Lock}}</code>, held by {{with $b}}<a class="link" href="{{buildPath .}}">{{.Job}} #{{.Number}}</a>{{else}}another build{{end}}{{else if eq .Waiting "executor"}}waiting for a free executor{{else if eq .Waiting "start"}}waiting to start{{else if eq .Waiting "gone"}}its job is gone from the job files or disabled, so it will not start{{else}}starting{{end}}{{end}}
 {{define "tokens"}}{{if .Tokens}}<div class="scroll">
 <table>

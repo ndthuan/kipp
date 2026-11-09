@@ -8,10 +8,7 @@
 <h1 class="crumbs"><a class="link-plain" href="{{$group.Href}}">{{$group.Label}}</a><span aria-hidden="true">/</span><a class="link-plain" href="/jobs/{{$build.Job}}">{{$build.Job}}</a><span aria-hidden="true">/</span><span>#{{$build.Number}}</span> <span class="status {{$build.Status}}">{{$build.Status}}</span></h1>
 <p class="meta"><span>{{$build.Trigger}}{{with $build.StartedBy}} by {{.}}{{end}}{{with $build.TriggerDetail}} ({{.}}){{end}}</span>{{if $build.StartedAt}}<span>started {{clock $build.StartedAt}}</span>{{with .Waited}}<span>waited {{.}}</span>{{end}}<span>took {{took $build.StartedAt $build.FinishedAt}}</span>{{else}}<span>queued {{clock $build.QueuedAt}}</span>{{end}}{{with .Exit}}<span>exit {{.}}</span>{{end}}{{with $build.KeptAt}}<span>kept by {{$build.KeptBy}} {{clock .}}</span>{{end}}</p>
 </div>
-{{if .CanCancel}}<form class="build" method="post" action="{{$page}}/cancel">
-<input type="hidden" name="csrf" value="{{$.CSRF}}">
-<button class="action action-danger action-small">Cancel</button>
-</form>
+{{if .CanCancel}}<a class="build action action-small" href="{{$page}}/cancel">Cancel...</a>
 {{end}}{{if .CanKeep}}<form class="build" method="post" action="{{$page}}/{{if $build.KeptAt}}unkeep{{else}}keep{{end}}">
 <input type="hidden" name="csrf" value="{{$.CSRF}}">
 <button class="action">{{if $build.KeptAt}}Stop keeping{{else}}Keep{{end}}</button>
@@ -35,7 +32,7 @@
 {{range .View.Stages}}<tr>
 <td>{{.Name}}</td>
 <td><span class="status {{.Status}}">{{.Status}}</span>{{if gt .Tries 1}}<span class="sub">, {{.Tries}} tries</span>{{end}}</td>
-<td>{{with .ExitCode}}{{.}}{{end}}</td>
+<td>{{exitText . $build}}</td>
 <td>{{clock .StartedAt}}</td>
 <td>{{took .StartedAt .FinishedAt}}</td>
 <td>{{with .RanOn}}{{if ne . "local"}}<code>{{.}}</code>{{else}}<span class="sub">the server</span>{{end}}{{end}}</td>

@@ -111,7 +111,7 @@ func parsePages(assets map[string]asset, zone *time.Location) map[string]*templa
 		}
 		return "/static/" + name + "?v=" + a.version(), nil
 	}
-	funcs := template.FuncMap{"static": static, "dag": dagOf, "ago": ago, "clock": clockIn(zone), "zoned": zoned, "since": since, "join": join, "cancelOf": cancelOf, "took": took, "millis": millis, "lines": lines, "buildPath": buildPath, "crumb": crumb,
+	funcs := template.FuncMap{"static": static, "dag": dagOf, "ago": ago, "clock": clockIn(zone), "zoned": zoned, "since": since, "join": join, "cancelOf": cancelOf, "exitText": exitText, "took": took, "millis": millis, "lines": lines, "buildPath": buildPath, "crumb": crumb,
 		"userPath": userPath, "secretPath": secretPath, "lasts": lasts, "expired": expired, "tokenList": tokenList, "appList": appList, "appScopes": appScopes, "tokenForm": tokenForm, "secretName": webhook.SecretName, "placePath": placePath, "bytes": byteSize, "scopePath": scopePath, "scopeField": scopeField, "metricsPath": metricsPath, "plural": plural, "percent": percent}
 	layout := template.Must(template.New("layout.html").Funcs(funcs).ParseFS(templateFS, "templates/layout.html"))
 	files, err := fs.Glob(templateFS, "templates/*.html")
@@ -160,6 +160,7 @@ func (s *Site) handler() http.Handler {
 	pages.HandleFunc("POST /jobs/{name}/build", s.withUser(s.build))
 	pages.HandleFunc("POST /jobs/{name}/scan", s.withUser(s.scan))
 	pages.HandleFunc("GET /jobs/{name}/{number}", s.withUser(s.buildPage))
+	pages.HandleFunc("GET /jobs/{name}/{number}/cancel", s.withUser(s.confirmCancel))
 	pages.HandleFunc("POST /jobs/{name}/{number}/cancel", s.withUser(s.cancel))
 	pages.HandleFunc("POST /jobs/{name}/{number}/again", s.withUser(s.again))
 	pages.HandleFunc("POST /jobs/{name}/{number}/keep", s.withUser(s.keep(false)))
@@ -472,6 +473,14 @@ func localPath(next string) string {
 		return "/"
 	}
 	return next
+}
+
+// nextOr is next when it is a path on this site, and fallback otherwise.
+func nextOr(next, fallback string) string {
+	if p := localPath(next); p != "/" || next == "/" {
+		return p
+	}
+	return fallback
 }
 
 // redirect sends the browser to to, a path of this site, and is the one

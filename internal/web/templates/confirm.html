@@ -10,7 +10,7 @@
 {{with .Check}}<label class="check"><input type="checkbox" name="{{.Name}}"> {{.Label}}</label>
 {{end}}<div class="actions">
 <button class="action action-danger">{{.Button}}</button>
-<a class="link" href="{{.Back}}">Cancel</a>
+<a class="link" href="{{.Back}}">{{or .BackLabel "Cancel"}}</a>
 </div>
 </form>
 {{end}}
