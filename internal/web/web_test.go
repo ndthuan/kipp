@@ -2294,7 +2294,7 @@ func TestABuildOfOneStageIsHeadedByOneLineOfFacts(t *testing.T) {
 	eq(t, "status", e.wait(t, id).Status, store.Failed)
 	_, page := get(t, c, e.srv.URL+e.at(t, id))
 	contains(t, page, `<p class="meta"><span>web by admin</span><span>started `, "<span>exit 3</span></p>",
-		`<details class="log" id="log-s" open>`, `data-open="s "`, `<input type="checkbox" data-times checked> Timestamps`, `/log?download=true&amp;timestamps=true">with times</a>`)
+		`<details class="log" id="log-s" open>`, `data-open="s "`, `<input type="checkbox" data-times checked> Timestamps`, `data-problem="-1">Previous problem</button>`, `data-problem="1">Next problem</button>`, `/log?download=true&amp;timestamps=true">with times</a>`)
 	lacks(t, page, `<dl class="facts">`, `<svg class="dag"`, "<th>Stage</th>", "Queued")
 }
 

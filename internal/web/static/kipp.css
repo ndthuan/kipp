@@ -420,17 +420,18 @@
   .log-note { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--space) * 1) calc(var(--space) * 4); padding: calc(var(--space) * 2) calc(var(--space) * 3); border-top: 1px solid var(--line); }
   .log-note .check { margin-left: auto; font-weight: var(--weight-normal); }
   .log pre {
-    max-height: 60vh;
-    overflow: auto;
     padding: calc(var(--space) * 3);
     border-top: 1px solid var(--line);
     background-color: var(--bg-sunken);
     font-family: var(--font-code);
-    font-size: var(--size-xs);
+    font-size: var(--size-sm);
     line-height: var(--leading-snug);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
+  .log .problems { display: inline-flex; flex-wrap: wrap; align-items: center; gap: calc(var(--space) * 2); }
+  .log .problems[hidden] { display: none; }
+  .log pre > [data-current] { outline: 2px solid var(--focus); outline-offset: 2px; background-color: var(--warn-soft); }
   .log pre:empty::before { content: "Nothing yet."; color: var(--fg-subtle); }
   /* A line's time is drawn, not written: it stays out of a copy of the
      log. A line with none keeps the column, and a line that wraps goes on

@@ -113,7 +113,7 @@
 <h2>Logs</h2>
 {{range .Logs}}<details class="log" id="log-{{.Name}}"{{if .Open}} open{{end}}>
 <summary>{{.Name}}{{with .Status}}<span class="status {{.}}" data-chip>{{.}}</span>{{end}}</summary>
-{{$log := printf "/api/v1/builds/%d/stages/%s/log" $build.ID .Name}}<div class="sub log-note"><span data-cut hidden></span><span>Download the whole log: <a class="link" href="{{$log}}?download=true">as written</a>, <a class="link" href="{{$log}}?download=true&amp;timestamps=true">with times</a></span><label class="check"><input type="checkbox" data-times checked> Timestamps</label></div>
+{{$log := printf "/api/v1/builds/%d/stages/%s/log" $build.ID .Name}}<div class="sub log-note"><span class="problems" data-problems hidden><button type="button" class="action action-small" data-problem="-1">Previous problem</button> <span data-count aria-live="polite"></span> <button type="button" class="action action-small" data-problem="1">Next problem</button></span><span data-cut hidden></span><span>Download the whole log: <a class="link" href="{{$log}}?download=true">as written</a>, <a class="link" href="{{$log}}?download=true&amp;timestamps=true">with times</a></span><label class="check"><input type="checkbox" data-times checked> Timestamps</label></div>
 <pre data-log="/api/v1/builds/{{$build.ID}}/stages/{{.Name}}/log" tabindex="0"></pre>
 </details>
 {{end}}

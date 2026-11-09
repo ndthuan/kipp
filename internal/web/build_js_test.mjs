@@ -55,8 +55,14 @@ function fakeNode() {
     },
   });
   node.append = (...parts) => node.children.push(...parts);
+  node.focus = (how) => focused.push({ node, how });
+  node.scrollIntoView = (how) => scrolled.push({ node, how });
   return node;
 }
+
+// What the problem buttons did: the lines focused and scrolled to.
+const focused = [];
+const scrolled = [];
 
 function fakeLog(name) {
   const pre = fakePre("/api/v1/builds/1/stages/" + name + "/log");
@@ -68,13 +74,19 @@ function fakeLog(name) {
     pre,
     cut,
     chip: { className: "", textContent: "" },
-    querySelector: (sel) => (sel === "pre[data-log]" ? pre : sel === "[data-cut]" ? cut : sel === "[data-chip]" ? details.chip : null),
+    problems: { hidden: true },
+    count: { textContent: "" },
+    buttons: [-1, 1].map((step) => ({ dataset: { problem: String(step) }, addEventListener: (_, fn) => (details["click" + step] = fn) })),
+    querySelector: (sel) =>
+      ({ "pre[data-log]": pre, "[data-cut]": cut, "[data-chip]": details.chip, "[data-problems]": details.problems, "[data-count]": details.count })[sel] || null,
+    querySelectorAll: (sel) => (sel === "[data-problem]" ? details.buttons : []),
     addEventListener() {},
   };
   return details;
 }
 
-const logs = { s: fakeLog("s"), big: fakeLog("big") };
+const logs = { s: fakeLog("s"), big: fakeLog("big"), prob: fakeLog("prob") };
+logs.prob.open = false;
 // The size each log answers a HEAD with.
 const sizes = { s: 0, big: 5 * 1024 * 1024 };
 const asked = [];
@@ -93,13 +105,14 @@ const windowListeners = {};
 globalThis.window = { addEventListener: (name, fn) => (windowListeners[name] = fn) };
 globalThis.requestAnimationFrame = (fn) => fn();
 let afterSwap;
-let shown = [logs.s];
+let shown = [logs.s, logs.prob];
 globalThis.EventSource = FakeEventSource;
 // The places in the notice of a red build for the tail of a log, by stage.
 const tails = {};
 // The Timestamps boxes of the page.
 const boxes = [{ checked: false, addEventListener: (_, fn) => (boxes.changed = fn) }];
 const select = (selector) => {
+  if (selector === "details.log[open]") return shown.filter((d) => d.open);
   if (selector === "pre[data-log]") return shown.map((d) => d.pre);
   if (selector === "input[data-times]") return boxes;
   return shown;
@@ -362,5 +375,100 @@ live.dataset.states = "red=cancelled";
 afterSwap();
 check(!tails.red.hidden && tails.red.textContent === "d\ne\nf\ng\nh", "a refresh fills the notice again, got " + JSON.stringify(tails.red.textContent));
 check(logs.red.chip.className === "status cancelled", "the heading follows the state of a refresh");
+
+// Problem lines: a red or yellow foreground (31, 33, 91, 93) or a word of
+// the list makes one; green and plain text do not.
+logs.prob.open = true;
+shown = [logs.prob];
+live.dataset.logs = "prob";
+live.dataset.open = "prob";
+live.dataset.states = "";
+afterSwap();
+await settle();
+const prob = logs.prob.pre;
+const pfeed = opened[opened.length - 1];
+let pid = 0;
+const say = (data) => pfeed.onmessage({ data, lastEventId: String(++pid) });
+check(logs.prob.problems.hidden, "the problem buttons stay hidden while the log holds no problem");
+say("all fine");
+say("\x1b[32mgreen is not a problem\x1b[0m");
+check(logs.prob.problems.hidden, "plain and green lines are no problem");
+const kinds = {
+  "\x1b[31mred": true, "\x1b[91mbright red": true, "\x1b[33myellow": true, "\x1b[93mbright yellow": true,
+  "\x1b[34mblue": false, "\x1b[1;38;5;196mindexed red": true, "ok \x1b[0m\x1b[1mbold only": false,
+  "error: x": true, "Error: x": true, "FAIL pkg": true, "panic: boom": true, "warning: x": true, "WARN x": true,
+  "a clean line": false, "\x1b[32mgreen with an error in it": true,
+};
+for (const [text, bad] of Object.entries(kinds)) {
+  say(text);
+  check(prob.lastChild.problem === bad, JSON.stringify(text) + (bad ? " is" : " is not") + " a problem");
+}
+const total = Object.values(kinds).filter(Boolean).length;
+check(!logs.prob.problems.hidden && logs.prob.count.textContent === total + " problems", "the count of problems is shown, got " + logs.prob.count.textContent);
+
+// Next and previous go round the ends, with the position in the count, and
+// the line reached is marked, scrolled to and given the keyboard.
+const lines = prob.childNodes.filter((n) => n.problem);
+check(lines.length === total, "the problem lines are the ones counted");
+logs.prob.click1();
+check(prob.current === lines[0] && lines[0].dataset.current === "1", "next from nowhere is the first problem");
+check(logs.prob.count.textContent === "1 of " + total, "the position is shown, got " + logs.prob.count.textContent);
+check(lines[0].tabIndex === -1 && focused.at(-1).node === lines[0] && scrolled.at(-1).node === lines[0], "the line is focusable, focused and scrolled to");
+logs.prob.click1();
+check(prob.current === lines[1] && lines[0].dataset.current === undefined, "next moves on and the mark moves with it");
+check(logs.prob.count.textContent === "2 of " + total, "the position follows");
+logs.prob["click-1"]();
+logs.prob["click-1"]();
+check(prob.current === lines[total - 1] && logs.prob.count.textContent === total + " of " + total, "previous from the first wraps to the last");
+logs.prob.click1();
+check(prob.current === lines[0], "next from the last wraps to the first");
+// A new problem line raises the total and leaves the position alone.
+say("error: late");
+check(logs.prob.count.textContent === "1 of " + (total + 1), "a new problem is counted, got " + logs.prob.count.textContent);
+// The page stops following the log's end once the reader jumps.
+revealed.length = 0;
+pfeed.onmessage({ data: "more", lastEventId: String(++pid) });
+check(revealed.length === 0, "the page stays where the reader jumped to");
+
+// Progress that became a problem is counted once, and the count falls
+// with the lines the page drops.
+const before2 = prob.bad;
+pfeed.onmessage({ data: "5%", lastEventId: String(pid) });
+pfeed.onmessage({ data: "error: 5%", lastEventId: String(pid) });
+pfeed.onmessage({ data: "ok", lastEventId: String(pid) });
+check(prob.bad === before2, "progress turned into a clean line is not counted, got " + prob.bad);
+for (let i = 0; i < 5000; i++) say("fine " + i);
+check(prob.bad === 0 && logs.prob.problems.hidden, "the problems of dropped lines are not counted, got " + prob.bad);
+check(prob.current === null, "the current line is forgotten when it is dropped");
+check(logs.prob.cut.textContent.includes("Problems before the cut are not searched"), "a cut log says problems before it are not searched, got " + logs.prob.cut.textContent);
+logs.prob.click1();
+check(prob.current === null, "next with no problem does nothing");
+
+// The times are shown by default from 48rem up, hidden below it, and what
+// the reader chose wins either way.
+const stored = {};
+async function startWith(wide, kept, broken) {
+  boxes[0] = { checked: !wide, addEventListener() {} };
+  globalThis.window.matchMedia = (q) => ({ matches: q === "(min-width: 48rem)" && wide });
+  Object.keys(stored).forEach((k) => delete stored[k]);
+  if (kept !== undefined) stored["kipp.log.times"] = kept;
+  globalThis.localStorage = {
+    getItem: (k) => {
+      if (broken) throw new Error("no storage");
+      return stored[k] ?? null;
+    },
+    setItem: (k, v) => (stored[k] = v),
+  };
+  shown = [];
+  globalThis.document.querySelectorAll = select;
+  new Function(fs.readFileSync(script, "utf8"))();
+  await settle();
+  return boxes[0].checked;
+}
+check((await startWith(true)) === true, "the times are shown on a wide screen when nothing is remembered");
+check((await startWith(false)) === false, "the times are hidden on a narrow screen when nothing is remembered");
+check((await startWith(false, "1")) === true, "a narrow screen shows them when the reader chose to");
+check((await startWith(true, "0")) === false, "a wide screen hides them when the reader chose to");
+check((await startWith(false, undefined, true)) === false, "storage that cannot be read leaves the default of the width");
 
 console.log("build.js: ok");

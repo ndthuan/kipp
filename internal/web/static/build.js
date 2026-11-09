@@ -77,19 +77,29 @@ const classesOf = (s) =>
     .filter(Boolean)
     .join(" ");
 
+// A line is a problem when it was drawn in red or yellow (SGR 31, 33, 91,
+// 93), or when it says one of these words, written exactly so.
+const PROBLEM_COLOURS = ["red", "red-bright", "yellow", "yellow-bright"];
+const PROBLEM_WORDS = ["error", "Error", "ERROR", "FAIL", "panic:", "warning", "WARN"];
+
 // Puts a line in a span: one text node when nothing in it is styled, a
 // span per styled run otherwise. The newline is plain text after them, so
 // no style reaches past the line.
 function fill(node, text) {
   node.raw = bytes(text) + 1;
   node.textContent = "";
+  node.problem = false;
   if (!text.includes("\x1b")) {
     node.textContent = text + "\n";
+    node.problem = PROBLEM_WORDS.some((w) => text.includes(w));
     return;
   }
   const style = {};
+  let plain = "";
   const put = (run) => {
     if (!run) return;
+    plain += run;
+    if (PROBLEM_COLOURS.includes(style.fg)) node.problem = true;
     const classes = classesOf(style);
     if (!classes) return node.append(document.createTextNode(run));
     const span = document.createElement("span");
@@ -105,13 +115,14 @@ function fill(node, text) {
   }
   put(text.slice(at));
   node.append(document.createTextNode("\n"));
+  node.problem = node.problem || PROBLEM_WORDS.some((w) => plain.includes(w));
 }
 
 // Shows the line that says the log is not all there.
 function cut(details, text) {
   const note = details.querySelector("[data-cut]");
   if (!note) return;
-  note.textContent = text;
+  note.textContent = text + " Problems before the cut are not searched.";
   note.hidden = false;
 }
 
@@ -190,17 +201,21 @@ function stream(details, pre, midLine) {
     }
     const atEnd = pre.scrollHeight - pre.scrollTop - pre.clientHeight < 40;
     let node = pre.progress;
-    if (node) pre.held -= node.raw;
-    else {
+    if (node) {
+      pre.held -= node.raw;
+      if (node.problem) pre.bad--;
+    } else {
       node = document.createElement("span");
       pre.append(node);
     }
     fill(node, e.data);
     pre.held = (pre.held || 0) + node.raw;
+    if (node.problem) pre.bad = (pre.bad || 0) + 1;
     if (began !== null) node.dataset.t = clockOf(began);
     if (ends) began = null;
     pre.progress = ends ? null : node;
     trim(details, pre);
+    showProblems(details, pre);
     showTail(details);
     if (atEnd) pre.scrollTop = pre.scrollHeight;
     reveal(details);
@@ -235,8 +250,44 @@ function trim(details, pre) {
 }
 
 function drop(pre) {
-  pre.held -= pre.firstChild.raw;
+  const gone = pre.firstChild;
+  pre.held -= gone.raw;
+  if (gone.problem) pre.bad--;
+  if (pre.current === gone) pre.current = null;
   pre.firstChild.remove();
+}
+
+// The buttons that walk the problem lines of a log, and the count between
+// them: "3 of 7" once one is chosen, "7 problems" before. They are drawn
+// when the log holds a problem.
+const problemsOf = (pre) => Array.from(pre.childNodes).filter((n) => n.problem);
+
+function showProblems(details, pre) {
+  const box = details.querySelector("[data-problems]");
+  const count = details.querySelector("[data-count]");
+  if (!box || !count) return;
+  const n = pre.bad || 0;
+  box.hidden = n === 0;
+  const at = pre.current ? problemsOf(pre).indexOf(pre.current) : -1;
+  count.textContent = at < 0 ? n + (n === 1 ? " problem" : " problems") : at + 1 + " of " + n;
+}
+
+// Moves to the next (1) or previous (-1) problem line, round the ends, and
+// puts the keyboard there.
+function goProblem(details, pre, step) {
+  const all = problemsOf(pre);
+  if (all.length === 0) return;
+  const from = pre.current ? all.indexOf(pre.current) : -1;
+  const to = from < 0 ? (step > 0 ? 0 : all.length - 1) : (from + step + all.length) % all.length;
+  if (pre.current) delete pre.current.dataset.current;
+  const line = all[to];
+  pre.current = line;
+  line.dataset.current = "1";
+  line.tabIndex = -1;
+  following = false;
+  line.scrollIntoView({ block: "center" });
+  line.focus({ preventScroll: true });
+  showProblems(details, pre);
 }
 
 const pad = (n) => String(n).padStart(2, "0");
@@ -248,16 +299,19 @@ function clockOf(ms) {
 }
 
 // The times beside the lines are shown or hidden on every log of the page
-// at once, and the choice is remembered in this browser; shown until the
-// reader hides them. Storage that cannot be used only forgets the choice.
+// at once, and the choice is remembered in this browser. Storage that cannot be used only forgets the choice.
 const TIMES = "kipp.log.times";
 
+// A narrow screen has no room for them: with nothing remembered they are
+// shown from 48rem up.
 function timesShown() {
   try {
-    return localStorage.getItem(TIMES) !== "0";
+    const kept = localStorage.getItem(TIMES);
+    if (kept === "0" || kept === "1") return kept === "1";
   } catch {
-    return true;
+    // nothing remembered
   }
+  return !window.matchMedia || window.matchMedia("(min-width: 48rem)").matches;
 }
 
 function showTimes(on) {
@@ -323,6 +377,9 @@ function reveal(details) {
 const opened = new Set();
 document.querySelectorAll("details.log").forEach((details) => {
   details.addEventListener("toggle", () => (details.open ? follow(details) : pause(details)));
+  details.querySelectorAll("[data-problem]").forEach((button) => {
+    button.addEventListener("click", () => goProblem(details, details.querySelector("pre[data-log]"), Number(button.dataset.problem)));
+  });
   if (details.open) {
     opened.add(details.id);
     focus = details;

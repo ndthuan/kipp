@@ -8,6 +8,11 @@ lines and the data directory are the public surface.
 
 ## Unreleased
 
+- A build's log is easier to read: the text is larger, the page scrolls
+  instead of each log, and times start hidden on a narrow screen (unless you
+  chose). "Previous problem" and "Next problem" buttons, with a count, jump
+  between the lines drawn in red or yellow or saying error, warning, FAIL or
+  panic among the lines the page keeps.
 - Cancel asks first: the queue's and the build page's button lead to a page
   that names the build and how long it has run, and only the button there
   cancels, then returns to the page you came from. A page the queue refreshes
