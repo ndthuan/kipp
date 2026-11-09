@@ -3,6 +3,7 @@ package store
 import (
 	"errors"
 	"path/filepath"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -483,4 +484,24 @@ func TestResetPasswordIsOneChangeOfTheHashTheEpochAndEverySession(t *testing.T) 
 	if err := s.ResetPassword(ctx, 999, "h"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("an unknown user: %v", err)
 	}
+}
+
+func TestBuildOrCancelWithoutViewIsNotStoredByEitherWayOfGranting(t *testing.T) {
+	s := open(t)
+	u := newUser(t, s, "alice", false)
+	for _, perms := range [][]string{{"build"}, {"cancel"}, {"build", "cancel"}} {
+		var nv *NeedsViewError
+		if err := s.Grant(ctx, u.ID, "site", perms); !errors.As(err, &nv) || !slices.Equal(nv.Jobs, []string{"site"}) {
+			t.Fatalf("Grant %v: %v", perms, err)
+		}
+	}
+	err := s.ReplaceGrants(ctx, u.ID, map[string]Perm{"b": {Build: true}, "a": {Cancel: true}, "ok": {View: true, Build: true}})
+	var nv *NeedsViewError
+	if !errors.As(err, &nv) || !slices.Equal(nv.Jobs, []string{"a", "b"}) {
+		t.Fatalf("ReplaceGrants: %v", err)
+	}
+	if got, err := s.Permissions(ctx, u.ID); err != nil || len(got) != 0 {
+		t.Fatalf("a refused set stored %v, %v", got, err)
+	}
+	must(t, s.Grant(ctx, u.ID, "site", []string{"view", "build", "cancel"}))
 }

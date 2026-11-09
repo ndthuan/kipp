@@ -3,8 +3,10 @@ package web
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"time"
 
@@ -76,6 +78,32 @@ type sudoData struct {
 	// names what it is about, a user or a secret, when it is about one.
 	Action, About string
 	What, Next    string
+	// Carry is the change's own fields, sent again with the password so
+	// that it is made once the password is right, which only the grants
+	// form does: a ticked table is too much to ask an admin to redo.
+	Carry []carried
+}
+
+// carried is one field of a change held through the password step.
+type carried struct{ Name, Value string }
+
+// grantsRoute is the route of the grants form, whose change the password
+// step makes itself.
+const grantsRoute = "POST /admin/users/{name}/grants"
+
+// carryOf is the fields of form that action's change is made from, when
+// the change is one the password step makes.
+func carryOf(action string, form url.Values) []carried {
+	if action != grantsRoute {
+		return nil
+	}
+	var out []carried
+	for _, field := range slices.Sorted(maps.Keys(permFields)) {
+		for _, job := range form[field] {
+			out = append(out, carried{field, job})
+		}
+	}
+	return out
 }
 
 // sudoFor is what the password form says to a user whose change, sent
@@ -93,6 +121,7 @@ func sudoFor(action, about string) sudoData {
 // that asks for it.
 func (s *Site) askSudo(w http.ResponseWriter, r *http.Request) {
 	d := sudoFor(r.Pattern, r.PathValue("name"))
+	d.Carry = carryOf(r.Pattern, r.PostForm)
 	if a, ok := sudoActions[r.Pattern]; ok {
 		d.Next = localPath(a.back(r))
 	}
@@ -105,8 +134,13 @@ func (s *Site) askSudo(w http.ResponseWriter, r *http.Request) {
 func (s *Site) sudo(w http.ResponseWriter, r *http.Request, u *store.User) {
 	d := sudoFor(r.PostFormValue("action"), r.PostFormValue("about"))
 	d.Next = localPath(r.PostFormValue("next"))
+	d.Carry = carryOf(d.Action, r.PostForm)
 	err := s.api.Service().Sudo(r.Context(), u, api.SessionFrom(r.Context()), r.PostFormValue("password"), s.api.Attempt(r))
 	if err == nil {
+		if d.Action == grantsRoute {
+			s.applyGrants(w, r, u, d.About, r.PostForm)
+			return
+		}
 		redirect(w, r, d.Next, http.StatusSeeOther)
 		return
 	}

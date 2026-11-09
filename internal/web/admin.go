@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -89,6 +90,15 @@ type grantGroup struct {
 type grantRow struct {
 	Job  string
 	Perm store.Perm
+	// Warn is why the row was not saved.
+	Warn string
+}
+
+// grantFault is a refused grants form: what was ticked, and the jobs it
+// was refused for.
+type grantFault struct {
+	perms map[string]store.Perm
+	jobs  []string
 }
 
 type userData struct {
@@ -105,8 +115,14 @@ type userData struct {
 }
 
 func (s *Site) userPage(w http.ResponseWriter, r *http.Request, u *store.User) {
+	s.showUser(w, r, u, r.PathValue("name"), http.StatusOK, nil)
+}
+
+// showUser draws the user's page; with fault, the grants form is as it
+// was sent and the refused rows say why.
+func (s *Site) showUser(w http.ResponseWriter, r *http.Request, u *store.User, name string, status int, fault *grantFault) {
 	svc := s.api.Service()
-	info, err := svc.User(r.Context(), u, r.PathValue("name"))
+	info, err := svc.User(r.Context(), u, name)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -130,11 +146,27 @@ func (s *Site) userPage(w http.ResponseWriter, r *http.Request, u *store.User) {
 		}
 		gg := grantGroup{Label: g.label()}
 		for _, j := range g.Jobs {
-			gg.Jobs = append(gg.Jobs, grantRow{Job: j.Name, Perm: info.Grants[j.Name]})
+			gg.Jobs = append(gg.Jobs, grantRowOf(j.Name, info.Grants[j.Name], fault))
 		}
 		d.Groups = append(d.Groups, gg)
 	}
-	s.render(w, r, "user", http.StatusOK, page{Title: info.Name, Here: "/admin/users", Data: d, oneTime: true})
+	s.render(w, r, "user", status, page{Title: info.Name, Here: "/admin/users", Data: d, oneTime: true})
+}
+
+// grantRowOf is a job's row of the grants form. Grants stored as build or
+// cancel without view show view ticked, as saving them stores it. After a
+// refusal the row is what was sent, and the refused ones say so.
+func grantRowOf(job string, stored store.Perm, fault *grantFault) grantRow {
+	row := grantRow{Job: job, Perm: stored}
+	if fault != nil {
+		row.Perm = fault.perms[job]
+		if slices.Contains(fault.jobs, job) {
+			row.Warn = "Not saved: build and cancel need view too. Tick View for " + job + ", or untick the others."
+		}
+	} else if stored.Build || stored.Cancel {
+		row.Perm.View = true
+	}
+	return row
 }
 
 // userApps are the apps the user called name let in.
@@ -220,17 +252,35 @@ var permFields = map[string]func(*store.Perm){
 	"cancel": func(p *store.Perm) { p.Cancel = true },
 }
 
-func (s *Site) setGrants(w http.ResponseWriter, r *http.Request, u *store.User) {
+// grantForm is the permissions a grants form sent, by job.
+func grantForm(form url.Values) map[string]store.Perm {
 	perms := map[string]store.Perm{}
 	for field, set := range permFields {
-		for _, job := range r.PostForm[field] {
+		for _, job := range form[field] {
 			p := perms[job]
 			set(&p)
 			perms[job] = p
 		}
 	}
-	name := r.PathValue("name")
-	if err := s.api.Service().SetGrants(r.Context(), u, api.SessionFrom(r.Context()), name, perms); err != nil {
+	return perms
+}
+
+func (s *Site) setGrants(w http.ResponseWriter, r *http.Request, u *store.User) {
+	s.applyGrants(w, r, u, r.PathValue("name"), r.PostForm)
+}
+
+// applyGrants saves the grants of a form for name, from the grants route
+// or from the password step that held the form. A set with build or
+// cancel and no view is shown back on the user's page, the ticks as
+// sent and the rows named.
+func (s *Site) applyGrants(w http.ResponseWriter, r *http.Request, u *store.User, name string, form url.Values) {
+	perms := grantForm(form)
+	err := s.api.Service().SetGrants(r.Context(), u, api.SessionFrom(r.Context()), name, perms)
+	if nv, ok := errors.AsType[*store.NeedsViewError](err); ok {
+		s.showUser(w, r, u, name, http.StatusBadRequest, &grantFault{perms: perms, jobs: nv.Jobs})
+		return
+	}
+	if err != nil {
 		s.fail(w, r, err)
 		return
 	}

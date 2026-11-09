@@ -116,7 +116,7 @@ func newEnv(t *testing.T, tune ...func(*API)) *env {
 	}))
 	t.Cleanup(func() { stop(); <-stopped; e.srv.Close(); _ = st.Close() })
 	e.admin = token(t, st, "admin", true, nil)
-	e.agent = token(t, st, "agent", false, map[string][]string{"smoke": {"build"}})
+	e.agent = token(t, st, "agent", false, map[string][]string{"smoke": {"view", "build"}})
 	e.viewer = token(t, st, "viewer", false, map[string][]string{"smoke": {"view"}})
 	return e
 }
@@ -1168,7 +1168,7 @@ func TestARunningBuildOfARemovedJobIsStillReadAndCancelledByWhoeverMay(t *testin
 	e := newEnv(t)
 	pidFile := filepath.Join(t.TempDir(), "pid")
 	e.writeJob(t, "gone", "name: gone\ngroup: backend\nstages:\n  s: {run: 'echo $$ > "+pidFile+"; echo started; sleep 30'}\n")
-	keeper := token(t, e.st, "keeper", false, map[string][]string{"gone": {"cancel"}})
+	keeper := token(t, e.st, "keeper", false, map[string][]string{"gone": {"view", "cancel"}})
 	id := e.started(t, "gone")
 	data, err := os.ReadFile(pidFile)
 	must(t, err)

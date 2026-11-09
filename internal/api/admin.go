@@ -189,6 +189,9 @@ func (s *Service) SetGrants(ctx context.Context, u *store.User, sess *store.Sess
 		}
 	}
 	if err := s.deps.Store.ReplaceGrants(ctx, who.ID, next); err != nil {
+		if _, ok := errors.AsType[*store.NeedsViewError](err); ok {
+			return fmt.Errorf("%w: %w", ErrBadInput, err)
+		}
 		return missing(err)
 	}
 	s.record(ctx, u.Name, "grants.set", name, GrantsDetail(given))

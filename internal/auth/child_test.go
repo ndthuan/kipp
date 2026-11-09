@@ -13,7 +13,7 @@ func TestAChildIsAuthorizedByItsParentsGrant(t *testing.T) {
 	ctx := context.Background()
 	svc, st := service(t)
 	u := addUser(t, st, "ann", "h", false)
-	grant(t, st, u.ID, "site", []string{"build"})
+	grant(t, st, u.ID, "site", []string{"view", "build"})
 	if err := st.PutChild(ctx, store.Child{Parent: "site", Key: "pr-12", Kind: "pr", PR: 12, State: "live", LastSeenAt: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ func TestAChildIsAuthorizedByItsParentsGrant(t *testing.T) {
 		t.Fatalf("visible %v %v", vis, err)
 	}
 	// A grant on the child itself adds to the parent's.
-	grant(t, st, u.ID, "site.pr-12", []string{"cancel"})
+	grant(t, st, u.ID, "site.pr-12", []string{"view", "cancel"})
 	if ok, err := svc.Can(ctx, u, "site.pr-12", "cancel"); err != nil || !ok {
 		t.Fatalf("%v %v", ok, err)
 	}
@@ -45,7 +45,7 @@ func TestARepoOfAnOwnerJobAndItsChildrenAreAuthorizedByTheOwnerJobsGrant(t *test
 	ctx := context.Background()
 	svc, st := service(t)
 	u := addUser(t, st, "ann", "h", false)
-	grant(t, st, u.ID, "acme", []string{"build"})
+	grant(t, st, u.ID, "acme", []string{"view", "build"})
 	seen := time.Now()
 	if err := st.PutOwnerRepo(ctx, store.OwnerRepo{Owner: "acme", Key: "site", Repo: "acme/site", State: "live", LastSeenAt: seen}); err != nil {
 		t.Fatal(err)

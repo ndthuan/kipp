@@ -1,3 +1,4 @@
+{{define "scripts"}}<script src="{{static "grants.js"}}" defer></script>{{end}}
 {{define "content"}}
 {{with .Data}}{{$path := userPath .Info.Name}}
 <div class="head">
@@ -29,17 +30,18 @@
 {{if .Groups}}<form class="stack" method="post" action="{{$path}}/grants">
 <input type="hidden" name="csrf" value="{{$.CSRF}}">
 <div class="scroll">
-<table class="grants">
+<table class="grants" data-needs-view>
 <thead><tr><th>Job</th><th>View</th><th>Build</th><th>Cancel</th></tr></thead>
 {{range .Groups}}<tbody>
 <tr><th colspan="4" scope="rowgroup">{{.Label}}</th></tr>
 {{range .Jobs}}<tr>
 <td><code>{{.Job}}</code></td>
-<td><input type="checkbox" name="view" value="{{.Job}}" aria-label="View {{.Job}}"{{if .Perm.View}} checked{{end}}></td>
-<td><input type="checkbox" name="build" value="{{.Job}}" aria-label="Build {{.Job}}"{{if .Perm.Build}} checked{{end}}></td>
-<td><input type="checkbox" name="cancel" value="{{.Job}}" aria-label="Cancel {{.Job}}"{{if .Perm.Cancel}} checked{{end}}></td>
+<td class="tick"><label><input type="checkbox" name="view" value="{{.Job}}" aria-label="View {{.Job}}"{{if .Perm.View}} checked{{end}}></label></td>
+<td class="tick"><label><input type="checkbox" name="build" value="{{.Job}}" aria-label="Build {{.Job}}"{{if .Perm.Build}} checked{{end}}></label></td>
+<td class="tick"><label><input type="checkbox" name="cancel" value="{{.Job}}" aria-label="Cancel {{.Job}}"{{if .Perm.Cancel}} checked{{end}}></label></td>
 </tr>
-{{end}}</tbody>
+{{with .Warn}}<tr><td colspan="4"><p class="notice notice-warn" role="alert">{{.}}</p></td></tr>
+{{end}}{{end}}</tbody>
 {{end}}</table>
 </div>
 <div><button class="action action-main">Save the grants</button></div>

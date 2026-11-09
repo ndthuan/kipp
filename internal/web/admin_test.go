@@ -646,3 +646,111 @@ func TestTheServerPageSaysWhereTheBinaryCameFromAndWhatTheUpdateCheckFound(t *te
 		})
 	}
 }
+
+// The grants form held through the password step: the admin who is asked
+// for the password again sends nothing twice, and the change is made once.
+func TestGrantsSurviveThePasswordStepAndAreAppliedOnce(t *testing.T) {
+	e := site(t)
+	admin := e.login(t, "admin")
+	form := url.Values{"view": {"ask", "smoke"}, "build": {"ask"}, "cancel": {"ask"}}
+	res, page := e.form(t, admin, "/admin/users/bob/grants", form)
+	eq(t, "the password is asked", res.StatusCode, http.StatusForbidden)
+	contains(t, page, "Confirm your password", `name="action" value="POST /admin/users/{name}/grants"`, `name="about" value="bob"`,
+		`name="view" value="ask"`, `name="view" value="smoke"`, `name="build" value="ask"`, `name="cancel" value="ask"`, "the change is made as you ticked it")
+	lacks(t, page, "to send the change again")
+	if _, held := e.perms(t, "bob")["ask"]; held {
+		t.Fatal("the change was made before the password")
+	}
+
+	// A wrong password changes nothing and still holds the form.
+	sent := url.Values{"password": {"nope"}, "next": {"/admin/users/bob"}, "action": {"POST /admin/users/{name}/grants"}, "about": {"bob"},
+		"view": {"ask", "smoke"}, "build": {"ask"}, "cancel": {"ask"}}
+	res, page = e.form(t, admin, "/sudo", sent)
+	eq(t, "a wrong password", res.StatusCode, http.StatusUnauthorized)
+	contains(t, page, `name="build" value="ask"`)
+	if _, held := e.perms(t, "bob")["ask"]; held {
+		t.Fatal("a wrong password made the change")
+	}
+
+	sent.Set("password", "pw")
+	res, _ = e.form(t, admin, "/sudo", sent)
+	eq(t, "the password is right", res.StatusCode, http.StatusSeeOther)
+	eq(t, "back on the user page, saved", res.Header.Get("Location"), "/admin/users/bob?done=grants")
+	want := map[string]store.Perm{"ask": {View: true, Build: true, Cancel: true}, "smoke": {View: true}, "gone-job": {}}
+	delete(want, "gone-job")
+	if got := e.perms(t, "bob"); !maps.Equal(got, want) {
+		t.Fatalf("grants: got %v, want %v", got, want)
+	}
+	_, page = get(t, admin, e.srv.URL+"/admin/users/bob?done=grants")
+	contains(t, page, "The grants are saved.")
+	eq(t, "audited once", strings.Count(e.audit(t), "grants.set bob"), 1)
+}
+
+func TestTheGrantsOfAnotherActionAreNotAppliedByThePasswordStep(t *testing.T) {
+	e := site(t)
+	admin := e.login(t, "admin")
+	res, _ := e.form(t, admin, "/sudo", url.Values{"password": {"pw"}, "next": {"/admin/users/bob"}, "action": {"POST /admin/users/{name}/tokens"}, "about": {"bob"},
+		"view": {"ask"}})
+	eq(t, "the password is right", res.StatusCode, http.StatusSeeOther)
+	eq(t, "led back, nothing sent again", res.Header.Get("Location"), "/admin/users/bob")
+	if _, held := e.perms(t, "bob")["ask"]; held {
+		t.Fatal("a form of another change was applied as grants")
+	}
+}
+
+func TestBuildOrCancelWithoutViewIsRefusedWithTheRowNamedAndTheTicksKept(t *testing.T) {
+	e := site(t)
+	admin := e.login(t, "admin")
+	e.sudo(t, admin)
+	before := e.perms(t, "bob")
+	res, page := e.form(t, admin, "/admin/users/bob/grants", url.Values{"view": {"slow"}, "build": {"ask"}, "cancel": {"smoke"}})
+	eq(t, "refused", res.StatusCode, http.StatusBadRequest)
+	contains(t, page, `class="notice notice-warn" role="alert">Not saved: build and cancel need view too. Tick View for ask,`,
+		"Tick View for smoke,", `name="build" value="ask" aria-label="Build ask" checked>`, `name="view" value="slow" aria-label="View slow" checked>`)
+	lacks(t, page, "Tick View for slow", "The grants are saved.")
+	if got := e.perms(t, "bob"); !maps.Equal(got, before) {
+		t.Fatalf("a refused form changed the grants: %v, was %v", got, before)
+	}
+
+	// The same set with view saves.
+	res, _ = e.form(t, admin, "/admin/users/bob/grants", url.Values{"view": {"ask", "smoke", "slow"}, "build": {"ask"}, "cancel": {"smoke"}})
+	eq(t, "saved", res.StatusCode, http.StatusSeeOther)
+	eq(t, "bob", e.perms(t, "bob")["smoke"], store.Perm{View: true, Cancel: true})
+}
+
+func TestAGrantStoredWithoutViewShowsViewTickedAndSavingStoresIt(t *testing.T) {
+	stored := store.Perm{Build: true}
+	row := grantRowOf("smoke", stored, nil)
+	eq(t, "view shown ticked", row.Perm, store.Perm{View: true, Build: true})
+	eq(t, "no warning", row.Warn, "")
+	eq(t, "a row with nothing stays so", grantRowOf("smoke", store.Perm{}, nil).Perm, store.Perm{})
+}
+
+func TestTheGrantsFormLoadsTheScriptThatTicksViewWithBuildAndCancel(t *testing.T) {
+	e := site(t)
+	_, page := get(t, e.login(t, "admin"), e.srv.URL+"/admin/users/bob")
+	contains(t, page, `<script src="/static/grants.js`, `<table class="grants" data-needs-view>`, `<td class="tick"><label><input type="checkbox" name="view"`)
+	lacks(t, page, "<script>")
+}
+
+// On a screen touched with a finger, what is tapped is 44px tall; the
+// widths and heights the browser measures are checked by hand, the rules
+// are held here.
+func TestWhatIsTappedIsAtLeast44pxTallWhereThePointerIsCoarse(t *testing.T) {
+	data, err := staticFS.ReadFile("static/kipp.css")
+	must(t, err)
+	css := string(data)
+	_, coarse, ok := strings.Cut(css, "@media (pointer: coarse) {")
+	if !ok {
+		t.Fatal("no rules for a coarse pointer")
+	}
+	for _, sel := range []string{".action,", ".action-small,", ".seg a,", ".group > summary,", ".user > summary,", ".theme > summary,", "td .link,"} {
+		if !strings.Contains(coarse, sel) {
+			t.Errorf("%s is not made touch sized", sel)
+		}
+	}
+	contains(t, coarse, "min-height: 44px;", ".dot::after { content: \"\"; position: absolute; inset: -17px",
+		".grants .tick label { min-height: 44px; min-width: 44px; }")
+	contains(t, css, ".grants .tick label { display: flex;", `.grants input[type="checkbox"] { width: calc(var(--space) * 6); height: calc(var(--space) * 6);`)
+	lacks(t, coarse, "font-size")
+}

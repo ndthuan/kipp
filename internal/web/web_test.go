@@ -142,7 +142,7 @@ func site(t *testing.T, tune ...func(*api.Deps)) *env {
 	must(t, err)
 	bob, err := st.CreateUser(ctx, "bob", hashOnce(), false)
 	must(t, err)
-	must(t, st.Grant(ctx, bob.ID, "smoke", []string{"build"}))
+	must(t, st.Grant(ctx, bob.ID, "smoke", []string{"view", "build"}))
 	must(t, st.Grant(ctx, bob.ID, "slow", []string{"view"}))
 	alice, err := st.CreateUser(ctx, "alice", hashOnce(), false)
 	must(t, err)

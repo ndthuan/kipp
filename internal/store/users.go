@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"slices"
+	"strings"
 	"time"
 )
 
@@ -35,6 +37,33 @@ func (p Perm) Names() []string {
 		}
 	}
 	return out
+}
+
+// NeedsViewError refuses a grant of build or cancel on jobs the same grant
+// leaves without view: a user who may not see a job is answered 404 by it,
+// so the grant would do nothing.
+type NeedsViewError struct {
+	Jobs []string
+}
+
+func (e *NeedsViewError) Error() string {
+	return "build and cancel need view too: " + strings.Join(e.Jobs, ", ")
+}
+
+// needsView is the jobs of perms that allow build or cancel without view,
+// in name order.
+func needsView(perms map[string]Perm) error {
+	var jobs []string
+	for job, p := range perms {
+		if (p.Build || p.Cancel) && !p.View {
+			jobs = append(jobs, job)
+		}
+	}
+	if len(jobs) == 0 {
+		return nil
+	}
+	slices.Sort(jobs)
+	return &NeedsViewError{Jobs: jobs}
 }
 
 // Token is an API token's row; the token itself is never stored.
@@ -202,8 +231,12 @@ func whyUnchanged(ctx context.Context, tx *sql.Tx, id int64, res sql.Result, err
 }
 
 // Grant replaces the user's permission set on one job; with no perms it
-// takes them all away.
+// takes them all away. Build or cancel without view is a *NeedsViewError.
 func (s *Store) Grant(ctx context.Context, userID int64, job string, perms []string) error {
+	p := Perm{View: slices.Contains(perms, "view"), Build: slices.Contains(perms, "build"), Cancel: slices.Contains(perms, "cancel")}
+	if err := needsView(map[string]Perm{job: p}); err != nil {
+		return err
+	}
 	return s.inTx(ctx, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, `DELETE FROM permissions WHERE user_id = ? AND job = ?`, userID, job); err != nil {
 			return err
@@ -219,8 +252,12 @@ func (s *Store) Grant(ctx context.Context, userID int64, job string, perms []str
 
 // ReplaceGrants sets everything a user may do, job by job, in one
 // transaction: a job not in perms, or one with no perm on, is taken away.
-// An unknown user is ErrNotFound.
+// An unknown user is ErrNotFound; build or cancel without view is a
+// *NeedsViewError.
 func (s *Store) ReplaceGrants(ctx context.Context, userID int64, perms map[string]Perm) error {
+	if err := needsView(perms); err != nil {
+		return err
+	}
 	return s.inTx(ctx, func(tx *sql.Tx) error {
 		var n int
 		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE id = ?`, userID).Scan(&n); err != nil {
@@ -232,15 +269,19 @@ func (s *Store) ReplaceGrants(ctx context.Context, userID int64, perms map[strin
 		if _, err := tx.ExecContext(ctx, `DELETE FROM permissions WHERE user_id = ?`, userID); err != nil {
 			return err
 		}
-		for job, p := range perms {
-			for _, name := range p.Names() {
-				if _, err := tx.ExecContext(ctx, `INSERT INTO permissions (user_id, job, perm) VALUES (?, ?, ?)`, userID, job, name); err != nil {
-					return err
-				}
+		return insertGrants(ctx, tx, userID, perms)
+	})
+}
+
+func insertGrants(ctx context.Context, tx *sql.Tx, userID int64, perms map[string]Perm) error {
+	for job, p := range perms {
+		for _, name := range p.Names() {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO permissions (user_id, job, perm) VALUES (?, ?, ?)`, userID, job, name); err != nil {
+				return err
 			}
 		}
-		return nil
-	})
+	}
+	return nil
 }
 
 // Permissions of a user, by job.

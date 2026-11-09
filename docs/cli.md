@@ -197,6 +197,8 @@ kipp user revoke <name> <job> --data <dir>
 kipp user list --data <dir>
 ```
 
+- `grant` replaces the user's grants on one job; `build` and `cancel` need
+  `view` as well, or it exits 2 with the reason.
 - `add` makes a user, an admin with `--admin`. It prints a generated
   password once, `<name> password: ...`, unless `--password-stdin` reads
   one from the first line of stdin ([Passwords](accounts.md#passwords)).

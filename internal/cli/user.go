@@ -292,6 +292,9 @@ func grant(ctx context.Context, st *store.Store, name, job string, perms []strin
 	}
 	slices.Sort(perms)
 	if err := st.Grant(ctx, u.ID, job, slices.Compact(perms)); err != nil {
+		if _, ok := errors.AsType[*store.NeedsViewError](err); ok {
+			return refused("build and cancel need view too: " + job + " has no view")
+		}
 		return err
 	}
 	now, err := st.Permissions(ctx, u.ID)

@@ -127,9 +127,9 @@ func TestAGrantReplacesAndTokensAndSessionsResolveUntilDeletedOrExpired(t *testi
 	if _, err := s.CreateUser(ctx, "agent", "h", false); err == nil {
 		t.Fatal("duplicate user")
 	}
-	must(t, s.Grant(ctx, u.ID, "site-smoke", []string{"build", "cancel"}))
+	must(t, s.Grant(ctx, u.ID, "site-smoke", []string{"view", "build", "cancel"}))
 	must(t, s.Grant(ctx, u.ID, "site-smoke", []string{"view"})) // replaces
-	must(t, s.Grant(ctx, u.ID, "other", []string{"build"}))
+	must(t, s.Grant(ctx, u.ID, "other", []string{"view", "build"}))
 	must(t, s.Grant(ctx, u.ID, "other", nil))
 	perms, err := s.Permissions(ctx, u.ID)
 	must(t, err)

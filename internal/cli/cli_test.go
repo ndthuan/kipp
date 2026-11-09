@@ -230,10 +230,10 @@ func TestUsersAndTheirPermissions(t *testing.T) {
 	lacks(t, out, "from stdin, long enough")
 	eq(t, "the given password logs in", verifies(t, hashOf("agent"), "from stdin, long enough"), true)
 
-	ok(t, "", "user", "grant", "agent", "deploy", "cancel,build,build", "--data", data)
+	ok(t, "", "user", "grant", "agent", "deploy", "view,cancel,build,build", "--data", data)
 	ok(t, "", "user", "grant", "agent", "other", "view", "--data", data)
 	eq(t, "list", ok(t, "", "user", "list", "--data", data),
-		"admin  admin\nagent  user\nagent  deploy: build,cancel\nagent  other: view\n")
+		"admin  admin\nagent  user\nagent  deploy: view,build,cancel\nagent  other: view\n")
 	ok(t, "", "user", "revoke", "agent", "other", "--data", data)
 	lacks(t, ok(t, "", "user", "list", "--data", data), "other")
 
@@ -398,7 +398,7 @@ func TestAUserIsDeletedWithAllTheyHeldAndTheOnlyAdminLeftNever(t *testing.T) {
 	ok(t, "", "user", "add", "admin", "--admin", "--data", data)
 	ok(t, "", "user", "add", "second", "--admin", "--data", data)
 	ok(t, "", "user", "add", "agent", "--data", data)
-	ok(t, "", "user", "grant", "agent", "smoke", "build", "--data", data)
+	ok(t, "", "user", "grant", "agent", "smoke", "view,build", "--data", data)
 	ok(t, "", "token", "create", "agent", "--label", "ci", "--data", data)
 	st := openDB(t, data)
 	ctx := context.Background()
@@ -443,11 +443,11 @@ func TestAGrantNamesWhatAJobCouldBeCalledAndIsCheckedAgainstTheJobFilesWhenAsked
 	contains(t, errOut, `no job called "smok" in `+jobs)
 
 	// Without the job files the grant is taken, and says it was not checked.
-	contains(t, ok(t, "", "user", "grant", "agent", "later", "build", "--data", data), "not checked against the job files")
-	eq(t, "list", ok(t, "", "user", "list", "--data", data), "agent  user\nagent  later: build\nagent  smoke: view\n")
+	contains(t, ok(t, "", "user", "grant", "agent", "later", "view,build", "--data", data), "not checked against the job files")
+	eq(t, "list", ok(t, "", "user", "list", "--data", data), "agent  user\nagent  later: view,build\nagent  smoke: view\n")
 
 	write(t, filepath.Join(jobs, "bad.yml"), "name: other\n", 0o600)
-	code, _, errOut = kipp("", "user", "grant", "agent", "smoke", "build", "--data", data, "--jobs", jobs)
+	code, _, errOut = kipp("", "user", "grant", "agent", "smoke", "view,build", "--data", data, "--jobs", jobs)
 	eq(t, "job files that do not load", code, 1)
 	contains(t, errOut, "bad.yml")
 
@@ -566,4 +566,15 @@ func TestASecretIsSetShownAndRescopedFromTheCommandLineAndEveryChangeIsAudited(t
 	}
 	eq(t, "the audit", strings.Join(got, "\n"), strings.Join(want, "\n"))
 	lacks(t, strings.Join(got, "\n"), value)
+}
+
+func TestAGrantOfBuildOrCancelWithoutViewIsRefusedWithTheReason(t *testing.T) {
+	data := newData(t)
+	ok(t, "", "user", "add", "agent", "--data", data)
+	for _, perms := range []string{"build", "cancel", "build,cancel"} {
+		code, _, errOut := kipp("", "user", "grant", "agent", "smoke", perms, "--data", data)
+		eq(t, perms, code, 2)
+		contains(t, errOut, "build and cancel need view too: smoke has no view")
+	}
+	eq(t, "nothing was stored", ok(t, "", "user", "list", "--data", data), "agent  user\n")
 }

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -210,7 +211,7 @@ func TestAnAdminReadsEveryUserWithGrantsTokensAndSessions(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
 	alice := e.person(t, "alice", false)
-	must(t, e.st.Grant(ctx, alice.u.ID, "smoke", []string{"build"}))
+	must(t, e.st.Grant(ctx, alice.u.ID, "smoke", []string{"view", "build"}))
 	must(t, e.st.Grant(ctx, alice.u.ID, "gone", []string{"view"}))
 	admin := e.user(t, "admin")
 	users, err := e.api.svc.Users(ctx, admin) // as with a token: reads need no session
@@ -221,7 +222,7 @@ func TestAnAdminReadsEveryUserWithGrantsTokensAndSessions(t *testing.T) {
 	}
 	eq(t, "users", strings.Join(names, ","), "admin,agent,alice,viewer")
 	a := users[2]
-	if a.Grants["smoke"] != (store.Perm{Build: true}) || !slices.Equal(a.GoneGrants, []string{"gone"}) || a.Sessions != 1 || a.LastLoginAt == nil || a.Admin {
+	if a.Grants["smoke"] != (store.Perm{View: true, Build: true}) || !slices.Equal(a.GoneGrants, []string{"gone"}) || a.Sessions != 1 || a.LastLoginAt == nil || a.Admin {
 		t.Fatalf("alice: %+v", a)
 	}
 	eq(t, "agent's tokens", len(users[1].Tokens), 1)
@@ -496,5 +497,26 @@ func TestTheSecretsReadListsWhatAScopeKeepsFromAJobAndHintsAtNarrowingAGlobalOne
 	}
 	if narrow["KEY"] || narrow["SHARED"] || !narrow["LONE"] {
 		t.Fatalf("only a global secret one job lists is marked: %v", narrow)
+	}
+}
+
+func TestSetGrantsRefusesBuildOrCancelWithoutViewAsBadInputAndStoresNothing(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	root := e.root(t)
+	before, err := e.st.Permissions(ctx, e.user(t, "agent").ID)
+	must(t, err)
+	err = e.api.svc.SetGrants(ctx, root.u, root.sess, "agent", map[string]store.Perm{"smoke": {Build: true}})
+	if !errors.Is(err, ErrBadInput) {
+		t.Fatalf("got %v", err)
+	}
+	var nv *store.NeedsViewError
+	if !errors.As(err, &nv) || !slices.Equal(nv.Jobs, []string{"smoke"}) {
+		t.Fatalf("the job is not named: %v", err)
+	}
+	perms, err := e.st.Permissions(ctx, e.user(t, "agent").ID)
+	must(t, err)
+	if !maps.Equal(perms, before) {
+		t.Fatalf("stored %v, was %v", perms, before)
 	}
 }

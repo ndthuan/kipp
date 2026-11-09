@@ -21,6 +21,17 @@ lines and the data directory are the public surface.
   notice that says which stage and how it ended, links to its log and shows
   the log's last lines; the stage table links each stage to its log, and the
   heading of each log carries the stage's status.
+- On a touch screen the controls are at least 44px tall: buttons, the header
+  menus, the range switch, links in tables and the grants checkboxes (the
+  whole cell is the label), and the overview's dots have a 44px hit area
+  without being drawn larger.
+- Saving a user's grants when the session needs the password again no longer
+  loses the ticks: the form goes through the password step and is saved once
+  the password is right. Build and cancel need view, since a user who may not
+  view a job gets 404 from it: the grants form ticks View by itself, and a set
+  with build or cancel and no view is refused, by the user's page and by
+  `kipp user grant` (it now exits 2 with the reason). A grant already stored
+  without view shows View ticked, and saving the page stores it.
 - A GitHub webhook that arrives while the server is quiet before a restart is
   kept, not answered 503: a verified delivery is stored (202), handled in
   arrival order when quiet ends or the server starts, and built once however

@@ -106,7 +106,7 @@ func TestATokenResolvesToItsUserAndBuildOrCancelIncludesView(t *testing.T) {
 	ctx := context.Background()
 	agent := addUser(t, st, "ci-agent", "x", false)
 	admin := addUser(t, st, "admin", "x", true)
-	grant(t, st, agent.ID, "site-smoke", []string{"build", "cancel"})
+	grant(t, st, agent.ID, "site-smoke", []string{"view", "build", "cancel"})
 	plain, hash, _ := NewToken()
 	if HashToken(plain) != hash || len(plain) < 40 {
 		t.Fatal("token hash")
@@ -199,7 +199,7 @@ func TestAnUnknownActionOrJobIsRefusedAndAnAdminSeesEveryJob(t *testing.T) {
 	ctx := context.Background()
 	u := addUser(t, st, "viewer", "x", false)
 	grant(t, st, u.ID, "j", []string{"view"})
-	grant(t, st, u.ID, "k", []string{"cancel"})
+	grant(t, st, u.ID, "k", []string{"view", "cancel"})
 	for _, c := range []struct {
 		job, action string
 		want        bool

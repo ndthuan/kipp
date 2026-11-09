@@ -549,3 +549,34 @@
   }
   .scope-tag button:hover, .scope-tag button:focus-visible { background-color: var(--bg-raised); }
 }
+
+/* A finger: what is tapped is at least 44px tall. Padding does it, never the
+   font size, and the overview's dots keep the size they are drawn at, their
+   hit area growing round them. */
+@layer kipp {
+  @media (pointer: coarse) {
+    .action, .action-small, .seg a, .navlink, .brand, .menu-toggle,
+    .group > summary, .user > summary, .menu a, .menu-button, .menu li.menu-who,
+    .theme > summary, .queue-badge, .sort, .link-plain, td .link, th .link, .pager .link,
+    .results > summary, .guards > summary, .artifacts > summary, .log summary {
+      min-height: 44px;
+    }
+    .action, .seg a, .navlink, .brand, .menu a, .menu-button, .queue-badge, td .link, td .link-plain, th .link, .pager .link {
+      display: inline-flex;
+      align-items: center;
+    }
+    .menu a, .menu-button { display: flex; }
+    .entry { min-height: 44px; }
+    .seg { align-items: stretch; }
+    .theme > summary { min-width: 44px; align-items: center; justify-content: center; }
+    .results > summary, .guards > summary, .artifacts > summary, .log summary { display: flex; align-items: center; }
+    .dots { display: inline-flex; vertical-align: middle; }
+    .dot { position: relative; margin-right: calc(var(--space) * 3); }
+    .dot::after { content: ""; position: absolute; inset: -17px calc(var(--space) * -1.5); }
+    .grants .tick label { min-height: 44px; min-width: 44px; }
+  }
+  /* The whole cell is the label, so a tick is as easy to hit as its cell. */
+  .grants td.tick { padding: 0; }
+  .grants .tick label { display: flex; align-items: center; justify-content: center; padding: calc(var(--space) * 2) calc(var(--space) * 3); cursor: pointer; }
+  .grants input[type="checkbox"] { width: calc(var(--space) * 6); height: calc(var(--space) * 6); margin: 0; accent-color: var(--primary); }
+}

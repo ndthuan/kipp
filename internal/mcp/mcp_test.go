@@ -96,8 +96,8 @@ func newEnvAt(t *testing.T, verify Verifier, metadata string) *env {
 	t.Cleanup(func() { stop(); <-stopped; e.srv.Close(); _ = st.Close() })
 	e.admin = e.token(t, "admin", true, nil, nil)
 	e.viewer = e.token(t, "viewer", false, map[string][]string{"smoke": {"view"}}, nil)
-	e.builder = e.token(t, "builder", false, map[string][]string{"smoke": {"build"}}, nil)
-	e.stopper = e.token(t, "stopper", false, map[string][]string{"slow": {"cancel"}}, nil)
+	e.builder = e.token(t, "builder", false, map[string][]string{"smoke": {"view", "build"}}, nil)
+	e.stopper = e.token(t, "stopper", false, map[string][]string{"slow": {"view", "cancel"}}, nil)
 	return e
 }
 

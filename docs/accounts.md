@@ -27,6 +27,14 @@ what their grants allow, job by job:
 | `build` | Starting a build, Build again, Keep, and Scan now. |
 | `cancel` | Cancelling a build. |
 
+`build` and `cancel` need `view` on the same job, since a job one may not
+view answers 404: a set with either and no `view` is refused (the user's
+page names the row, `kipp user grant` exits 2), and the user's page ticks
+View by itself when Build or Cancel is ticked. A grant stored without
+`view` by an earlier version shows View ticked, and saving the page stores
+it. When the session needs the password again to save the grants, the
+ticked form goes through that step and is saved once the password is right.
+
 A grant on a multibranch job is a grant on each of its children, and a
 grant on an owner job is a grant on every repo and child of it. An admin
 sets grants on a user's page, every loaded job in one form, or with
