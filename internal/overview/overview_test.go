@@ -40,7 +40,7 @@ func failing(o *Overview) string { return names(o.Failing, func(f Failing) strin
 func flaky(o *Overview) string   { return names(o.Flaky, func(f FlakyJob) string { return f.Job }) }
 
 func TestMeasuredShapesLandInTheirSections(t *testing.T) {
-	o := Compute([]Job{
+	o := compute([]Job{
 		job("units", "ssssfssssfsssssfsssf"),
 		job("pensor", "ffffssffssf"),
 		job("docs", "ssssssfffff"),
@@ -60,7 +60,7 @@ func TestMeasuredShapesLandInTheirSections(t *testing.T) {
 }
 
 func TestAJobNeedsFiveFinishedBuildsToBeFlaky(t *testing.T) {
-	o := Compute([]Job{job("four", "sfsf"), job("five", "sfsfs")}, 2, now)
+	o := compute([]Job{job("four", "sfsf"), job("five", "sfsfs")}, 2, now)
 	if flaky(o) != "five" {
 		t.Fatalf("flaky: %q", flaky(o))
 	}
@@ -68,23 +68,23 @@ func TestAJobNeedsFiveFinishedBuildsToBeFlaky(t *testing.T) {
 
 func TestFlipsAreCountedOverTheNewestTwentyOnly(t *testing.T) {
 	// Twenty steady builds, then a flapping history that is out of the window.
-	o := Compute([]Job{job("old", strings.Repeat("s", 20)+"fsfsfsfsfs")}, 1, now)
+	o := compute([]Job{job("old", strings.Repeat("s", 20)+"fsfsfsfsfs")}, 1, now)
 	if flaky(o) != "" {
 		t.Fatalf("flips from outside the window counted: %v", o.Flaky)
 	}
-	o = Compute([]Job{job("win", "sfsfsfsfsfsfsfsfsfsf"+"ssss")}, 4, now)
+	o = compute([]Job{job("win", "sfsfsfsfsfsfsfsfsfsf"+"ssss")}, 4, now)
 	if len(o.Flaky) != 1 || o.Flaky[0].Finished != Window || o.Flaky[0].Flips != 19 || o.Flaky[0].Failed != 10 {
 		t.Fatalf("%+v", o.Flaky)
 	}
 }
 
 func TestUnstableIsGreenAndLostAndTimeoutAreRedForFlips(t *testing.T) {
-	o := Compute([]Job{job("mix", "ustlsus")}, 4, now)
+	o := compute([]Job{job("mix", "ustlsus")}, 4, now)
 	// u s t l s u s: green green red red green green green = 2 flips.
 	if flaky(o) != "" {
 		t.Fatalf("2 flips: %v", o.Flaky)
 	}
-	o = Compute([]Job{job("mix", "uftlsuf"), job("flat", "uusuusu")}, 2, now)
+	o = compute([]Job{job("mix", "uftlsuf"), job("flat", "uusuusu")}, 2, now)
 	// u f t l s u f: g r r r g g r = 3 flips; the newest is green.
 	if flaky(o) != "mix" || o.Flaky[0].Flips != 3 || o.Flaky[0].Failed != 4 {
 		t.Fatalf("%+v", o.Flaky)
@@ -92,7 +92,7 @@ func TestUnstableIsGreenAndLostAndTimeoutAreRedForFlips(t *testing.T) {
 }
 
 func TestAJobWhoseNewestFinishedBuildIsRedIsFailingNotFlaky(t *testing.T) {
-	o := Compute([]Job{job("red", "fsfsfsfs"), job("lost", "lsfsfsfs"), job("timed", "tsfsfsfs")}, 4, now)
+	o := compute([]Job{job("red", "fsfsfsfs"), job("lost", "lsfsfsfs"), job("timed", "tsfsfsfs")}, 4, now)
 	if len(o.Flaky) != 0 || len(o.Failing) != 3 {
 		t.Fatalf("flaky %v failing %v", flaky(o), failing(o))
 	}
@@ -104,7 +104,7 @@ func TestAJobWhoseNewestFinishedBuildIsRedIsFailingNotFlaky(t *testing.T) {
 }
 
 func TestZeroFlipsSwitchesFlakyOffAndTheTagWithIt(t *testing.T) {
-	o := Compute([]Job{job("a", "ssssfssssfsssssfsssf"), job("b", "fsfsfsfsfs")}, 0, now)
+	o := compute([]Job{job("a", "ssssfssssfsssssfsssf"), job("b", "fsfsfsfsfs")}, 0, now)
 	if len(o.Flaky) != 0 {
 		t.Fatalf("%v", flaky(o))
 	}
@@ -116,7 +116,7 @@ func TestZeroFlipsSwitchesFlakyOffAndTheTagWithIt(t *testing.T) {
 func TestRedSinceIsTheFirstRedBuildOfTheCurrentStreak(t *testing.T) {
 	// f f f s f f: the streak is the three newest; the red before the green is another one.
 	j := job("j", "fffsff")
-	o := Compute([]Job{j}, DefaultFlips, now)
+	o := compute([]Job{j}, DefaultFlips, now)
 	third := j.History[2]
 	if len(o.Failing) != 1 || !o.Failing[0].Since.Equal(*third.FinishedAt) {
 		t.Fatalf("%+v want %v", o.Failing, third.FinishedAt)
@@ -130,13 +130,13 @@ func TestFailingIsSortedByRedSinceNewestFirst(t *testing.T) {
 	a := Job{Name: "a", History: history("a", "fs", now.Add(-5*time.Hour))}
 	b := Job{Name: "b", History: history("b", "fs", now.Add(-2*time.Hour))}
 	c := Job{Name: "c", History: history("c", "fs", now.Add(-9*time.Hour))}
-	if got := failing(Compute([]Job{a, b, c}, 4, now)); got != "b,a,c" {
+	if got := failing(compute([]Job{a, b, c}, 4, now)); got != "b,a,c" {
 		t.Fatal(got)
 	}
 }
 
 func TestFlakyIsSortedByFlipsThenFailedShareThenName(t *testing.T) {
-	o := Compute([]Job{
+	o := compute([]Job{
 		job("tie", "sfsfsfsfs"),        // 8 flips, 4 of 9
 		job("few", "sfsfsfsfs"),        // the same: by name
 		job("lessred", "ssfsfsfsfs"),   // 8 flips, 4 of 10
@@ -155,7 +155,7 @@ func TestRecentFailuresAreTheLast24HoursNewestFirstAtMostTen(t *testing.T) {
 		jobs = append(jobs, Job{Name: name, History: history(name, "fs", now.Add(-time.Duration(i)*time.Hour-time.Minute))})
 	}
 	jobs = append(jobs, Job{Name: "old", History: history("old", "f", now.Add(-25*time.Hour))})
-	o := Compute(jobs, 4, now)
+	o := compute(jobs, 4, now)
 	if len(o.RecentFailures) != RecentMax || o.MoreFailures != 2 {
 		t.Fatalf("%d shown, %d more", len(o.RecentFailures), o.MoreFailures)
 	}
@@ -171,7 +171,7 @@ func TestRecentFailuresAreTheLast24HoursNewestFirstAtMostTen(t *testing.T) {
 
 func TestARecentFailureSaysWhetherItsJobIsGreenAgain(t *testing.T) {
 	j := Job{Name: "j", History: history("j", "sfs", now.Add(-time.Hour))}
-	o := Compute([]Job{j}, 4, now)
+	o := compute([]Job{j}, 4, now)
 	if len(o.RecentFailures) != 1 || !o.RecentFailures[0].GreenAgain || o.MoreFailures != 0 {
 		t.Fatalf("%+v", o.RecentFailures)
 	}
@@ -184,7 +184,7 @@ func TestComingUpIsTheNextEightByTime(t *testing.T) {
 		jobs = append(jobs, Job{Name: fmt.Sprintf("j%d", i), Cron: "* * * * *", Next: &at})
 	}
 	jobs = append(jobs, Job{Name: "never", Cron: ""})
-	o := Compute(jobs, 4, now)
+	o := compute(jobs, 4, now)
 	if len(o.Upcoming) != UpcomingMax || o.Upcoming[0].Job != "j9" || o.Upcoming[7].Job != "j2" || o.Upcoming[0].Cron != "* * * * *" {
 		t.Fatalf("%+v", o.Upcoming)
 	}
@@ -194,7 +194,7 @@ func TestDisabledJobsAreInEverySectionButTheGroupStrip(t *testing.T) {
 	at := now.Add(time.Minute)
 	j := job("off", "fsfsfsfsfs")
 	j.Disabled, j.Next, j.Group = true, &at, "ci"
-	o := Compute([]Job{j}, 4, now)
+	o := compute([]Job{j}, 4, now)
 	if len(o.Failing)+len(o.Flaky)+len(o.RecentFailures)+len(o.Upcoming) != 0 {
 		t.Fatalf("%+v", o)
 	}
@@ -213,7 +213,7 @@ func TestGroupsCountGreenRedNeverBuiltRunningAndDisabledNamedFirstThenNoGroup(t 
 		jobs[i].Group = "b"
 	}
 	jobs = append(jobs, Job{Name: "loose", History: history("loose", "s", now)}, Job{Name: "a1", Group: "a", History: history("a1", "u", now)})
-	o := Compute(jobs, 4, now)
+	o := compute(jobs, 4, now)
 	want := []Group{
 		{Name: "a", Green: 1},
 		{Name: "b", Green: 2, Red: 1, NeverBuilt: 1, Running: 2, Disabled: 1},
@@ -225,8 +225,19 @@ func TestGroupsCountGreenRedNeverBuiltRunningAndDisabledNamedFirstThenNoGroup(t 
 }
 
 func TestADotRunIsTheFiveNewestBuilds(t *testing.T) {
-	o := Compute([]Job{job("a", "ffffffffff")}, 4, now)
+	o := compute([]Job{job("a", "ffffffffff")}, 4, now)
 	if len(o.Failing[0].Dots) != Dots {
 		t.Fatalf("%d dots", len(o.Failing[0].Dots))
 	}
+}
+
+// compute is Compute with the builds of each job's history as the builds
+// that ended in the range, as the store gives them.
+func compute(jobs []Job, flips int, at time.Time) *Overview {
+	for i := range jobs {
+		if jobs[i].Builds == nil {
+			jobs[i].Builds = jobs[i].History
+		}
+	}
+	return Compute(jobs, Config{Flips: flips}, at)
 }

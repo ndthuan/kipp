@@ -9,7 +9,7 @@ It runs cron jobs with a history, a log and a page per build, stages
 that form a DAG, builds from GitHub pushes, tags and pull requests, and
 has a JSON API and a command line that can do all a browser can.
 
-![The overview: what is failing, what is flaky, what failed in the last day, what runs next and how each group stands](docs/screenshots/overview.png)
+![The overview: graphs of builds, slots and pass rates, what is running, failing, unstable and flaky, what failed lately, what runs next and how each group stands](docs/screenshots/overview.png)
 
 ![The job list: jobs by group, each with its last build, schedule and next run](docs/screenshots/job-list.png)
 

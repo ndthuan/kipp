@@ -1,0 +1,13 @@
+type: object
+additionalProperties: false
+required: [green, red, percent]
+properties:
+  green:
+    type: integer
+    description: Builds that ended `success` or `unstable`.
+  red:
+    type: integer
+    description: Builds that ended `failed`, `timeout` or `lost`.
+  percent:
+    type: integer
+    description: The share of the builds that ended green, in whole percent; 0 when there are none.

@@ -60,7 +60,7 @@ func TestTheOverviewAnswersEverySectionAsTheSpecDescribesItForATokenUser(t *test
 	e.ended(t, "slow", "ssssfssssfsssssfsssf")
 	e.ended(t, "once", "ffffssffssf")
 	o := e.object(t, http.StatusOK, e.admin, "GET", "/api/v1/overview", "")
-	eqKeys(t, "keys", o, "failing,flaky,groups,more_failures,recent_failures,upcoming")
+	eqKeys(t, "keys", o, "charts,failing,flaky,groups,more_failures,recent_failures,unstable,upcoming")
 
 	failing := rowsOf(t, o, "failing")
 	// The job red for the shortest time first.
@@ -159,4 +159,79 @@ func TestFlakyFlipsOfZeroLeavesTheFlakySectionEmpty(t *testing.T) {
 	eq(t, "flaky", len(rowsOf(t, o, "flaky")), 0)
 	failing := rowsOf(t, o, "failing")
 	eq(t, "once is failing, untagged", fmt.Sprint(jobsOf(failing, "job"), failing[0]["flaky"]), "oncefalse")
+}
+
+// endedAt writes one build of a job with the status, ended ago ago.
+func (e *env) endedAt(t *testing.T, job string, st store.Status, ago time.Duration) {
+	t.Helper()
+	b := &store.Build{Job: job, Status: store.Running, Trigger: "cli", QueuedAt: time.Now().Add(-ago - 2*time.Minute)}
+	must(t, e.st.CreateBuild(context.Background(), b))
+	must(t, e.st.SetBuildStatus(context.Background(), b.ID, store.Running, time.Now().Add(-ago-time.Minute)))
+	must(t, e.st.SetBuildStatus(context.Background(), b.ID, st, time.Now().Add(-ago)))
+}
+
+func TestTheOverviewAnswersTheChartsOfTheDayAndTheWeekAndRefusesAnyOtherWindow(t *testing.T) {
+	e := newEnv(t)
+	e.endedAt(t, "smoke", store.Success, time.Hour)
+	e.endedAt(t, "smoke", store.Failed, 2*time.Hour)
+	e.endedAt(t, "smoke", store.Unstable, 3*time.Hour)
+	e.endedAt(t, "smoke", store.Failed, 3*24*time.Hour)
+	e.endedAt(t, "slow", store.Cancelled, time.Hour)
+
+	day := e.object(t, http.StatusOK, e.admin, "GET", "/api/v1/overview", "")
+	week := e.object(t, http.StatusOK, e.admin, "GET", "/api/v1/overview?window=7d", "")
+	explicit := e.object(t, http.StatusOK, e.admin, "GET", "/api/v1/overview?window=24h", "")
+	dc, wc := day["charts"].(map[string]any), week["charts"].(map[string]any)
+	eqKeys(t, "charts", dc, "bucket_seconds,buckets,builds_limit,end,groups,start,window")
+	eq(t, "the default window", dc["window"], "24h")
+	eq(t, "explicit 24h is the default", explicit["charts"].(map[string]any)["window"], "24h")
+	eq(t, "the week", wc["window"], "7d")
+	eq(t, "day columns", len(rowsOf(t, dc, "buckets")), 25)
+	eq(t, "week columns", len(rowsOf(t, wc, "buckets")), 29)
+	eq(t, "bucket", dc["bucket_seconds"], any(float64(3600)))
+	eqKeys(t, "a bucket", rowsOf(t, dc, "buckets")[0], "cancelled,failed,max_running,start,started,success,unstable,wait_max_seconds,wait_median_seconds")
+
+	sum := func(c map[string]any, key string) int {
+		n := 0
+		for _, b := range rowsOf(t, c, "buckets") {
+			n += int(b[key].(float64))
+		}
+		return n
+	}
+	eq(t, "day: one success", sum(dc, "success"), 1)
+	eq(t, "day: failed", sum(dc, "failed"), 1)
+	eq(t, "day: unstable", sum(dc, "unstable"), 1)
+	eq(t, "day: cancelled", sum(dc, "cancelled"), 1)
+	eq(t, "week: the failure of three days ago too", sum(wc, "failed"), 2)
+	eq(t, "the failed list follows the window", len(rowsOf(t, day, "recent_failures")), 1)
+	eq(t, "the failed list of the week", len(rowsOf(t, week, "recent_failures")), 2)
+	eq(t, "the limit of builds", dc["builds_limit"], any(float64(e.api.deps.Dispatch.Builds())))
+
+	groups := rowsOf(t, dc, "groups")
+	eqKeys(t, "a group's rate", groups[0], "before,change,name,now")
+	eqKeys(t, "a tally", groups[0]["now"].(map[string]any), "green,percent,red")
+	eq(t, "backend: 2 of 3 builds green, unstable being green", fmt.Sprint(groups[0]["name"], groups[0]["now"].(map[string]any)["percent"]), "backend67")
+	if groups[0]["change"] != nil {
+		t.Fatalf("no change with no build before: %v", groups[0]["change"])
+	}
+
+	for _, bad := range []string{"1h", "30d", "week", "24H"} {
+		body, _ := e.call(t, http.StatusBadRequest, e.admin, "GET", "/api/v1/overview?window="+bad, "")
+		contains(t, body, "window is 24h or 7d")
+	}
+}
+
+func TestTheUnstableSectionHoldsTheJobsWhoseNewestBuildIsUnstableAndSaysSince(t *testing.T) {
+	e := newEnv(t)
+	e.endedAt(t, "smoke", store.Success, 5*time.Hour)
+	e.endedAt(t, "smoke", store.Unstable, 4*time.Hour)
+	e.endedAt(t, "smoke", store.Unstable, time.Hour)
+	e.endedAt(t, "slow", store.Unstable, 3*time.Hour)
+	e.endedAt(t, "slow", store.Failed, time.Hour)
+	o := e.object(t, http.StatusOK, e.admin, "GET", "/api/v1/overview", "")
+	unstable := rowsOf(t, o, "unstable")
+	eq(t, "unstable", jobsOf(unstable, "job"), "smoke")
+	eqKeys(t, "an unstable row", unstable[0], "build,flaky,job,recent,since")
+	eq(t, "the build", unstable[0]["build"].(map[string]any)["status"], "unstable")
+	eq(t, "a job unstable and then failed is failing only", jobsOf(rowsOf(t, o, "failing"), "job"), "slow")
 }

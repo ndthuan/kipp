@@ -1,0 +1,30 @@
+type: object
+additionalProperties: false
+required: [start, success, unstable, failed, cancelled, max_running, started, wait_median_seconds, wait_max_seconds]
+properties:
+  start:
+    $ref: Timestamp.yaml
+  success:
+    type: integer
+    description: Builds that ended `success` in the bucket.
+  unstable:
+    type: integer
+    description: Builds that ended `unstable` in the bucket.
+  failed:
+    type: integer
+    description: Builds that ended `failed`, `timeout` or `lost` in the bucket.
+  cancelled:
+    type: integer
+    description: Builds that ended `cancelled` in the bucket.
+  max_running:
+    type: integer
+    description: The most builds running at one moment of the bucket.
+  started:
+    type: integer
+    description: Builds that started running in the bucket.
+  wait_median_seconds:
+    type: integer
+    description: The median time those builds waited in the queue, 0 when none started.
+  wait_max_seconds:
+    type: integer
+    description: The longest time one of those builds waited in the queue, 0 when none started.

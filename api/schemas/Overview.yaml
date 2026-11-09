@@ -1,11 +1,21 @@
 type: object
 additionalProperties: false
 description: What the front page shows besides the queue.
-required: [failing, flaky, recent_failures, more_failures, upcoming, groups]
+required: [failing, unstable, flaky, recent_failures, more_failures, upcoming, groups, charts]
 properties:
   failing:
     type: array
     description: Jobs whose newest red-or-green build is red, the job that has been red for the shortest time first.
+    items:
+      $ref: OverviewFailing.yaml
+  unstable:
+    type: array
+    description: |
+      Jobs whose newest red-or-green build is `unstable`, in the shape of
+      `failing`: `since` is when the oldest build of the run of unstable ones
+      it ends ended (the oldest of the last 20, if all are unstable). An
+      unstable build counts as green everywhere else. The job that has been
+      unstable for the shortest time first.
     items:
       $ref: OverviewFailing.yaml
   flaky:
@@ -19,12 +29,12 @@ properties:
       $ref: OverviewFlaky.yaml
   recent_failures:
     type: array
-    description: At most 10 red builds that ended in the last 24 hours, newest first.
+    description: At most 10 red builds that ended in the last `window` (24 hours or 7 days), newest first.
     items:
       $ref: OverviewRecentFailure.yaml
   more_failures:
     type: integer
-    description: How many more red builds of the last 24 hours `recent_failures` leaves out.
+    description: How many more red builds of the last `window` `recent_failures` leaves out.
   upcoming:
     type: array
     description: The next 8 builds a cron will start, soonest first.
@@ -35,3 +45,5 @@ properties:
     description: One entry per group, the groups by name and the jobs with no group (`name` empty) last.
     items:
       $ref: OverviewGroup.yaml
+  charts:
+    $ref: OverviewCharts.yaml

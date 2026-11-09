@@ -309,6 +309,51 @@ func (s *Store) RecentColoured(ctx context.Context, n int) (map[string][]*Build,
 	return out, nil
 }
 
+// FinishedSince are the builds that ended at or after from, and the ones
+// that have not ended: queued, running, or lost with no end recorded.
+func (s *Store) FinishedSince(ctx context.Context, from time.Time) ([]*Build, error) {
+	return s.queryBuilds(ctx, `WHERE finished_at >= ? OR finished_at IS NULL`, ts(from))
+}
+
+// Tally is how many builds ended green and how many ended red.
+type Tally struct{ Green, Red int }
+
+// Total is the builds that ended green or red.
+func (t Tally) Total() int { return t.Green + t.Red }
+
+// Percent is the share that ended green, in whole percent; 0 for none.
+func (t Tally) Percent() int {
+	if t.Total() == 0 {
+		return 0
+	}
+	return (t.Green*100 + t.Total()/2) / t.Total()
+}
+
+// TalliesBetween counts, per job, the builds that ended in [from, to)
+// green or red. A job with none has no entry.
+func (s *Store) TalliesBetween(ctx context.Context, from, to time.Time) (map[string]Tally, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT job,
+		SUM(status IN (?, ?)), SUM(status IN (?, ?, ?)) FROM builds
+		WHERE finished_at >= ? AND finished_at < ? GROUP BY job`,
+		Success, Unstable, Failed, Timeout, Lost, ts(from), ts(to))
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	out := map[string]Tally{}
+	for rows.Next() {
+		var job string
+		var t Tally
+		if err := rows.Scan(&job, &t.Green, &t.Red); err != nil {
+			return nil, err
+		}
+		if t.Total() > 0 {
+			out[job] = t
+		}
+	}
+	return out, rows.Err()
+}
+
 // SetBuildStatus moves a build on; Running stamps started_at, a terminal status finished_at.
 func (s *Store) SetBuildStatus(ctx context.Context, id int64, status Status, at time.Time) error {
 	col := ""

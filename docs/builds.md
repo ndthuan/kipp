@@ -95,33 +95,71 @@ A line that kipp kept no time for has none.
 The front page, `/`, says what needs a look; the whole job list, grouped as
 before, is at `/jobs` (and `/jobs?group=<name>` for one group), linked from
 the header. An old link to `/?group=<name>` still works: it leads on to
-`/jobs?group=<name>`. The page shows, in order:
+`/jobs?group=<name>`.
+
+On a wide window (75rem and up) the page is a strip of three graphs, then
+two columns, then the groups; on a narrower one everything is one column in
+the order graphs, running and queued, failing, unstable, flaky, failed,
+coming up, groups. A control beside the graphs sets how far back they look:
+**24 hours** (the default, `/`) or **7 days** (`/?window=7d`); an address
+with any other window shows the 24 hours.
+
+The graphs are drawn by the server as SVG, so they need no script, and each
+comes with its numbers as text for a screen reader:
+
+- **Builds over time**: the builds that ended in each hour (each six hours
+  for the week), stacked by how they ended: success, unstable, failed
+  (`failed`, `timeout` and `lost`) and cancelled.
+- **Slots and queue**: the most builds running at once in each column
+  against the server's `--builds` limit (the dashed line), and under it how
+  long the builds that started in the column waited in the queue, the median
+  and the longest.
+- **Pass rate by group**: for each group, the share of the builds that ended
+  green in the window, how many builds that is of, and the change against
+  the window before it of the same length ("92% (+4) of 130"). A group with
+  no finished build in either window is left out.
+
+The columns follow, the left one with:
 
 - **Running and queued**: the queue, as below.
+- **Coming up**: the next 8 builds a cron will start.
+
+and the right one with:
+
 - **Failing now**: every job whose newest finished build is red, with how
   long it has been red, the run of its recent builds as dots, and a `flaky`
   tag when it also flips as often as a flaky job does. The job that has
   been red for the shortest time is first.
+- **Unstable now**: every job whose newest finished build is `unstable`, with
+  how long the run of unstable builds it ends has lasted and its recent
+  builds as dots. Unstable is still green everywhere else: in the groups,
+  in Flaky and in the pass rate. A job that was unstable and then failed is
+  in Failing now only.
 - **Flaky**: a job that is green now but changed colour at least four times
   between consecutive builds among its last 20 finished ones (at least 5
   needed), with its share of red builds ("20% failed (4/20)") and its flips.
   `kipp serve --flaky-flips <n>` sets the four; 0 hides the section.
-- **Failed in the last 24 hours**: up to 10 red builds, newest first, and
-  whether the job is green again.
-- **Coming up**: the next 8 builds a cron will start.
-- **Groups**: one line per group, linking to its list, with how many jobs
-  are green, red, never built, running and disabled.
+- **Failed in the last 24 hours** (or **7 days**, as the window says): up to
+  10 red builds, newest first, with a count of the rest, and whether the job
+  is green again.
+
+**Groups** comes last across the full width: one line per group, linking to
+its list, with how many jobs are green, red, never built, running and
+disabled.
 
 Green is a build that ended `success` or `unstable`; red is `failed`,
 `timeout` or `lost`; `cancelled`, `skipped`, queued and running builds are
-neither and are passed over. Only jobs that build themselves are counted: a
-multibranch job and an owner job (and its repos) stand for their children.
-Jobs removed from the job files and disabled jobs are in no section, and a
-disabled job is counted in its group's line. A user sees only the jobs they
-may view. `GET /api/v1/overview` gives the same sections as JSON
-([API](api.md)).
+neither and are passed over (a cancelled build is only in the first graph).
+Only jobs that build themselves are counted: a multibranch job and an owner
+job (and its repos) stand for their children. Jobs removed from the job
+files and disabled jobs are in no list, and a disabled job is counted in its
+group's line. The graphs count the builds still kept (`keep` in
+[Jobs](jobs.md#concurrency-locks-timeout-and-retention)), so a job that
+builds more than 100 times a week needs a larger `keep.builds` for the
+week's graphs to be whole. A user sees only the jobs they may view.
+`GET /api/v1/overview?window=24h|7d` gives the same as JSON ([API](api.md)).
 
-![The overview: what is failing, what is flaky, what failed lately, what runs next and each group's standing](screenshots/overview.png)
+![The overview: a strip of graphs (builds over time, slots and queue, pass rate by group), then running and coming up on the left and failing, unstable, flaky and failed on the right, then the groups](screenshots/overview.png)
 
 ## The queue
 

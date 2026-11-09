@@ -11,6 +11,7 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/ndthuan/kipp/internal/api"
+	"github.com/ndthuan/kipp/internal/overview"
 	"github.com/ndthuan/kipp/internal/store"
 )
 
@@ -100,7 +101,7 @@ func (s *Server) newServer() *sdk.Server {
 		Instructions: "kipp is a CI server. Start with overview to see what is red; read_log with a build's number shows why. " +
 			"What you can see and do is what the token's user may.",
 	})
-	add(s, srv, "overview", "What needs attention now: failing jobs, flaky jobs, recent failures, what runs next, how each group stands, and the queue.", reads(), s.overview)
+	add(s, srv, "overview", "What needs attention now: failing, unstable and flaky jobs, recent failures, what runs next, how each group stands, a summary of the graphs, and the queue. window is 24h (default) or 7d.", reads(), s.overview)
 	add(s, srv, "list_jobs", "List the jobs you may see, with each one's last build and schedule. Optionally only one group.", reads(), s.listJobs)
 	add(s, srv, "get_job", "One job: its parameters (names, defaults, choices) to pass to run_build, its stages, schedule, concurrency, recent builds and, for a multibranch job, its branches and pull requests.", reads(), s.getJob)
 	add(s, srv, "list_builds", "A job's builds, newest first. Pass next_cursor back as cursor for older ones.", reads(), s.listBuilds)
@@ -199,20 +200,82 @@ type none struct{}
 
 // --- overview -------------------------------------------------------------
 
+type overviewIn struct {
+	Window string `json:"window,omitempty" jsonschema:"how far back the recent failures and the graphs look: 24h (default) or 7d"`
+}
+
 type overviewOut struct {
 	Failing        []failingOut  `json:"failing"`
+	Unstable       []unstableOut `json:"unstable"`
 	Flaky          []flakyOut    `json:"flaky"`
 	RecentFailures []failureOut  `json:"recent_failures"`
 	MoreFailures   int           `json:"more_failures"`
 	Upcoming       []upcomingOut `json:"upcoming"`
 	Groups         []groupOut    `json:"groups"`
+	Charts         chartsOut     `json:"charts"`
 	Queue          queueOut      `json:"queue"`
+}
+
+// chartsOut is each graph in a line or two: what ended in the window, how
+// busy the server was, and how each group's builds fared.
+type chartsOut struct {
+	Window            string        `json:"window"`
+	Success           int           `json:"success"`
+	Unstable          int           `json:"unstable"`
+	Failed            int           `json:"failed"`
+	Cancelled         int           `json:"cancelled"`
+	PeakRunning       int           `json:"peak_running"`
+	BuildsLimit       int           `json:"builds_limit"`
+	LongestWaitSecond int           `json:"longest_wait_seconds"`
+	PassRates         []passRateOut `json:"pass_rates"`
+}
+
+type passRateOut struct {
+	Group   string `json:"group"`
+	Percent int    `json:"percent"`
+	Builds  int    `json:"builds"`
+	// Change is the points against the window before, absent when either
+	// window has no build to compare.
+	Change *int `json:"change,omitempty"`
+}
+
+func chartsSummary(c *overview.Charts) chartsOut {
+	out := chartsOut{Window: c.Range.Name, BuildsLimit: c.BuildsLimit, PassRates: []passRateOut{}}
+	for _, b := range c.Buckets {
+		out.Success += b.Success
+		out.Unstable += b.Unstable
+		out.Failed += b.Failed
+		out.Cancelled += b.Cancelled
+		out.PeakRunning = max(out.PeakRunning, b.MaxRunning)
+		out.LongestWaitSecond = max(out.LongestWaitSecond, int(b.WaitMax.Seconds()))
+	}
+	for _, g := range c.Groups {
+		if g.Now.Total() == 0 {
+			continue
+		}
+		r := passRateOut{Group: g.Name, Percent: g.Now.Percent(), Builds: g.Now.Total()}
+		if d, ok := g.Delta(); ok {
+			r.Change = &d
+		}
+		out.PassRates = append(out.PassRates, r)
+	}
+	return out
 }
 
 type failingOut struct {
 	Job    string   `json:"job"`
 	Build  lastOut  `json:"build"`
 	Since  string   `json:"red_since"`
+	Flaky  bool     `json:"flaky"`
+	Recent []string `json:"recent_statuses"`
+}
+
+// unstableOut is a job whose newest finished build is unstable, and when the
+// run of unstable builds it ends began.
+type unstableOut struct {
+	Job    string   `json:"job"`
+	Build  lastOut  `json:"build"`
+	Since  string   `json:"unstable_since"`
 	Flaky  bool     `json:"flaky"`
 	Recent []string `json:"recent_statuses"`
 }
@@ -253,17 +316,24 @@ func statuses(bs []*store.Build) []string {
 	return out
 }
 
-func (s *Server) overview(ctx context.Context, c *Caller, _ none) (overviewOut, error) {
-	out := overviewOut{Failing: []failingOut{}, Flaky: []flakyOut{}, RecentFailures: []failureOut{}, Upcoming: []upcomingOut{}, Groups: []groupOut{}, Queue: emptyQueue()}
+func (s *Server) overview(ctx context.Context, c *Caller, in overviewIn) (overviewOut, error) {
+	rg, ok := overview.ParseRange(in.Window)
+	if !ok {
+		return overviewOut{}, badInput("window is 24h or 7d")
+	}
+	out := overviewOut{Failing: []failingOut{}, Unstable: []unstableOut{}, Charts: chartsOut{Window: rg.Name, PassRates: []passRateOut{}}, Flaky: []flakyOut{}, RecentFailures: []failureOut{}, Upcoming: []upcomingOut{}, Groups: []groupOut{}, Queue: emptyQueue()}
 	if !sees(c) {
 		return out, nil
 	}
-	v, err := s.cfg.Service.Overview(ctx, c.User)
+	v, err := s.cfg.Service.Overview(ctx, c.User, rg)
 	if err != nil {
 		return out, err
 	}
 	for _, f := range v.Failing {
 		out.Failing = append(out.Failing, failingOut{f.Job, *lastOf(f.Build), stamp(f.Since), f.Flaky, statuses(f.Dots)})
+	}
+	for _, f := range v.Unstable {
+		out.Unstable = append(out.Unstable, unstableOut{f.Job, *lastOf(f.Build), stamp(f.Since), f.Flaky, statuses(f.Dots)})
 	}
 	for _, f := range v.Flaky {
 		out.Flaky = append(out.Flaky, flakyOut{f.Job, f.Failed, f.Finished, f.Percent(), f.Flips})
@@ -278,6 +348,7 @@ func (s *Server) overview(ctx context.Context, c *Caller, _ none) (overviewOut, 
 	for _, g := range v.Groups {
 		out.Groups = append(out.Groups, groupOut{g.Name, g.Green, g.Red, g.NeverBuilt, g.Running, g.Disabled})
 	}
+	out.Charts = chartsSummary(v.Charts)
 	out.Queue, err = s.queueOf(ctx, c)
 	return out, err
 }

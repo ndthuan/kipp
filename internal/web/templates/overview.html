@@ -1,10 +1,55 @@
 {{define "dots"}}<span class="dots">{{range .}}<a class="dot {{.Status}}" href="{{buildPath .}}" title="#{{.Number}} {{.Status}}"></a>{{end}}</span>{{end}}
+{{define "chart"}}<figure class="chart chart-{{.Key}}">
+<figcaption>{{.Heading}}</figcaption>
+<svg class="plot" viewBox="0 0 {{.W}} {{.H}}" role="img" aria-labelledby="chart-{{.Key}}-title chart-{{.Key}}-desc">
+<title id="chart-{{.Key}}-title">{{.Title}}</title>
+<desc id="chart-{{.Key}}-desc">{{.Desc}}</desc>
+{{range .Lines}}<line class="{{.Class}}" x1="{{.X1}}" y1="{{.Y1}}" x2="{{.X2}}" y2="{{.Y2}}"/>{{end}}
+{{range .Rects}}<rect class="{{.Class}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}">{{with .Title}}<title>{{.}}</title>{{end}}</rect>{{end}}
+{{range .Labels}}<text class="{{.Class}}" x="{{.X}}" y="{{.Y}}" text-anchor="{{.Anchor}}">{{.Text}}{{with .Title}}<title>{{.}}</title>{{end}}</text>{{end}}
+</svg>
+<ul class="legend">{{range .Legend}}<li><span class="swatch swatch-{{.Class}}" aria-hidden="true"></span>{{.Text}}</li>{{end}}</ul>
+<div class="sr-only"><table>
+<caption>{{.Title}}</caption>
+<thead><tr>{{range .Head}}<th>{{.}}</th>{{end}}</tr></thead>
+<tbody>{{range .Rows}}<tr>{{range .}}<td>{{.}}</td>{{end}}</tr>{{end}}</tbody>
+</table></div>
+</figure>{{end}}
 {{define "content"}}
-{{$o := .Data.Overview}}
+{{$o := .Data.Overview}}{{$w := .Data.Range}}
 <h1 class="sr-only">Overview</h1>
-{{template "queue" .Data.Queue}}
-<div id="overview" class="stack" hx-get="/" hx-select="#overview" hx-target="this" hx-swap="outerHTML" hx-trigger="kipp-changed from:body, every 60s">
-<section>
+<div id="overview" class="stack" hx-get="{{.Data.Self}}" hx-select="#overview" hx-target="this" hx-swap="outerHTML" hx-trigger="kipp-changed from:body, every 60s">
+<section class="charts stack" aria-labelledby="charts-heading">
+<div class="charts-head">
+<h2 id="charts-heading">The last {{$w.Label}}</h2>
+<nav class="seg" aria-label="How far back the graphs look">{{range .Data.Ranges}}<a href="{{.Href}}"{{if .Current}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>
+</div>
+<div class="charts-strip">
+{{range .Data.Charts}}{{template "chart" .}}
+{{end}}</div>
+</section>
+<div class="columns">
+<div class="col">
+<div class="sec sec-now">{{template "queue" .Data.Queue}}</div>
+<section class="sec sec-coming">
+<h2>Coming up</h2>
+{{with $o.Upcoming}}<div class="scroll">
+<table class="rows">
+<thead><tr><th>When</th><th>Job</th><th>Schedule</th></tr></thead>
+<tbody>
+{{range .}}<tr>
+<td>{{clock .At}}</td>
+<td><a class="link" href="/jobs/{{.Job}}">{{.Job}}</a></td>
+<td><code>{{.Cron}}</code></td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>
+{{else}}<p class="sub">Nothing is scheduled.</p>
+{{end}}</section>
+</div>
+<div class="col">
+<section class="sec sec-failing">
 <h2>Failing now</h2>
 {{with $o.Failing}}<div class="scroll">
 <table class="rows">
@@ -21,7 +66,24 @@
 </div>
 {{else}}<p class="sub">Nothing is failing.</p>
 {{end}}</section>
-<section>
+<section class="sec sec-unstable">
+<h2 class="attn-unstable">Unstable now</h2>
+{{with $o.Unstable}}<div class="scroll">
+<table class="rows">
+<thead><tr><th>Job</th><th>Build</th><th>Unstable since</th><th>Recent</th></tr></thead>
+<tbody>
+{{range .}}<tr>
+<td><a class="link" href="/jobs/{{.Job}}">{{.Job}}</a>{{if .Flaky}} <span class="tag">flaky</span>{{end}}</td>
+<td><a class="link" href="{{buildPath .Build}}">#{{.Build.Number}}</a> <span class="status {{.Build.Status}}">{{.Build.Status}}</span></td>
+<td>{{template "since" (since .Since)}}</td>
+<td>{{template "dots" .Dots}}</td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>
+{{else}}<p class="sub">Nothing is unstable.</p>
+{{end}}</section>
+<section class="sec sec-flaky">
 <h2>Flaky</h2>
 {{with $o.Flaky}}<div class="scroll">
 <table class="rows">
@@ -38,8 +100,8 @@
 </div>
 {{else}}<p class="sub">Nothing is flaky.</p>
 {{end}}</section>
-<section>
-<h2>Failed in the last 24 hours</h2>
+<section class="sec sec-failed">
+<h2>Failed in the last {{$w.Label}}</h2>
 {{with $o.RecentFailures}}<div class="scroll">
 <table class="rows">
 <thead><tr><th>Job</th><th>Build</th><th>Ended</th><th>Now</th></tr></thead>
@@ -53,25 +115,11 @@
 {{end}}</tbody>
 </table>
 </div>
-{{if $o.MoreFailures}}<p class="sub">And {{plural $o.MoreFailures "more failure"}} in the last 24 hours.</p>
-{{end}}{{else}}<p class="sub">Nothing failed in the last 24 hours.</p>
+{{if $o.MoreFailures}}<p class="sub">And {{plural $o.MoreFailures "more failure"}} in the last {{$w.Label}}.</p>
+{{end}}{{else}}<p class="sub">Nothing failed in the last {{$w.Label}}.</p>
 {{end}}</section>
-<section>
-<h2>Coming up</h2>
-{{with $o.Upcoming}}<div class="scroll">
-<table class="rows">
-<thead><tr><th>When</th><th>Job</th><th>Schedule</th></tr></thead>
-<tbody>
-{{range .}}<tr>
-<td>{{clock .At}}</td>
-<td><a class="link" href="/jobs/{{.Job}}">{{.Job}}</a></td>
-<td><code>{{.Cron}}</code></td>
-</tr>
-{{end}}</tbody>
-</table>
 </div>
-{{else}}<p class="sub">Nothing is scheduled.</p>
-{{end}}</section>
+</div>
 <section>
 <h2>Groups</h2>
 {{with .Data.Groups}}<div class="scroll">

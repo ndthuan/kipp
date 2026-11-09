@@ -32,6 +32,17 @@ lines and the data directory are the public surface.
   over like that, the data directory forgets its previous version. A
   server that still holds such an unfinished rollback record settles it as
   done when it starts.
+- The front page uses the width of a wide window: a strip of three graphs
+  (builds over time by outcome, builds running at once against the
+  `--builds` limit with the queue wait, and the pass rate of each group
+  against the window before), then two columns, then the groups. A new
+  Unstable now list holds the jobs whose newest build is unstable. A control
+  switches the graphs and the failed list between 24 hours and 7 days
+  (`?window=7d`). `GET /api/v1/overview` takes `window=24h|7d` and adds
+  `unstable` and `charts`, and the MCP `overview` tool takes `window` and
+  returns the unstable jobs and a summary of the graphs. The database gets
+  an index on `builds.finished_at`. `go run ./internal/devtools/demo` makes
+  a demo installation for screenshots and timing.
 
 ## [1.1.1] - 2026-11-08
 

@@ -1,7 +1,7 @@
 get:
   operationId: getOverview
   tags: [jobs]
-  summary: What is failing, flaky, recently failed and coming up
+  summary: What is failing, unstable, flaky, recently failed and coming up
   description: |
     The data of the front page, over the jobs the caller may view that
     build themselves: a multibranch job is represented by its children, an
@@ -10,8 +10,11 @@ get:
     is green when it ended `success` or `unstable`, red when it ended
     `failed`, `timeout` or `lost`; other builds are not looked at. Each
     job is judged by its last 20 builds that ended green or red. The queue
-    is `GET /queue` and is not repeated here.
+    is `GET /queue` and is not repeated here. `window` sets how far back
+    `recent_failures` and `charts` look.
   x-kipp-package: api
+  parameters:
+    - $ref: ../parameters/OverviewWindow.yaml
   responses:
     "200":
       description: The overview.
@@ -19,6 +22,8 @@ get:
         application/json:
           schema:
             $ref: ../schemas/Overview.yaml
+    "400":
+      $ref: ../responses/BadRequest.yaml
     "401":
       $ref: ../responses/Unauthorized.yaml
     "500":

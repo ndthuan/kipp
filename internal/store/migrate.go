@@ -149,6 +149,8 @@ CREATE TABLE oauth_tokens (
   hash TEXT PRIMARY KEY, grant_id INTEGER NOT NULL REFERENCES oauth_grants(id) ON DELETE CASCADE,
   kind TEXT NOT NULL CHECK (kind IN ('access','refresh')), expires_at TEXT NOT NULL, used_at TEXT);
 CREATE INDEX oauth_tokens_grant ON oauth_tokens(grant_id);
+`, `
+CREATE INDEX builds_finished_at ON builds(finished_at);
 `}
 
 // Upgrade is what Open did to the schema of the database it opened.

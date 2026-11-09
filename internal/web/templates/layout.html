@@ -74,7 +74,7 @@
 <footer class="foot">kipp {{.Version}}</footer>
 </body>
 </html>
-{{define "queue"}}<section id="queue" class="stack" hx-get="/queue" hx-select="#queue" hx-target="this" hx-swap="outerHTML" hx-trigger="kipp-changed from:body">
+{{define "queue"}}<section id="queue" class="stack"{{if not .Nested}} hx-get="/queue" hx-select="#queue" hx-target="this" hx-swap="outerHTML" hx-trigger="kipp-changed from:body"{{end}}>
 {{with .Queue}}{{if or .Running .Queued}}<h2>Now{{if .Executors}} <span class="sub">{{.Busy}} of {{.Executors}} build slots busy</span>{{end}}</h2>
 <div class="scroll">
 <table class="queue">

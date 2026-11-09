@@ -1934,8 +1934,11 @@ paths:
         is green when it ended `success` or `unstable`, red when it ended
         `failed`, `timeout` or `lost`; other builds are not looked at. Each
         job is judged by its last 20 builds that ended green or red. The queue
-        is `GET /queue` and is not repeated here.
+        is `GET /queue` and is not repeated here. `window` sets how far back
+        `recent_failures` and `charts` look.
       operationId: getOverview
+      parameters:
+        - $ref: "#/components/parameters/OverviewWindow"
       responses:
         "200":
           content:
@@ -1943,11 +1946,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/Overview"
           description: The overview.
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
-      summary: What is failing, flaky, recently failed and coming up
+      summary: What is failing, unstable, flaky, recently failed and coming up
       tags:
         - jobs
       x-kipp-package: api
@@ -2044,6 +2049,17 @@ components:
       schema:
         minimum: 1
         type: integer
+    OverviewWindow:
+      description: |
+        How far back the graphs and the list of recent failures look: `24h` (the
+        default) or `7d`. Anything else is refused.
+      in: query
+      name: window
+      schema:
+        enum:
+          - 24h
+          - 7d
+        type: string
     StageName:
       description: A stage's name.
       in: path
@@ -3423,6 +3439,8 @@ components:
       additionalProperties: false
       description: What the front page shows besides the queue.
       properties:
+        charts:
+          $ref: "#/components/schemas/OverviewCharts"
         failing:
           description: Jobs whose newest red-or-green build is red, the job that has been red for the shortest time first.
           items:
@@ -3443,12 +3461,22 @@ components:
             $ref: "#/components/schemas/OverviewGroup"
           type: array
         more_failures:
-          description: How many more red builds of the last 24 hours `recent_failures` leaves out.
+          description: How many more red builds of the last `window` `recent_failures` leaves out.
           type: integer
         recent_failures:
-          description: At most 10 red builds that ended in the last 24 hours, newest first.
+          description: At most 10 red builds that ended in the last `window` (24 hours or 7 days), newest first.
           items:
             $ref: "#/components/schemas/OverviewRecentFailure"
+          type: array
+        unstable:
+          description: |
+            Jobs whose newest red-or-green build is `unstable`, in the shape of
+            `failing`: `since` is when the oldest build of the run of unstable ones
+            it ends ended (the oldest of the last 20, if all are unstable). An
+            unstable build counts as green everywhere else. The job that has been
+            unstable for the shortest time first.
+          items:
+            $ref: "#/components/schemas/OverviewFailing"
           type: array
         upcoming:
           description: The next 8 builds a cron will start, soonest first.
@@ -3457,10 +3485,103 @@ components:
           type: array
       required:
         - failing
+        - unstable
         - flaky
         - recent_failures
         - more_failures
         - upcoming
+        - groups
+        - charts
+      type: object
+    OverviewBucket:
+      additionalProperties: false
+      properties:
+        cancelled:
+          description: Builds that ended `cancelled` in the bucket.
+          type: integer
+        failed:
+          description: Builds that ended `failed`, `timeout` or `lost` in the bucket.
+          type: integer
+        max_running:
+          description: The most builds running at one moment of the bucket.
+          type: integer
+        start:
+          $ref: "#/components/schemas/Timestamp"
+        started:
+          description: Builds that started running in the bucket.
+          type: integer
+        success:
+          description: Builds that ended `success` in the bucket.
+          type: integer
+        unstable:
+          description: Builds that ended `unstable` in the bucket.
+          type: integer
+        wait_max_seconds:
+          description: The longest time one of those builds waited in the queue, 0 when none started.
+          type: integer
+        wait_median_seconds:
+          description: The median time those builds waited in the queue, 0 when none started.
+          type: integer
+      required:
+        - start
+        - success
+        - unstable
+        - failed
+        - cancelled
+        - max_running
+        - started
+        - wait_median_seconds
+        - wait_max_seconds
+      type: object
+    OverviewCharts:
+      additionalProperties: false
+      description: |
+        The series of the front page's three graphs, over the jobs the caller may
+        view that build themselves, disabled ones included: the builds that ended
+        by how they ended, how many ran at once and how long builds waited, and
+        how often each group's builds ended green.
+      properties:
+        bucket_seconds:
+          description: How long one entry of `buckets` is, 3600 for `24h` and 21600 for `7d`.
+          type: integer
+        buckets:
+          description: |
+            Consecutive buckets from `start` to `end`, oldest first, on the hour
+            edges of the server's time zone. The first holds the moment a window
+            before now, so the list is one bucket longer than the window.
+          items:
+            $ref: "#/components/schemas/OverviewBucket"
+          type: array
+        builds_limit:
+          description: The server's limit of builds with something running at once.
+          type: integer
+        end:
+          $ref: "#/components/schemas/Timestamp"
+          description: Where the last bucket ends, after now.
+        groups:
+          description: |
+            How each group's builds ended in the window and in the one before it,
+            the groups by name and the jobs with no group (`name` empty) last; a
+            group with no finished build in either window is left out.
+          items:
+            $ref: "#/components/schemas/OverviewGroupRate"
+          type: array
+        start:
+          $ref: "#/components/schemas/Timestamp"
+          description: Where the first bucket begins.
+        window:
+          description: The `window` asked for.
+          enum:
+            - 24h
+            - 7d
+          type: string
+      required:
+        - window
+        - bucket_seconds
+        - start
+        - end
+        - builds_limit
+        - buckets
         - groups
       type: object
     OverviewFailing:
@@ -3549,6 +3670,31 @@ components:
         - running
         - disabled
       type: object
+    OverviewGroupRate:
+      additionalProperties: false
+      properties:
+        before:
+          $ref: "#/components/schemas/OverviewTally"
+          description: The builds that ended in the window before that, of the same length.
+        change:
+          description: |
+            `now.percent` minus `before.percent`, null when either window has no
+            build to compare.
+          type:
+            - integer
+            - "null"
+        name:
+          description: The group, empty for the jobs with no group.
+          type: string
+        now:
+          $ref: "#/components/schemas/OverviewTally"
+          description: The builds that ended in the last window.
+      required:
+        - name
+        - now
+        - before
+        - change
+      type: object
     OverviewRecentFailure:
       additionalProperties: false
       properties:
@@ -3560,6 +3706,23 @@ components:
       required:
         - build
         - green_again
+      type: object
+    OverviewTally:
+      additionalProperties: false
+      properties:
+        green:
+          description: Builds that ended `success` or `unstable`.
+          type: integer
+        percent:
+          description: The share of the builds that ended green, in whole percent; 0 when there are none.
+          type: integer
+        red:
+          description: Builds that ended `failed`, `timeout` or `lost`.
+          type: integer
+      required:
+        - green
+        - red
+        - percent
       type: object
     OverviewUpcoming:
       additionalProperties: false

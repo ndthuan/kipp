@@ -1350,6 +1350,8 @@ func TestTheColourRolesHoldTheirContrast(t *testing.T) {
 		{"line-strong", "bg"}, {"line-strong", "bg-sunken"}, {"focus", "bg"}, {"focus", "bg-raised"},
 		{"accent", "bg-raised"}, {"ok", "bg"}, {"warn", "bg"}, {"bad", "bg"}, {"busy", "bg"},
 		{"ok", "ok-soft"}, {"warn", "warn-soft"}, {"bad", "bad-soft"}, {"busy", "busy-soft"},
+		// The graphs' marks on their cards.
+		{"ok", "bg-raised"}, {"warn", "bg-raised"}, {"bad", "bg-raised"}, {"busy", "bg-raised"}, {"line-strong", "bg-raised"},
 	}
 	for theme, role := range themes {
 		holdContrast(t, theme, role, 4.5, text)

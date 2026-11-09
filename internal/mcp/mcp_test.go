@@ -793,3 +793,33 @@ func TestALoopbackConnectionMustNameLoopbackOrTheBaseURLsHost(t *testing.T) {
 		}
 	}
 }
+
+func TestTheOverviewToolListsTheUnstableJobsAndSummarisesTheGraphsOfAWindow(t *testing.T) {
+	e := newEnv(t, nil)
+	s := e.session(t, e.admin)
+	ctx := context.Background()
+	for _, st := range []store.Status{store.Success, store.Unstable} {
+		b := &store.Build{Job: "smoke", Status: store.Running, Trigger: "cli", QueuedAt: time.Now().Add(-time.Hour)}
+		if err := e.st.CreateBuild(ctx, b); err != nil {
+			t.Fatal(err)
+		}
+		if err := e.st.SetBuildStatus(ctx, b.ID, st, time.Now().Add(-10*time.Minute)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var ov overviewOut
+	ok(t, s, "overview", nil, &ov)
+	if len(ov.Unstable) != 1 || ov.Unstable[0].Job != "smoke" || ov.Unstable[0].Build.Status != "unstable" || ov.Unstable[0].Since == "" || len(ov.Failing) != 0 {
+		t.Fatalf("unstable %+v, failing %+v", ov.Unstable, ov.Failing)
+	}
+	c := ov.Charts
+	if c.Window != "24h" || c.Success != 1 || c.Unstable != 1 || c.Failed != 0 || len(c.PassRates) == 0 || c.PassRates[0].Percent != 100 {
+		t.Fatalf("charts %+v", c)
+	}
+	var week overviewOut
+	ok(t, s, "overview", map[string]any{"window": "7d"}, &week)
+	if week.Charts.Window != "7d" {
+		t.Fatalf("%+v", week.Charts)
+	}
+	refused(t, s, "overview", map[string]any{"window": "30d"}, "window is 24h or 7d")
+}

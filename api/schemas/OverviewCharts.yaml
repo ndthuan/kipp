@@ -1,0 +1,41 @@
+type: object
+additionalProperties: false
+description: |
+  The series of the front page's three graphs, over the jobs the caller may
+  view that build themselves, disabled ones included: the builds that ended
+  by how they ended, how many ran at once and how long builds waited, and
+  how often each group's builds ended green.
+required: [window, bucket_seconds, start, end, builds_limit, buckets, groups]
+properties:
+  window:
+    type: string
+    enum: ["24h", "7d"]
+    description: The `window` asked for.
+  bucket_seconds:
+    type: integer
+    description: How long one entry of `buckets` is, 3600 for `24h` and 21600 for `7d`.
+  start:
+    $ref: Timestamp.yaml
+    description: Where the first bucket begins.
+  end:
+    $ref: Timestamp.yaml
+    description: Where the last bucket ends, after now.
+  builds_limit:
+    type: integer
+    description: The server's limit of builds with something running at once.
+  buckets:
+    type: array
+    description: |
+      Consecutive buckets from `start` to `end`, oldest first, on the hour
+      edges of the server's time zone. The first holds the moment a window
+      before now, so the list is one bucket longer than the window.
+    items:
+      $ref: OverviewBucket.yaml
+  groups:
+    type: array
+    description: |
+      How each group's builds ended in the window and in the one before it,
+      the groups by name and the jobs with no group (`name` empty) last; a
+      group with no finished build in either window is left out.
+    items:
+      $ref: OverviewGroupRate.yaml

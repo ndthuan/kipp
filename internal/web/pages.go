@@ -145,7 +145,10 @@ func (s *Site) home(w http.ResponseWriter, r *http.Request, u *store.User) {
 		redirect(w, r, "/jobs?"+r.URL.RawQuery, http.StatusSeeOther)
 		return
 	}
-	o, err := s.api.Service().Overview(r.Context(), u)
+	// A window nobody knows is the day, not an error page: the address is a
+	// link someone typed.
+	rg, _ := overview.ParseRange(r.URL.Query().Get("window"))
+	o, err := s.api.Service().Overview(r.Context(), u, rg)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -155,7 +158,11 @@ func (s *Site) home(w http.ResponseWriter, r *http.Request, u *store.User) {
 		s.fail(w, r, err)
 		return
 	}
-	d := overviewData{Queue: queueData{Queue: q, CSRF: csrf(r), Full: true}, Overview: o}
+	d := overviewData{Queue: queueData{Queue: q, CSRF: csrf(r), Full: true, Nested: true}, Overview: o, Range: rg,
+		Charts: chartsOf(o.Charts, s.api.Zone()), Self: windowHref(overview.Day, rg)}
+	for _, c := range []overview.Range{overview.Day, overview.Week} {
+		d.Ranges = append(d.Ranges, rangeLink{Label: c.Label, Href: windowHref(overview.Day, c), Current: c == rg})
+	}
 	for _, g := range o.Groups {
 		h := &group{Name: g.Name}
 		d.Groups = append(d.Groups, groupRow{Group: g, Href: h.href(), Label: h.label()})
@@ -163,12 +170,33 @@ func (s *Site) home(w http.ResponseWriter, r *http.Request, u *store.User) {
 	s.render(w, r, "overview", http.StatusOK, page{Title: "Overview", Data: d, Here: "/", Queue: q})
 }
 
-// overviewData is the overview page: the queue, the sections, and the
-// groups with the address of their lists.
+// overviewData is the overview page: the queue, the graphs, the sections,
+// and the groups with the address of their lists. Self is the page's own
+// address, which its refresh asks for again, so that a week stays a week.
 type overviewData struct {
 	Queue    queueData
 	Overview *overview.Overview
 	Groups   []groupRow
+	Range    overview.Range
+	Ranges   []rangeLink
+	Charts   []*chart
+	Self     string
+}
+
+// rangeLink is one choice of the control that sets how far back the graphs
+// look; Current is the one the page shows.
+type rangeLink struct {
+	Label, Href string
+	Current     bool
+}
+
+// windowHref is the address of the overview for rg, "/" for the day that
+// is the default.
+func windowHref(def, rg overview.Range) string {
+	if rg == def {
+		return "/"
+	}
+	return "/?window=" + rg.Name
 }
 
 type groupRow struct {
@@ -199,6 +227,9 @@ type queueData struct {
 	Queue *api.QueueView
 	CSRF  string
 	Full  bool
+	// Nested: the queue is a part of a page that refreshes itself whole, so
+	// it does not ask for itself again.
+	Nested bool
 }
 
 func (s *Site) queue(w http.ResponseWriter, r *http.Request, u *store.User) {

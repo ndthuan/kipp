@@ -121,3 +121,104 @@ func TestTheJobListMovedToJobsAndKeepsEveryGroup(t *testing.T) {
 	contains(t, page, `<table class="jobs">`, `<h2>backend</h2>`, `<h2>No group</h2>`, `id="jobs"`, `hx-get="/jobs"`)
 	lacks(t, page, "Failing now")
 }
+
+// finishedAgo writes one build of a job with the status, ended ago ago.
+func (e *env) finishedAgo(t *testing.T, job string, st store.Status, ago time.Duration) {
+	t.Helper()
+	ctx := context.Background()
+	b := &store.Build{Job: job, Status: store.Running, Trigger: "cli", QueuedAt: time.Now().Add(-ago - 2*time.Minute)}
+	must(t, e.st.CreateBuild(ctx, b))
+	must(t, e.st.SetBuildStatus(ctx, b.ID, store.Running, time.Now().Add(-ago-time.Minute)))
+	must(t, e.st.SetBuildStatus(ctx, b.ID, st, time.Now().Add(-ago)))
+}
+
+func (e *env) overviewAt(t *testing.T, query string) string {
+	t.Helper()
+	code, page := get(t, e.login(t, "admin"), e.srv.URL+"/"+query)
+	eq(t, "the overview"+query, code, http.StatusOK)
+	return page
+}
+
+func TestTheOverviewDrawsThreeGraphsAsSVGWithTheirNumbersAsText(t *testing.T) {
+	e := site(t)
+	e.finishedAgo(t, "smoke", store.Success, time.Hour)
+	e.finishedAgo(t, "smoke", store.Success, 5*time.Hour)
+	e.finishedAgo(t, "smoke", store.Failed, 2*time.Hour)
+	e.finishedAgo(t, "smoke", store.Unstable, 3*time.Hour)
+	page := e.overviewAt(t, "")
+	eq(t, "three graphs", strings.Count(page, `<svg class="plot"`), 3)
+	contains(t, page,
+		// Each graph names itself and says what it shows, for a screen reader.
+		`role="img" aria-labelledby="chart-builds-title chart-builds-desc"`,
+		`<title id="chart-builds-title">Builds over time: how the builds that ended in the last 24 hours ended</title>`,
+		"In the last 24 hours, 2 builds ended success, 1 unstable, 1 failed and 0 cancelled.",
+		`aria-labelledby="chart-slots-title chart-slots-desc"`, "at most 1 builds ran at once",
+		`aria-labelledby="chart-rates-title chart-rates-desc"`,
+		// The pass rate of a group, in the words of the page: 3 green of 4.
+		"backend 75% of 4",
+		// The numbers are in a table too, and in the legend.
+		`<div class="sr-only"><table>`, "<td>1</td><td>0</td><td>0</td><td>0</td>", "<td>0</td><td>1</td><td>0</td><td>0</td>", "success 2", "failed 1")
+	lacks(t, page, "<script src=\"https://", "<img")
+}
+
+func TestTheOverviewTakesAWindowOfAWeekAndTheControlShowsWhichOneHolds(t *testing.T) {
+	e := site(t)
+	e.finishedAgo(t, "smoke", store.Failed, 3*24*time.Hour)
+	e.finishedAgo(t, "smoke", store.Success, time.Hour)
+	day := e.overviewAt(t, "")
+	week := e.overviewAt(t, "?window=7d")
+
+	contains(t, day, `<a href="/" aria-current="true">24 hours</a>`, `<a href="/?window=7d">7 days</a>`, `hx-get="/" hx-select="#overview"`,
+		"<h2>Failed in the last 24 hours</h2>", "Nothing failed in the last 24 hours.", "ended in the last 24 hours")
+	lacks(t, day, `href="/jobs/smoke/1"`)
+	// The week's page keeps its window when it redraws itself.
+	contains(t, week, `<a href="/">24 hours</a>`, `<a href="/?window=7d" aria-current="true">7 days</a>`, `hx-get="/?window=7d" hx-select="#overview"`,
+		"<h2>Failed in the last 7 days</h2>", `<a class="link" href="/jobs/smoke/1">#1</a>`, "ended in the last 7 days")
+	lacks(t, week, "Nothing failed in the last 7 days.")
+	eq(t, "the week's graph has its 29 rows", strings.Count(week, "<tr><td>") >= 29, true)
+}
+
+func TestAWindowNobodyKnowsIsTheDayOnThePage(t *testing.T) {
+	e := site(t)
+	for _, q := range []string{"?window=1h", "?window=", "?window=7D", "?window=30d"} {
+		page := e.overviewAt(t, q)
+		contains(t, page, `<a href="/" aria-current="true">24 hours</a>`, "<h2>Failed in the last 24 hours</h2>")
+	}
+}
+
+func TestTheUnstableSectionIsBetweenFailingAndFlakyAndHasItsRows(t *testing.T) {
+	e := site(t)
+	e.finishedAgo(t, "smoke", store.Success, 4*time.Hour)
+	e.finishedAgo(t, "smoke", store.Unstable, 3*time.Hour)
+	e.finishedAgo(t, "smoke", store.Unstable, time.Hour)
+	e.finishedAgo(t, "slow", store.Unstable, 2*time.Hour)
+	e.finishedAgo(t, "slow", store.Failed, time.Hour)
+	page := e.overviewAt(t, "")
+	_, afterFailing, _ := strings.Cut(page, "<h2>Failing now</h2>")
+	failing, rest, _ := strings.Cut(afterFailing, `<h2 class="attn-unstable">Unstable now</h2>`)
+	unstable, flaky, _ := strings.Cut(rest, "<h2>Flaky</h2>")
+	contains(t, failing, `href="/jobs/slow"`)
+	lacks(t, failing, `href="/jobs/smoke"`)
+	contains(t, unstable, `href="/jobs/smoke"`, `<span class="status unstable">unstable</span>`, "Unstable since", `<time class="since"`)
+	lacks(t, unstable, `href="/jobs/slow"`, "Nothing is unstable.")
+	contains(t, flaky, "Nothing is flaky.")
+}
+
+func TestTheOverviewHoldsItsSectionsInTwoColumnsAndTheQueueDoesNotRefreshTwice(t *testing.T) {
+	e := site(t)
+	page := e.overviewAt(t, "")
+	_, right, _ := strings.Cut(page, `<div class="columns">`)
+	cols := strings.Split(right, `<div class="col">`)[1:]
+	if len(cols) != 2 {
+		t.Fatalf("two columns expected in:\n%s", page)
+	}
+	contains(t, cols[0], `<section id="queue" class="stack">`, "<h2>Coming up</h2>")
+	lacks(t, cols[0], "Failing now", "Flaky", "Failed in the last")
+	contains(t, cols[1], "<h2>Failing now</h2>", `Unstable now</h2>`, "<h2>Flaky</h2>", "<h2>Failed in the last 24 hours</h2>")
+	_, groups, _ := strings.Cut(cols[1], "<h2>Groups</h2>")
+	contains(t, groups, `href="/jobs?group=backend"`)
+	// The queue's own page and the job list still refresh it themselves.
+	_, jobs := get(t, e.login(t, "admin"), e.srv.URL+"/jobs")
+	contains(t, jobs, `<section id="queue" class="stack" hx-get="/queue"`)
+	lacks(t, page, `<section id="queue" class="stack" hx-get="/queue"`)
+}
