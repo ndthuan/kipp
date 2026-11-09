@@ -85,8 +85,8 @@ An admin has more pages in the menu under their name:
 - **GitHub Apps**: every App the owner jobs sign in as, and every App
   made here, with what is wrong with each; and the form that makes a
   GitHub App for an [organization folder](organization-folders.md#github-app).
-- **Agents**: the Docker engines and standing agents
-  ([Agents and engines](agents.md#managing-them)).
+- **Runners**: the Docker engines and standing runners
+  ([Runners and engines](runners.md#managing-them)).
 - **Cache**: the keyed caches ([Cache](builds.md#cache)).
 - **Server**: the version, the flags `serve` runs with, the data
   directory's free disk and database size, the last reload of the job
@@ -223,7 +223,7 @@ it at all.
 
 ## Sudo mode
 
-A change to logins, tokens, secrets, agents, engines, GitHub Apps or the
+A change to logins, tokens, secrets, runners, engines, GitHub Apps or the
 cache in the browser needs the user's password given in the last 10
 minutes, as GitHub asks for it: a session cookie someone took is not
 enough to make a token, add a user or set a secret. The page asks for the
@@ -238,7 +238,7 @@ having given it.
 
 ## The audit
 
-Every change to a user, a grant, a token, a secret, an engine, an agent,
+Every change to a user, a grant, a token, a secret, an engine, a runner,
 a cache entry or metrics, in the browser or with the `kipp` command, and
 every reload, quiet switch and upgrade, is a row of the audit: who (a user's name,
 `cli` for the command line, `kipp` for the server's own removals), what,
@@ -256,8 +256,8 @@ newest 10,000 rows are kept.
   commands as that user, and so does an admin, who sets the secrets and
   the grants.
 - That user can read the data directory, the secrets' key and a GitHub
-  App's key file. Run untrusted stages on an agent, in a container, or as
-  another user ([Agents and engines](agents.md)).
+  App's key file. Run untrusted stages on a runner, in a container, or as
+  another user ([Runners and engines](runners.md)).
 - A stage is not given the server's whole environment, which may hold
   what the server was started with for its own sake (a cloud key, a
   token): only what `serve --pass-env` names, comma-separated, a name or a

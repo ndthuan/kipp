@@ -152,7 +152,7 @@ owner:
   content. PKCS#1 and PKCS#8 RSA keys are read. It is as protected as
   kipp's data directory: a stage that runs on the server as the same OS
   user can read it, as it can the secrets' key, so run untrusted stages
-  on an agent, in a container or as another user.
+  on a runner, in a container or as another user.
 - **The App's name** is the key file's name without its extension,
   lower-cased (`acme.pem` is `acme`), or `app.name` when given:
   lower-case letters, digits and `-`. Two jobs with the same name must

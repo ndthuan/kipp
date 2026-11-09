@@ -84,7 +84,7 @@ func TestAStagesWorkdirIsAPathInsideItsWorkspace(t *testing.T) {
 	}
 }
 
-func TestASourceFilesStagesMayRunOnAnAgent(t *testing.T) {
+func TestASourceFilesStagesMayRunOnAnRunner(t *testing.T) {
 	stages, err := stagesOf([]byte("stages:\n  s: {run: true, runs_on: [linux], image: alpine:3.22}\n"))
 	if err != nil || !stages[0].Remote() || stages[0].Image != "alpine:3.22" {
 		t.Fatalf("%v %+v", err, stages)

@@ -168,7 +168,7 @@ and on its own page, `/queue`, which the header links to from every page with a 
 ("2 running, 1 queued", or "idle").
 
 - A running build shows the stages it runs, and for a stage that waits to
-  be placed on an agent or an engine, what it waits for.
+  be placed on a runner or an engine, what it waits for.
 - A queued one says why it waits: behind a build of its job, for a lock
   and the build that holds it, for a free executor, or that its job is
   gone and it will not start. A build that holds a lock is named only to
@@ -281,7 +281,7 @@ stages:
   the audit (actor `kipp`, action `artifacts.remove`). A running build's
   are never removed, nor are a kept build's: kept artifacts can hold the
   total over the limit.
-- A stage on an agent or in a container sends its files when its command
+- A stage on a runner or in a container sends its files when its command
   ends, as a tar. The server takes only plain files inside the stage's
   directory, refuses a link, an absolute name or one with `..` in it, and
   stops reading at `max_size`. A refused upload ends the stage `failed`,
@@ -301,7 +301,7 @@ stages:
 
 - Each stage named is put under `$KIPP_WORKSPACE/.kipp/artifacts/<stage>/`
   before the command starts, at the paths it kept them under, and the
-  same path holds on the server, on an agent and in a container.
+  same path holds on the server, on a runner and in a container.
   Whatever was there before is replaced.
 - `artifacts_from` names only stages the stage needs, directly or
   through others; `kipp check` refuses any other, and a name given
@@ -401,7 +401,7 @@ stages:
 `KIPP_UPSTREAM_STATUS` and `KIPP_STAGE`. A secret, or a name that is none
 of these, is refused when the job file is read; a key that is no key once
 expanded (a branch with a slash in it) skips that cache and says so in
-the log. On an agent and in a container the agent restores and saves.
+the log. On a runner and in a container the runner restores and saves.
 
 **Namespaces keep a pull request from poisoning the main branch's
 cache.** A build reads its own namespace, then `default`, and writes its
@@ -422,8 +422,8 @@ sets `cache_writes_default: true` and writes `default`.
   `GET /api/v1/admin/cache` lists them for an admin's token, and
   `kipp cache ls` and `kipp cache rm` do the same on the server's machine
   ([Commands](cli.md#kipp-cache)). Each removal is a row of the audit.
-- A stage on an agent reaches the cache at `serve --agent-url`, which
-  must be given explicitly: a default would be an address the agent may
+- A stage on a runner reaches the cache at `serve --runner-url`, which
+  must be given explicitly: a default would be an address the runner may
   not reach, and the stage fails saying so. Inside a container,
-  `kipp-agent cache` is the same command as `kipp cache`, and
+  `kipp-runner cache` is the same command as `kipp cache`, and
   `$KIPP_BIN` names it.

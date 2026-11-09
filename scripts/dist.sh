@@ -38,12 +38,12 @@ ldflags="-s -w -buildid= -X github.com/ndthuan/kipp/internal/version.Version=$ve
 
 rm -rf dist
 mkdir -p dist
-# The Linux agents first: every kipp embeds them, and puts the one of an
+# The Linux runners first: every kipp embeds them, and puts the one of an
 # engine's architecture into the containers it starts there. They are the
 # release's version, as the server must be.
 for arch in amd64 arm64; do
 	CGO_ENABLED=0 GOOS=linux GOARCH=$arch "$go" build -trimpath -buildvcs=false -ldflags "$ldflags" \
-		-o "internal/agentbin/bin/kipp-agent_linux_$arch" ./cmd/kipp-agent
+		-o "internal/runnerbin/bin/kipp-runner_linux_$arch" ./cmd/kipp-runner
 done
 for platform in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
 	os=${platform%/*}

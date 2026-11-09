@@ -1,7 +1,7 @@
 # Install
 
 kipp is one binary, `kipp`, which is the server, the command line and
-the standing agent. It runs on Linux and macOS, on amd64 and arm64. The
+the standing runner. It runs on Linux and macOS, on amd64 and arm64. The
 machine the server runs on needs a POSIX shell and git (git for jobs that
 clone); nothing else.
 
@@ -79,7 +79,7 @@ docker run -d --name kipp -p 8085:8085 \
 The stages a server runs itself run inside its container, with bash,
 git, an ssh client, curl, zstd, tzdata and the CA certificates. A stage
 that needs more runs in an image of its own on a Docker engine
-([Agents and engines](agents.md)), or the server's image is built
+([Runners and engines](runners.md)), or the server's image is built
 `FROM ghcr.io/ndthuan/kipp` with what it needs added.
 
 `docker kill -s HUP kipp` reloads the job files, as `kipp reload` does.
@@ -129,7 +129,7 @@ Building needs Go 1.27.3 or newer, and make:
 make build        # bin/kipp
 ```
 
-`make build` first builds the Linux agents that kipp puts into containers
+`make build` first builds the Linux runners that kipp puts into containers
 and embeds them. `make dist` builds the release archives and `SHA256SUMS`
 in `dist/`; from the same commit, with the same Go and tar, they come out
 byte for byte the same.
@@ -228,9 +228,9 @@ the running kipp, then the archive against `SHA256SUMS`, unpacks the binary
 and runs it once (`kipp version`) before it changes anything.
 
 An upgrade is an admin's, by browser or token alike, and a row of the
-[audit](accounts.md#the-audit). Standing agents are not upgraded with the
-server: drain each agent, upgrade the server, then upgrade and enable the
-agents ([Agents and engines](agents.md#managing-them)).
+[audit](accounts.md#the-audit). Standing runners are not upgraded with the
+server: drain each runner, upgrade the server, then upgrade and enable the
+runners ([Runners and engines](runners.md#managing-them)).
 
 The card has no button, and gives the lines to type instead, for a release
 that has no `SHA256SUMS.sig` file (kipp does not install what is not
@@ -507,10 +507,10 @@ hand](#upgrading-by-hand). `kipp version` never asks.
 
 ## Limits
 
-- Windows is not supported, for the server or for an agent.
+- Windows is not supported, for the server or for a runner.
 - A stage on the server's machine runs as the server's user, isolated
   from that user's other files by nothing but a process group. Stages
-  that must be kept apart run on an agent, in a container, or under
+  that must be kept apart run on a runner, in a container, or under
   another user ([Security](accounts.md#security)).
 - The engines kipp runs containers on are Docker engines, reached over a
   Unix socket, TCP with TLS, or ssh.

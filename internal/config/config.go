@@ -179,11 +179,11 @@ type Stage struct {
 	Retries RetryCount `yaml:"retries"`
 	// RunsOn are the labels of the place the stage runs; none is the
 	// server. With Image it is an engine's container, without it a
-	// standing agent: two requests a shared label does not blur.
+	// standing runner: two requests a shared label does not blur.
 	RunsOn Labels `yaml:"runs_on"`
 	Image  string `yaml:"image"`
-	// Workdir is a path inside the stage's workspace, which on an agent is
-	// the agent's and not the job's.
+	// Workdir is a path inside the stage's workspace, which on a runner is
+	// the runner's and not the job's.
 	Workdir string `yaml:"workdir"`
 	// When is the condition the stage runs under; nil always runs.
 	When *When `yaml:"when"`

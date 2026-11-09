@@ -75,15 +75,15 @@ func TestTheClientAsksAPIV1AloneAndSaysTheProblemsDetail(t *testing.T) {
 	eq(t, "requests", strings.Join(seen, ","), "POST /api/v1/jobs/nojob/builds,POST /api/v1/admin/reload")
 }
 
-// The agents' and the cache's calls are their own routes: what answers is
+// The runners' and the cache's calls are their own routes: what answers is
 // their token check, not the JSON API's login, and the same paths without
-// /api/v1 reach neither, on the main listener or on the agents'.
-func TestAgentAndCacheCallsAreUnderAPIV1OnBothListenersAndNowhereElse(t *testing.T) {
-	s := &served{t: t, stderr: &syncBuffer{}, args: []string{"--agent-listen", "127.0.0.1:0"}}
+// /api/v1 reach neither, on the main listener or on the runners'.
+func TestRunnerAndCacheCallsAreUnderAPIV1OnBothListenersAndNowhereElse(t *testing.T) {
+	s := &served{t: t, stderr: &syncBuffer{}, args: []string{"--runner-listen", "127.0.0.1:0"}}
 	s.data, s.jobs, s.token = dataAndJobs(t, map[string]string{"plain.yml": "name: plain\nstages:\n  s: {run: 'true'}\n"})
 	s.serve()
 	var info struct {
-		AgentListen string `json:"agent_listen"`
+		RunnerListen string `json:"runner_listen"`
 	}
 	must(t, json.Unmarshal([]byte(kippGet(t, s, "/api/v1/admin/server")), &info))
 	cachePath := "/api/v1/cache/site-smoke/lookup?key=k&restore=p"
@@ -96,19 +96,19 @@ func TestAgentAndCacheCallsAreUnderAPIV1OnBothListenersAndNowhereElse(t *testing
 		body, _ := io.ReadAll(res.Body)
 		return res.StatusCode, string(body)
 	}
-	for _, base := range []string{"http://" + info.AgentListen, s.url} {
+	for _, base := range []string{"http://" + info.RunnerListen, s.url} {
 		code, body := get(base + cachePath)
 		eq(t, base+" the cache at v1", code, http.StatusUnauthorized)
 		contains(t, body, "the cache token is missing")
 	}
 	// A cache path without /api/v1 reaches no cache on either listener: the
-	// agents' listener has no such route, and the main one answers as a page.
-	code, _ := get("http://" + info.AgentListen + "/cache/site-smoke/lookup?key=k&restore=p")
-	eq(t, "the cache without /api/v1 on the agents' listener", code, http.StatusNotFound)
-	code, _ = get("http://" + info.AgentListen + "/agent/claim")
-	eq(t, "the agent without /api/v1 on the agents' listener", code, http.StatusNotFound)
+	// runners' listener has no such route, and the main one answers as a page.
+	code, _ := get("http://" + info.RunnerListen + "/cache/site-smoke/lookup?key=k&restore=p")
+	eq(t, "the cache without /api/v1 on the runners' listener", code, http.StatusNotFound)
+	code, _ = get("http://" + info.RunnerListen + "/runner/claim")
+	eq(t, "the runner without /api/v1 on the runners' listener", code, http.StatusNotFound)
 	_, body := get(s.url + "/cache/site-smoke/lookup?key=k&restore=p")
 	lacks(t, body, "the cache token is missing")
-	_, body = get(s.url + "/agent/claim")
-	lacks(t, body, "an agent's token")
+	_, body = get(s.url + "/runner/claim")
+	lacks(t, body, "a runner's token")
 }

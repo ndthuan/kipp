@@ -130,7 +130,7 @@ func TestAnUnknownStoreIs404(t *testing.T) {
 	body, _ := e.call(t, 200, e.admin, "GET", "/api/v1/metrics/smoke/remembered", "")
 	eq(t, "an empty store", strings.TrimSpace(body), `{"items":[],"next_cursor":null}`)
 	e.call(t, 200, e.viewer, "GET", "/api/v1/metrics/smoke/remembered", "")
-	e.call(t, 404, e.agent, "GET", "/api/v1/metrics/gc/remembered", "")
+	e.call(t, 404, e.aide, "GET", "/api/v1/metrics/gc/remembered", "")
 	e.call(t, 404, e.admin, "GET", "/api/v1/builds/999/metrics", "")
 }
 

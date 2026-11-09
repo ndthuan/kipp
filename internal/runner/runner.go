@@ -1,5 +1,5 @@
 // Package runner starts a stage's command and can kill everything it
-// started. Local is the one implementation; a remote agent would be the
+// started. Local is the one implementation; a remote runner would be the
 // second, which is why the interface exists.
 package runner
 

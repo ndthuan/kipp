@@ -1,9 +1,9 @@
 # The tests on Linux, from a server on any system: the stage runs in a
 # golang container that kipp starts on an engine carrying the label linux
 # (kipp engine add), and the container is removed when the build ends. A
-# stage on an agent shares no files with the server, so it clones the
+# stage on a runner shares no files with the server, so it clones the
 # repository itself; a stage with runs_on and no image runs on a standing
-# agent instead (kipp agent add).
+# runner instead (kipp runner add).
 name: linux-tests
 group: ci
 description: Run the tests on Linux in a fresh container on every push to main.

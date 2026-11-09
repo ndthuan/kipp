@@ -14,7 +14,7 @@ import (
 
 	"golang.org/x/crypto/argon2"
 
-	"github.com/ndthuan/kipp/internal/agentproto"
+	"github.com/ndthuan/kipp/internal/runnerproto"
 )
 
 // The argon2id parameters a new hash is made with: 19 MiB, 2 passes, 1
@@ -189,15 +189,15 @@ func NewToken() (plain, hash string, err error) {
 	return "kipp_" + plain, HashToken("kipp_" + plain), nil
 }
 
-// NewAgentToken makes an agent's token and the hash the server keeps. It
+// NewRunnerToken makes a runner's token and the hash the server keeps. It
 // is told from an API token by its prefix, and is no API token: it reaches
-// /agent/ and nothing else.
-func NewAgentToken() (plain, hash string, err error) {
+// /runner/ and nothing else.
+func NewRunnerToken() (plain, hash string, err error) {
 	plain, err = NewID()
 	if err != nil {
 		return "", "", err
 	}
-	plain = agentproto.TokenPrefix + plain
+	plain = runnerproto.TokenPrefix + plain
 	return plain, HashToken(plain), nil
 }
 

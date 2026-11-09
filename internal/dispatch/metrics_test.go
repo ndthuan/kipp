@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ndthuan/kipp/internal/agenthub"
 	"github.com/ndthuan/kipp/internal/config"
 	"github.com/ndthuan/kipp/internal/metrics"
+	"github.com/ndthuan/kipp/internal/runnerhub"
 	"github.com/ndthuan/kipp/internal/store"
 )
 
@@ -122,8 +122,8 @@ stages:
 	}
 }
 
-func TestAStageOnAnAgentSeesKippMetricsAndItsReportComesBack(t *testing.T) {
-	ag := newAgents(t, agenthub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
+func TestAStageOnAnRunnerSeesKippMetricsAndItsReportComesBack(t *testing.T) {
+	ag := newRunners(t, runnerhub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
 	ag.runBox(t.TempDir())
 	h := newHarness(t, map[string]string{"site-smoke": `name: site-smoke
 metrics: {store: site}
@@ -151,7 +151,7 @@ stages:
 		t.Fatalf("%s: %s", b.Status, log)
 	}
 	if got := h.reported(t, b.ID, "seconds"); got["a"] != 1.5 || got["b"] != 2 || len(got) != 2 {
-		t.Fatalf("the agent's report: %v (%s)", got, log)
+		t.Fatalf("the runner's report: %v (%s)", got, log)
 	}
 	if got := h.reported(t, b.ID, "coverage"); got["total"] != 90 {
 		t.Fatalf("the server's report: %v (%s)", got, h.log(t, b, "local"))

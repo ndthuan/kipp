@@ -11,9 +11,9 @@ required:
   - executors
   - builds
   - default_runs_on
-  - agent_env
-  - agent_url
-  - agent_listen
+  - runner_env
+  - runner_url
+  - runner_listen
   - shell
   - session_ttl_seconds
   - timezone
@@ -55,17 +55,17 @@ properties:
     items:
       type: string
     description: The labels of a stage that names none, on a server with no executors.
-  agent_env:
+  runner_env:
     type: array
     items:
       type: string
-    description: The variables of the server's environment that agents' stages are given.
-  agent_url:
+    description: The variables of the server's environment that runners' stages are given.
+  runner_url:
     type: string
-    description: The URL a container's agent dials.
-  agent_listen:
+    description: The URL a container's runner dials.
+  runner_listen:
     type: string
-    description: The listener of the agent protocol and the cache apart from `listen`.
+    description: The listener of the runner protocol and the cache apart from `listen`.
   shell:
     type: string
   session_ttl_seconds:

@@ -16,13 +16,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ndthuan/kipp/internal/agenthub"
 	"github.com/ndthuan/kipp/internal/auth"
 	"github.com/ndthuan/kipp/internal/cachesrv"
 	"github.com/ndthuan/kipp/internal/config"
 	"github.com/ndthuan/kipp/internal/dispatch"
 	"github.com/ndthuan/kipp/internal/enginepool"
 	"github.com/ndthuan/kipp/internal/index"
+	"github.com/ndthuan/kipp/internal/runnerhub"
 	"github.com/ndthuan/kipp/internal/sched"
 	"github.com/ndthuan/kipp/internal/store"
 	"github.com/ndthuan/kipp/internal/upgrade/engine"
@@ -92,11 +92,11 @@ type Deps struct {
 	// ServerInfo is what the server runs with, as of the call. It may be
 	// nil.
 	ServerInfo func() ServerInfo
-	// Engines and Agents are the places a stage may run on as the server
+	// Engines and Runners are the places a stage may run on as the server
 	// sees them now, and PlacesChanged has it read their records again; each
 	// may be nil.
 	Engines       func() []enginepool.EngineStatus
-	Agents        func() []agenthub.Status
+	Runners       func() []runnerhub.Status
 	PlacesChanged func(ctx context.Context)
 	// Listen is the address the server listens on. The cookies of a
 	// browser on the server's own machine (LocalSessionCookie) are set

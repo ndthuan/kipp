@@ -1,6 +1,6 @@
 type: object
 description: |
-  What an agent says of itself. It is sent when the agent starts and again
+  What a runner says of itself. It is sent when the runner starts and again
   every heartbeat as long as it runs; three missed and the server counts it
   offline. The field names are Go's.
 properties:
@@ -10,12 +10,12 @@ properties:
     type: string
   Version:
     type: string
-    description: The agent's kipp version. The server refuses any but its own with a 409.
+    description: The runner's kipp version. The server refuses any but its own with a 409.
   Fresh:
     type: boolean
-    description: True on the first connect of the agent's process.
+    description: True on the first connect of the runner's process.
   Running:
     type: [array, "null"]
     items:
       type: string
-    description: The assignments the agent is running now.
+    description: The assignments the runner is running now.

@@ -91,7 +91,7 @@ func (a *API) Routes() []Route {
 		row("GET", "/admin/secrets", user(a.secrets)),
 		row("GET", "/admin/server", user(a.server)),
 		row("GET", "/admin/engines", user(a.engines)),
-		row("GET", "/admin/agents", user(a.agents)),
+		row("GET", "/admin/runners", user(a.runners)),
 		row("GET", "/admin/cache", user(a.cacheList)),
 		row("GET", "/admin/audit", user(a.audit)),
 	}
@@ -283,7 +283,7 @@ type stageJSON struct {
 	ExitCode   *int              `json:"exit_code"`
 	StartedAt  *stamp            `json:"started_at"`
 	FinishedAt *stamp            `json:"finished_at"`
-	// RanOn is where it ran: local, an agent, or engine/n for a container.
+	// RanOn is where it ran: local, a runner, or engine/n for a container.
 	RanOn string `json:"ran_on"`
 	// Tries is how many times its command ran: 1 unless retries ran it again.
 	Tries int `json:"tries"`

@@ -10,4 +10,4 @@ properties:
   Ended:
     type: [array, "null"]
     items:
-      $ref: AgentEnded.yaml
+      $ref: RunnerEnded.yaml

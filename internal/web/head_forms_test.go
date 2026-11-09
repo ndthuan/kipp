@@ -74,25 +74,25 @@ func TestSecretsSetASecretFromAButtonThatOpensWhenPrefilledOrRefused(t *testing.
 	contains(t, body, `role="alert"`, `name="name" value="CHAT_TOKEN"`)
 }
 
-func TestAgentsOpenOnlyTheFormThatWasRefusedWithItsErrorInside(t *testing.T) {
+func TestRunnersOpenOnlyTheFormThatWasRefusedWithItsErrorInside(t *testing.T) {
 	e := site(t)
 	admin := e.login(t, "admin")
 	e.sudo(t, admin)
-	_, page := get(t, admin, e.srv.URL+"/admin/agents")
+	_, page := get(t, admin, e.srv.URL+"/admin/runners")
 	wantPop(t, page, "Add an engine", true, false)
-	wantPop(t, page, "Add a standing agent", false, false)
+	wantPop(t, page, "Add a standing runner", false, false)
 	lacks(t, page, `role="alert"`)
 
-	res, page := e.form(t, admin, "/admin/agents/engines", url.Values{"name": {"tcp"}, "url": {"tcp://host:2376"}, "labels": {"linux"}, "max": {"1"}})
+	res, page := e.form(t, admin, "/admin/runners/engines", url.Values{"name": {"tcp"}, "url": {"tcp://host:2376"}, "labels": {"linux"}, "max": {"1"}})
 	eq(t, "engine refused", res.StatusCode, http.StatusBadRequest)
 	body := wantPop(t, page, "Add an engine", true, true)
 	contains(t, body, `role="alert"`, "a tcp engine needs")
-	body = wantPop(t, page, "Add a standing agent", false, false)
+	body = wantPop(t, page, "Add a standing runner", false, false)
 	lacks(t, body, `role="alert"`)
 
-	res, page = e.form(t, admin, "/admin/agents/agents", url.Values{"name": {"box"}, "labels": {"linux"}, "executors": {"no"}})
-	eq(t, "agent refused", res.StatusCode, http.StatusBadRequest)
-	body = wantPop(t, page, "Add a standing agent", false, true)
+	res, page = e.form(t, admin, "/admin/runners/runners", url.Values{"name": {"box"}, "labels": {"linux"}, "executors": {"no"}})
+	eq(t, "runner refused", res.StatusCode, http.StatusBadRequest)
+	body = wantPop(t, page, "Add a standing runner", false, true)
 	contains(t, body, `role="alert"`, `value="box"`)
 	body = wantPop(t, page, "Add an engine", true, false)
 	lacks(t, body, `role="alert"`)

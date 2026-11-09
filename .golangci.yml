@@ -90,6 +90,9 @@ linters:
       # and the job summary file the runner names.
       - path: ^internal/devtools/flakes/main(_test)?\.go$
         text: "G304"
+      # The files git lists as tracked, read from the repository's own root.
+      - path: ^internal/devtools/runnername/runnername_test\.go$
+        text: "G304"
       # The CLI talks to the server its user names (--url, KIPP_URL) and
       # reads the token from its user's config directory.
       - path: ^internal/cli/client\.go$
@@ -134,11 +137,11 @@ linters:
         text: "G204"
       # Tests whose subject is a repo URL with a user and password in it,
       # which must stay out of every log.
-      - path: ^internal/(cli/agent|config/repo|dispatch/dispatch|engine/docker/client|enginepool/pool)_test\.go$
+      - path: ^internal/(cli/runner|config/repo|dispatch/dispatch|engine/docker/client|enginepool/pool)_test\.go$
         text: "G101"
-      # Tests whose subject is an agent's token: who it lets in, and that it
+      # Tests whose subject is a runner's token: who it lets in, and that it
       # never reaches a stage.
-      - path: ^internal/agenthub/hub_test\.go$
+      - path: ^internal/runnerhub/hub_test\.go$
         text: "G101"
       # kipp cache packs and hashes the paths and files the stage's own
       # command names, in the stage's own directory and as its own user; an
@@ -148,6 +151,9 @@ linters:
         text: "G304"
       # The name of the variable that carries the cache token, not a token.
       - path: ^internal/cache/client\.go$
+        text: "G101"
+      # The name of the variable that carries a runner's token, not a token.
+      - path: ^internal/runnerd/runner\.go$
         text: "G101"
       # The scope and the key in the path are checked by authorize and
       # ValidKey before they reach the file system, and the namespace is
@@ -173,7 +179,7 @@ linters:
       - path: ^internal/web/apps_test\.go$
         text: "G304"
       # Tests read the files they wrote under t.TempDir().
-      - path: ^internal/(agenthub/artifacts|agenthub/hub|api/api|artifacts/artifacts|cli/serve|dispatch/dispatch|logtime/logtime|runner/local)_test\.go$
+      - path: ^internal/(runnerhub/artifacts|runnerhub/hub|api/api|artifacts/artifacts|cli/serve|dispatch/dispatch|logtime/logtime|runner/local)_test\.go$
         text: "G304"
       # Tests whose subject is a file's mode: a key or a database others can
       # read, a folder that can be entered and not written, an executable

@@ -38,7 +38,7 @@ type Queue struct {
 }
 
 // RunningBuild is a build that runs, with the stages it runs now, and
-// what each of them that waits to be placed on an agent or an engine
+// what each of them that waits to be placed on a runner or an engine
 // waits for.
 type RunningBuild struct {
 	Build   *store.Build

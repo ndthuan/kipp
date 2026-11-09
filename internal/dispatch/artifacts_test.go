@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ndthuan/kipp/internal/agenthub"
+	"github.com/ndthuan/kipp/internal/runnerhub"
 	"github.com/ndthuan/kipp/internal/store"
 )
 
@@ -99,8 +99,8 @@ func TestALinkOutOfTheStageFailsItAndKeepsNone(t *testing.T) {
 	}
 }
 
-func TestAStageOnAnAgentSendsItsArtifactsBack(t *testing.T) {
-	ag := newAgents(t, agenthub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
+func TestAStageOnAnRunnerSendsItsArtifactsBack(t *testing.T) {
+	ag := newRunners(t, runnerhub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
 	ag.runBox(t.TempDir())
 	h := newHarness(t, map[string]string{"a": `name: a
 stages:
@@ -156,9 +156,9 @@ func TestAStageOnTheServerFindsItsInputsUnderKippArtifacts(t *testing.T) {
 	}
 }
 
-// The same job file finds the same files at the same path on an agent.
-func TestAStageOnAnAgentFindsTheSameInputsAtTheSamePath(t *testing.T) {
-	ag := newAgents(t, agenthub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
+// The same job file finds the same files at the same path on a runner.
+func TestAStageOnAnRunnerFindsTheSameInputsAtTheSamePath(t *testing.T) {
+	ag := newRunners(t, runnerhub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
 	ag.runBox(t.TempDir())
 	h := newHarness(t, map[string]string{"site-deploy": inputsJob("    runs_on: linux")}, ag.opts)
 	b := h.wait(t, h.trigger(t, "site-deploy").ID)

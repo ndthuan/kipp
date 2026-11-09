@@ -289,25 +289,25 @@ name is lower-case letters, digits, `.`, `-` and `_`, and may not be
 | `artifacts_from` | Stages whose artifacts are put in this stage's workspace. |
 | `cache_scopes`, `cache` | The keyed caches the stage reaches ([Cache](builds.md#cache)). |
 | `metrics` | Numbers the stage reports, and guards on them ([Metrics](metrics.md)). |
-| `runs_on` | Labels of the agent or engine the stage runs on ([Agents and engines](agents.md)). |
+| `runs_on` | Labels of the runner or engine the stage runs on ([Runners and engines](runners.md)). |
 | `image` | With `runs_on`, the image of the container the stage runs in. |
 
 - Stages form a DAG through `needs`. Those that are ready run at once, up
-  to the server's `--executors` (and an agent's executors). A stage is
+  to the server's `--executors` (and a runner's executors). A stage is
   kipp's step: there is no level of steps inside one.
 - All stages of a build share one workspace, `$KIPP_WORKSPACE`, removed
-  when the build ends; a stage on an agent has a workspace of its own
+  when the build ends; a stage on a runner has a workspace of its own
   there.
 - A stage's `workdir` is a path inside the directory its build runs in
-  (the job's `workdir`, or the workspace; on an agent, the agent's
+  (the job's `workdir`, or the workspace; on a runner, the runner's
   workspace). One that leads out of it is refused.
 - A stage is over when its command exits. What it left running in the
   background is killed 2 seconds later; a daemon a stage means to leave
   running must detach itself (`setsid`).
-- `runs_on` sends a stage to an agent: a label, or a list of them
+- `runs_on` sends a stage to a runner: a label, or a list of them
   (`[linux, arm64]`), each lower-case letters, digits, `.`, `-` and `_`.
   With `image` it runs in a container of that image on a Docker engine
-  that carries the labels; without, on a standing agent that carries
+  that carries the labels; without, on a standing runner that carries
   them. An `image` without `runs_on` is refused.
 
 ## Conditions: when
@@ -441,7 +441,7 @@ so that one name set in several is the most specific's. From the lowest:
 
 1. `serve --pass-env`, the server's own environment (by default `PATH`,
    `HOME`, `USER`, `LOGNAME`, `SHELL`, `LANG`, `LC_*`, `TZ` and `TMPDIR`);
-   on an agent, the agent's own environment and `serve --agent-env`;
+   on a runner, the runner's own environment and `serve --runner-env`;
 2. `_vars.yml`, `global`;
 3. `_vars.yml`, `groups.<group>` (the job's `group`);
 4. `_vars.yml`, `jobs.<pattern>`;
@@ -490,7 +490,7 @@ lists the variables the files give it, each with the entry it came from.
 ### Handing variables on: KIPP_ENV
 
 A stage hands variables to the stages after it through `KIPP_ENV`, as
-GitHub's `GITHUB_ENV` does. Every stage, on the server or on an agent,
+GitHub's `GITHUB_ENV` does. Every stage, on the server or on a runner,
 gets `KIPP_ENV`, the path of an empty file of its own. It writes lines
 `NAME=value`, or `NAME<<DELIM`, the lines of the value and a line that is
 `DELIM` for a value of several lines; blank lines are ignored, and a name
@@ -529,11 +529,11 @@ stages:
 
 ## The variables kipp sets
 
-The variables under Build, Where it runs (but `KIPP_AGENT` and
+The variables under Build, Where it runs (but `KIPP_RUNNER` and
 `KIPP_BIN`), Git and History are set in every stage and in a hook, empty
 when they have no value, so that a stage under `set -u` reads them; the
-others are there where their line says. On an agent the values are the
-same, but for the ones under Where it runs, which are the agent's.
+others are there where their line says. On a runner the values are the
+same, but for the ones under Where it runs, which are the runner's.
 
 - **Build**: `CI` (`true`), `KIPP_JOB`, `KIPP_BUILD` (the job's build
   number), `KIPP_BUILD_ID` (unique on the server), `KIPP_TRIGGER`
@@ -544,10 +544,10 @@ same, but for the ones under Where it runs, which are the agent's.
   and `KIPP_JOB_URL` (the build's page and the job's; empty without
   `--base-url`).
 - **Where it runs**: `KIPP_WORKSPACE`, `KIPP_OS` and `KIPP_ARCH` (`linux`,
-  `darwin`, `amd64`, `arm64`), `KIPP_AGENT` (on an agent only: its name,
+  `darwin`, `amd64`, `arm64`), `KIPP_RUNNER` (on a runner only: its name,
   `<engine>/<n>` for a container), `KIPP_BIN` (the path of kipp's own
-  binary where the stage runs: the server's, the `kipp` a standing agent
-  runs, or in a container the `kipp-agent` kipp put there), and
+  binary where the stage runs: the server's, the `kipp` a standing runner
+  runs, or in a container the `kipp-runner` kipp put there), and
   `KIPP_TMP`: a directory of the stage's own, empty when it starts,
   outside every workspace, shared by its tries and removed when the stage
   ends however it ends. A hook has its own.
@@ -594,7 +594,7 @@ kind, which decides what a stage gets:
   service account's JSON. The stage gets `NAME`, the absolute path of a
   copy of the file that only its user reads, in a directory made for that
   stage (and for a hook, for that hook) outside the workspace. The copy is
-  removed when the stage ends however it ends, and a server or an agent
+  removed when the stage ends however it ends, and a server or a runner
   that starts again removes what a stage left when it died.
 - `userpass`: a user and a password. The stage gets `NAME_USR`,
   `NAME_PSW` and `NAME` as `user:password`, which is what a basic-auth

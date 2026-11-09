@@ -29,7 +29,7 @@ type fakeAPI struct {
 	// asked has a value for each request, for a test that waits for one.
 	asked chan struct{}
 	hits  atomic.Int32
-	agent atomic.Value
+	ua    atomic.Value
 	srv   *httptest.Server
 }
 
@@ -44,7 +44,7 @@ func newFake(t *testing.T, tag string, assets ...string) *fakeAPI {
 			default:
 			}
 		}()
-		f.agent.Store(r.Header.Get("User-Agent"))
+		f.ua.Store(r.Header.Get("User-Agent"))
 		if r.URL.Path != releasePath {
 			http.NotFound(w, r)
 			return
@@ -98,7 +98,7 @@ func TestANewerReleaseIsReportedWithItsNotesAndWhetherItIsUpgradable(t *testing.
 	if st.Latest != "v1.2.0" || !st.Upgradable || st.NotesURL != "https://github.com/ndthuan/kipp/releases/tag/v1.2.0" || st.CheckedAt.IsZero() {
 		t.Fatalf("%+v", st)
 	}
-	if got := f.agent.Load(); got != "kipp/v1.1.0" {
+	if got := f.ua.Load(); got != "kipp/v1.1.0" {
 		t.Fatalf("the User-Agent is %v", got)
 	}
 }

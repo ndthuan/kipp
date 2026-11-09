@@ -10,7 +10,7 @@ import (
 // nowhere else.
 func TestTheAdminRoutesLiveBelowAdminAndNowhereElse(t *testing.T) {
 	e := newEnv(t)
-	for _, name := range []string{"users", "users/admin", "secrets", "server", "engines", "agents", "cache", "audit"} {
+	for _, name := range []string{"users", "users/admin", "secrets", "server", "engines", "runners", "cache", "audit"} {
 		e.call(t, 200, e.admin, "GET", "/api/v1/admin/"+name, "")
 		e.call(t, 403, e.viewer, "GET", "/api/v1/admin/"+name, "")
 		e.asProblem(t, 404, "not_found", e.admin, "GET", "/api/v1/"+name, "")

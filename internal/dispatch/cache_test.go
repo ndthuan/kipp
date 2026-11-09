@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ndthuan/kipp/internal/agenthub"
 	"github.com/ndthuan/kipp/internal/cachesrv"
+	"github.com/ndthuan/kipp/internal/runnerhub"
 	"github.com/ndthuan/kipp/internal/store"
 )
 
@@ -73,24 +73,24 @@ func TestAStageWithCacheScopesOnAServerWithNoCacheFailsSayingSo(t *testing.T) {
 	}
 }
 
-func TestARemoteCacheStageWithoutAnExplicitAgentURLFailsSayingSo(t *testing.T) {
-	ag := newAgents(t, agenthub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
+func TestARemoteCacheStageWithoutAnExplicitRunnerURLFailsSayingSo(t *testing.T) {
+	ag := newRunners(t, runnerhub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
 	ag.runBox(t.TempDir())
 	opt, _ := withCache(t)
 	job := "name: a\nstages:\n  s: {runs_on: linux, cache_scopes: [site-smoke], run: 'echo ran'}\n"
 	h := newHarness(t, map[string]string{"a": job}, ag.opts, opt)
 	b := h.wait(t, h.trigger(t, "a").ID)
-	if log := h.log(t, b, "s"); b.Status != store.Failed || !strings.Contains(log, "--agent-url") {
+	if log := h.log(t, b, "s"); b.Status != store.Failed || !strings.Contains(log, "--runner-url") {
 		t.Fatalf("%s: %q", b.Status, log)
 	}
 }
 
-func TestAnAgentReachesTheCacheThroughAgentURL(t *testing.T) {
-	ag := newAgents(t, agenthub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
+func TestAnRunnerReachesTheCacheThroughRunnerURL(t *testing.T) {
+	ag := newRunners(t, runnerhub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
 	ag.runBox(t.TempDir())
 	opt, srv := withCache(t)
 	job := "name: a\nstages:\n  s: {runs_on: linux, cache_scopes: [site-smoke], run: 'echo \"[$KIPP_CACHE_URL][$KIPP_CACHE_SCOPE]\"'}\n"
-	h := newHarness(t, map[string]string{"a": job}, ag.opts, opt, func(o *Options) { o.CacheURL, o.AgentURL = "http://127.0.0.1:1", srv.URL })
+	h := newHarness(t, map[string]string{"a": job}, ag.opts, opt, func(o *Options) { o.CacheURL, o.RunnerURL = "http://127.0.0.1:1", srv.URL })
 	b := h.wait(t, h.trigger(t, "a").ID)
 	if log := h.log(t, b, "s"); b.Status != store.Success || !strings.Contains(log, "["+srv.URL+"][site-smoke]") {
 		t.Fatalf("%s: %q", b.Status, log)
@@ -196,12 +196,12 @@ func TestADeclaredCacheOnAStageWithNoCacheServerSaysSoAndFails(t *testing.T) {
 	}
 }
 
-func TestADeclaredCacheOnAnAgentIsRestoredAndSavedByTheAgent(t *testing.T) {
-	ag := newAgents(t, agenthub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
+func TestADeclaredCacheOnAnRunnerIsRestoredAndSavedByTheRunner(t *testing.T) {
+	ag := newRunners(t, runnerhub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
 	ag.runBox(t.TempDir())
 	opt, srv := withCache(t)
 	job := declaredJob("    runs_on: linux\n    unstable_exit: [3]\n")
-	h := newHarness(t, map[string]string{"a": job}, ag.opts, opt, func(o *Options) { o.AgentURL = srv.URL })
+	h := newHarness(t, map[string]string{"a": job}, ag.opts, opt, func(o *Options) { o.RunnerURL = srv.URL })
 	first := h.wait(t, h.trigger(t, "a").ID)
 	if log := h.log(t, first, "s"); first.Status != store.Success || !strings.Contains(log, "saved with key k1") {
 		t.Fatalf("%s: %s", first.Status, log)

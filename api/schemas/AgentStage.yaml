@@ -1,9 +1,0 @@
-type: object
-additionalProperties: false
-description: A stage an agent runs or has been given.
-required: [build, stage]
-properties:
-  build:
-    $ref: BuildRef.yaml
-  stage:
-    type: string

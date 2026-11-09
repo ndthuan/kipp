@@ -58,9 +58,9 @@ type serverJSON struct {
 	Executors         int      `json:"executors"`
 	Builds            int      `json:"builds"`
 	DefaultRunsOn     []string `json:"default_runs_on"`
-	AgentEnv          []string `json:"agent_env"`
-	AgentURL          string   `json:"agent_url"`
-	AgentListen       string   `json:"agent_listen"`
+	RunnerEnv         []string `json:"runner_env"`
+	RunnerURL         string   `json:"runner_url"`
+	RunnerListen      string   `json:"runner_listen"`
 	Shell             string   `json:"shell"`
 	SessionTTLSeconds int64    `json:"session_ttl_seconds"`
 	TimeZone          string   `json:"timezone"`
@@ -120,8 +120,8 @@ func toSecretsJSON(rows []SecretRow) []secretJSON {
 func toServerJSON(info *ServerInfo) serverJSON {
 	out := serverJSON{Version: info.Version, GoVersion: info.GoVersion, Schema: info.Schema, StartedAt: stampOf(info.StartedAt),
 		Listen: info.Listen, BaseURL: info.BaseURL, Executors: info.Executors, Builds: info.Builds,
-		DefaultRunsOn: append([]string{}, info.DefaultRunsOn...), AgentEnv: append([]string{}, info.AgentEnv...),
-		AgentURL: info.AgentURL, AgentListen: info.AgentListen, Shell: info.Shell,
+		DefaultRunsOn: append([]string{}, info.DefaultRunsOn...), RunnerEnv: append([]string{}, info.RunnerEnv...),
+		RunnerURL: info.RunnerURL, RunnerListen: info.RunnerListen, Shell: info.Shell,
 		SessionTTLSeconds: int64(info.SessionTTL / time.Second), TimeZone: info.TimeZone, DataDir: info.DataDir, JobsDir: info.JobsDir,
 		LastReloadAt: stampOf(info.LastReloadAt), LastReloadError: info.LastReloadError, Jobs: info.Jobs,
 		Origin: info.Origin, UpdateCheck: info.UpdateCheck, Latest: info.Latest, NotesURL: info.NotesURL, Upgradable: info.Upgradable,

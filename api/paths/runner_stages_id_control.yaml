@@ -1,0 +1,21 @@
+get:
+  operationId: runnerControl
+  tags: [internal]
+  summary: A runner asks whether to stop a stage
+  description: A long-poll. It answers `cancel` once the stage is to be killed, and `none` when the server's wait is over first.
+  x-kipp-package: runnerhub
+  security:
+    - runnerToken: []
+  parameters:
+    - $ref: ../parameters/AssignmentId.yaml
+  responses:
+    "200":
+      description: What to do.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/Control.yaml
+    "401":
+      $ref: ../responses/RunnerRefusal.yaml
+    "410":
+      $ref: ../responses/RunnerRefusal.yaml

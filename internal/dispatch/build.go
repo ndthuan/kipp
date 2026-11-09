@@ -47,7 +47,7 @@ type buildEnv struct {
 	vars      []config.Var
 	varsErr   error
 	fileEnv   map[string]string
-	remoteEnv []string          // a stage's on an agent: no PATH, HOME or workspace of the server's
+	remoteEnv []string          // a stage's on a runner: no PATH, HOME or workspace of the server's
 	secrets   []string          // values, for masking
 	files     map[string][]byte // the file secrets, by name
 	stages    []*config.Stage
@@ -320,8 +320,8 @@ func (d *Dispatcher) cloneStages(ctx context.Context, b *store.Build, src *confi
 
 // environment is what of the server's own Options.PassEnv names, then
 // buildVars. The second result is the same for a
-// stage on an agent: what Options.AgentEnv names of the server's, and no
-// KIPP_WORKSPACE, which the agent sets to its own. The third is the
+// stage on a runner: what Options.RunnerEnv names of the server's, and no
+// KIPP_WORKSPACE, which the runner sets to its own. The third is the
 // secret values, for masking.
 func (d *Dispatcher) environment(b *store.Build, job *config.Job, e *buildEnv, secrets map[string]Secret) (local, remote, values []string) {
 	pass := d.opts.PassEnv
@@ -330,7 +330,7 @@ func (d *Dispatcher) environment(b *store.Build, job *config.Job, e *buildEnv, s
 	}
 	vars := d.buildVars(b, job, e, secrets)
 	local = slices.Concat(PassEnv(os.Environ(), pass), vars, []string{"KIPP_WORKSPACE=" + e.workspace, "KIPP_OS=" + runtime.GOOS, "KIPP_ARCH=" + runtime.GOARCH})
-	remote = slices.Concat(AgentEnv(os.Environ(), d.opts.AgentEnv), vars)
+	remote = slices.Concat(RunnerEnv(os.Environ(), d.opts.RunnerEnv), vars)
 	return local, remote, secretMasks(secrets)
 }
 
@@ -562,8 +562,8 @@ type tried struct {
 }
 
 // runTries runs the command, and again while it exits with a code that
-// would end the stage failed and retries remain. A stage on an agent is
-// run again by the agent, where the command runs, and says how many
+// would end the stage failed and retries remain. A stage on a runner is
+// run again by the runner, where the command runs, and says how many
 // times. A cancel, the job's timeout and the server stopping end it at
 // once. Failing to start or to wait for a try is written to the log and
 // returned.
@@ -631,7 +631,7 @@ func (d *Dispatcher) recordTries(ctx context.Context, b *store.Build, name strin
 }
 
 // reportDir is where the stage's metrics.file glob is read: its own
-// directory, or for a stage on an agent where the files it sent were put.
+// directory, or for a stage on a runner where the files it sent were put.
 func (d *Dispatcher) reportDir(e *buildEnv, s *config.Stage) string {
 	if d.remote(s) {
 		return junitDir(e, s)
@@ -640,7 +640,7 @@ func (d *Dispatcher) reportDir(e *buildEnv, s *config.Stage) string {
 }
 
 // stageStarter prepares the stage where it runs, once, and returns what
-// starts its command: on the server, or on the agent or engine it is
+// starts its command: on the server, or on the runner or engine it is
 // placed on. The server's command may be started again, with the same
 // directory and environment.
 func (d *Dispatcher) stageStarter(ctx context.Context, b *store.Build, e *buildEnv, s *config.Stage, out io.Writer, sc *localCache) (start func(attempt int) (runner.Proc, error), done func(), err error) {

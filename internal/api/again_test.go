@@ -6,13 +6,13 @@ func TestBuildAgainQueuesACopyAndNamesTheOriginal(t *testing.T) {
 	e := newEnv(t)
 	id := e.trigger(t, "smoke", `{"params": {"TIER": "full"}}`)
 	e.finished(t, id)
-	b := e.object(t, 202, e.agent, "POST", "/api/v1/builds/"+id+"/again", "")
+	b := e.object(t, 202, e.aide, "POST", "/api/v1/builds/"+id+"/again", "")
 	eq(t, "number", b["number"], any(float64(2)))
 	eq(t, "trigger", b["trigger"], any("api"))
 	eq(t, "trigger_detail", b["trigger_detail"], any("again #1"))
-	eq(t, "started_by", b["started_by"], any("agent"))
-	done := e.object(t, 200, e.agent, "GET", "/api/v1/builds/"+jsonInt(b["id"])+"?wait=true", "")
-	original := e.object(t, 200, e.agent, "GET", "/api/v1/builds/"+id, "")
+	eq(t, "started_by", b["started_by"], any("aide"))
+	done := e.object(t, 200, e.aide, "GET", "/api/v1/builds/"+jsonInt(b["id"])+"?wait=true", "")
+	original := e.object(t, 200, e.aide, "GET", "/api/v1/builds/"+id, "")
 	eq(t, "params", canonical(t, mustJSON(t, done["params"])), canonical(t, mustJSON(t, original["params"])))
 }
 

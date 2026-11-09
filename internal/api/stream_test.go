@@ -65,7 +65,7 @@ func TestAUserHasAtMost16StreamsOpenAndThe17thIs429(t *testing.T) {
 	eq(t, "a log stream beyond 16", code, http.StatusTooManyRequests)
 	text, _ := e.call(t, http.StatusTooManyRequests, e.viewer, "GET", "/api/v1/builds/"+id+"?wait=true", "")
 	contains(t, text, "streams")
-	code, _ = e.openStream(t, e.agent, "/api/v1/queue/events")
+	code, _ = e.openStream(t, e.aide, "/api/v1/queue/events")
 	eq(t, "another user's stream", code, 200)
 }
 

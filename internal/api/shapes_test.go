@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ndthuan/kipp/internal/agenthub"
 	"github.com/ndthuan/kipp/internal/cachesrv"
 	"github.com/ndthuan/kipp/internal/config"
 	"github.com/ndthuan/kipp/internal/enginepool"
 	"github.com/ndthuan/kipp/internal/index"
+	"github.com/ndthuan/kipp/internal/runnerhub"
 	"github.com/ndthuan/kipp/internal/store"
 )
 
@@ -74,7 +74,7 @@ func (e *env) any(t *testing.T, tok, path string) any {
 
 // shapeEnv is a server with something of everything a v1 answer shows: an
 // owner job and its children, builds with times of nanoseconds, a build's
-// metrics and guards, an engine, an agent that runs a stage, a cache entry
+// metrics and guards, an engine, a runner that runs a stage, a cache entry
 // and an audit row. It returns the owner job's token as well.
 func shapeEnv(t *testing.T) (*env, string) {
 	t.Helper()
@@ -85,13 +85,13 @@ func shapeEnv(t *testing.T) (*env, string) {
 		a.deps.Engines = func() []enginepool.EngineStatus {
 			return []enginepool.EngineStatus{{Name: "mac", Kind: "docker", URL: "ssh://me@host", Labels: []string{"linux"}, Max: 2, Enabled: true, Reachable: true, Since: since, Version: "27.3.1", Running: []string{"mac/1"}}}
 		}
-		a.deps.Agents = func() []agenthub.Status {
+		a.deps.Runners = func() []runnerhub.Status {
 			b, err := e.st.Build(context.Background(), 1)
 			if err != nil {
 				return nil
 			}
-			return []agenthub.Status{{Name: "box", Online: true, Enabled: true, Since: since, Seen: since, Version: "test", OS: "linux", Arch: "amd64", Executors: 2, Busy: 1,
-				Stages: []string{b.Job + "#" + fmt.Sprint(b.Number) + "/s"}, Running: []agenthub.StageRef{{BuildID: b.ID, Job: b.Job, Number: b.Number, Stage: "s"}}}}
+			return []runnerhub.Status{{Name: "box", Online: true, Enabled: true, Since: since, Seen: since, Version: "test", OS: "linux", Arch: "amd64", Executors: 2, Busy: 1,
+				Stages: []string{b.Job + "#" + fmt.Sprint(b.Number) + "/s"}, Running: []runnerhub.StageRef{{BuildID: b.ID, Job: b.Job, Number: b.Number, Stage: "s"}}}}
 		}
 	})
 	ctx := context.Background()
@@ -103,7 +103,7 @@ func shapeEnv(t *testing.T) (*env, string) {
 	must(t, e.st.AddActivity(ctx, "smoke", "reloaded", since))
 	must(t, e.st.AppendAudit(ctx, store.Audit{At: since, Actor: "cli", Action: "reload", Target: "jobs"}))
 	must(t, e.st.PutEngine(ctx, store.Engine{Name: "mac", Kind: "docker", URL: "ssh://me@host", Labels: []string{"linux"}, Max: 2, Enabled: true}))
-	must(t, e.st.PutAgent(ctx, store.Agent{Name: "box", Labels: []string{"linux"}, Executors: 2, Enabled: true, TokenHash: "h1"}))
+	must(t, e.st.PutRunner(ctx, store.Runner{Name: "box", Labels: []string{"linux"}, Executors: 2, Enabled: true, TokenHash: "h1"}))
 	_, err := e.st.PutCacheEntry(ctx, &store.CacheEntry{Scope: "site", Namespace: "default", Key: "k", Size: 5, SavedAt: since, SavedByBuild: b.ID})
 	must(t, err)
 	metricJobs(t, e)
@@ -120,7 +120,7 @@ func shapeEnv(t *testing.T) (*env, string) {
 func TestEveryTimestampIsUTCWithThreeFractionDigits(t *testing.T) {
 	e, owner := shapeEnv(t)
 	id := itoa64(1)
-	paths := []string{"/jobs", "/jobs/smoke", "/jobs/smoke/builds", "/builds/" + id, "/jobs/smoke/activity", "/admin/users", "/admin/server", "/admin/audit", "/admin/agents",
+	paths := []string{"/jobs", "/jobs/smoke", "/jobs/smoke/builds", "/builds/" + id, "/jobs/smoke/activity", "/admin/users", "/admin/server", "/admin/audit", "/admin/runners",
 		"/admin/engines", "/admin/cache", "/queue", "/metrics/site", "/metrics/site/remembered", "/metrics/site/history?metric=seconds&item=a", "/builds/2/metrics", "/jobs/acme.site/children"}
 	found := map[string]string{}
 	for _, p := range paths {
@@ -206,14 +206,14 @@ func TestV1RefersToABuildAsABuildRefWithItsStatusEverywhere(t *testing.T) {
 		t.Fatalf("saved_by_build is saved_by in v1: %v", entries[0])
 	}
 	eq(t, "saved_by", ref("saved_by", entries[0]["saved_by"], "smoke")["id"], any(1.0))
-	// An agent's stages are the build and the stage.
-	agents, _ := e.page(t, e.admin, "/api/v1/admin/agents")
-	stages := agents[0]["stages"].([]any)
-	eq(t, "the agent's stages", len(stages), 1)
+	// A runner's stages are the build and the stage.
+	runners, _ := e.page(t, e.admin, "/api/v1/admin/runners")
+	stages := runners[0]["stages"].([]any)
+	eq(t, "the runner's stages", len(stages), 1)
 	st := stages[0].(map[string]any)
 	eqKeys(t, "stage keys", st, "build,stage")
 	eq(t, "stage", st["stage"], any("s"))
-	ref("agent stage build", st["build"], "smoke")
+	ref("runner stage build", st["build"], "smoke")
 }
 
 func TestAGuardWhoseOriginBuildIsGoneHasNoStatusAndAnIdOfZero(t *testing.T) {
@@ -304,9 +304,9 @@ func TestV1RenamesWhatD19Renames(t *testing.T) {
 	eq(t, "executors", engines[0]["executors"], any(2.0))
 	eq(t, "version", engines[0]["version"], any("27.3.1"))
 
-	// An agent says how many stages it runs and has been given.
-	agents, _ := e.page(t, e.admin, "/api/v1/admin/agents")
-	eq(t, "busy", agents[0]["busy"], any(1.0))
+	// A runner says how many stages it runs and has been given.
+	runners, _ := e.page(t, e.admin, "/api/v1/admin/runners")
+	eq(t, "busy", runners[0]["busy"], any(1.0))
 }
 
 func TestAnOwnerJobsOverlapsAreTheRepoAndTheJobsThatShareItInV1(t *testing.T) {

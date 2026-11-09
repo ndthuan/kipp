@@ -72,7 +72,7 @@ func TestAnImageNamesItsTagOrDigestOrIsTakenAtLatest(t *testing.T) {
 func TestAContainerIsCreatedWithNoPortsNoMountsAndNoPrivilege(t *testing.T) {
 	e := dockertest.New(t)
 	c := dialFake(t, e)
-	id, err := c.Create(context.Background(), CreateSpec{Image: "golang:1.27", Cmd: []string{"/kipp/agent", "--url", "u"}, Env: []string{"A=1"}, Labels: map[string]string{"kipp.build": "7"}, WorkingDir: "/kipp/workspace"})
+	id, err := c.Create(context.Background(), CreateSpec{Image: "golang:1.27", Cmd: []string{"/kipp/runner", "--url", "u"}, Env: []string{"A=1"}, Labels: map[string]string{"kipp.build": "7"}, WorkingDir: "/kipp/workspace"})
 	if err != nil || id == "" {
 		t.Fatal(id, err)
 	}
@@ -104,11 +104,11 @@ func TestAFileIsPutIntoTheContainerWithItsModeAndTheDirectoriesAboveIt(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := c.PutFile(context.Background(), id, "/kipp/agent", 0o755, []byte("binary")); err != nil {
+	if err := c.PutFile(context.Background(), id, "/kipp/runner", 0o755, []byte("binary")); err != nil {
 		t.Fatal(err)
 	}
 	got := e.Containers()[id]
-	mode, data, ok := got.File("/kipp/agent")
+	mode, data, ok := got.File("/kipp/runner")
 	if !ok || mode != 0o755 || string(data) != "binary" {
 		t.Fatal(mode, string(data), ok)
 	}
@@ -142,7 +142,7 @@ func TestContainersAreListedByLabelAndRemovedEvenWhenGone(t *testing.T) {
 
 func TestAContainersOwnWordsAreReadFromItsLogs(t *testing.T) {
 	e := dockertest.New(t)
-	e.Logs = "kipp-agent: the server refused the agent's token\n"
+	e.Logs = "kipp-runner: the server refused the runner's token\n"
 	c := dialFake(t, e)
 	id, _ := c.Create(context.Background(), CreateSpec{Image: "x"})
 	var out bytes.Buffer

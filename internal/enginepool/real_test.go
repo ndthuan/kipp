@@ -15,39 +15,39 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ndthuan/kipp/internal/agentbin"
-	"github.com/ndthuan/kipp/internal/agenthub"
-	"github.com/ndthuan/kipp/internal/agentproto"
 	"github.com/ndthuan/kipp/internal/runner"
+	"github.com/ndthuan/kipp/internal/runnerbin"
+	"github.com/ndthuan/kipp/internal/runnerhub"
+	"github.com/ndthuan/kipp/internal/runnerproto"
 	"github.com/ndthuan/kipp/internal/store"
 	"github.com/ndthuan/kipp/internal/version"
 	"github.com/ndthuan/kipp/internal/waitfor"
 )
 
-// TestARealContainerRunsAStageThroughItsAgent is the whole path on the
-// engine KIPP_TEST_DOCKER names: the image pulled, the embedded agent put
-// in, the agent dialling this test's hub at KIPP_TEST_AGENT_HOST (an
+// TestARealContainerRunsAStageThroughItsRunner is the whole path on the
+// engine KIPP_TEST_DOCKER names: the image pulled, the embedded runner put
+// in, the runner dialling this test's hub at KIPP_TEST_RUNNER_HOST (an
 // address of this machine a container there reaches), a stage run and its
 // output streamed back, and the container removed with the build.
-func TestARealContainerRunsAStageThroughItsAgent(t *testing.T) {
+func TestARealContainerRunsAStageThroughItsRunner(t *testing.T) {
 	r := realEngine(t)
-	// KIPP_BIN is the kipp-agent kipp put in, and KIPP_METRICS the file it
+	// KIPP_BIN is the kipp-runner kipp put in, and KIPP_METRICS the file it
 	// wrote of what the server sent.
-	command := `echo "in $(uname -s) as $KIPP_AGENT at $KIPP_WORKSPACE"; test -x "$KIPP_BIN" && echo "bin $(basename "$KIPP_BIN")"; cat "$KIPP_METRICS"`
+	command := `echo "in $(uname -s) as $KIPP_RUNNER at $KIPP_WORKSPACE"; test -x "$KIPP_BIN" && echo "bin $(basename "$KIPP_BIN")"; cat "$KIPP_METRICS"`
 	out, code := r.run(t, command, []byte(`{"store":"real"}`+"\n"))
 	if code != 0 {
 		t.Fatalf("%d: %s", code, out)
 	}
-	if want := "in Linux as real/1 at /kipp/workspace\nbin agent\n{\"store\":\"real\"}\n"; out != want {
+	if want := "in Linux as real/1 at /kipp/workspace\nbin runner\n{\"store\":\"real\"}\n"; out != want {
 		t.Fatalf("%q, want %q", out, want)
 	}
 	r.end(t)
 }
 
-// TestKippAgentRunsMetricsCheckInAContainerStage is "$KIPP_BIN" metrics
-// check inside a container: the kipp-agent there judges the guards of the
+// TestKippRunnerRunsMetricsCheckInAContainerStage is "$KIPP_BIN" metrics
+// check inside a container: the kipp-runner there judges the guards of the
 // KIPP_METRICS the server sent, offline.
-func TestKippAgentRunsMetricsCheckInAContainerStage(t *testing.T) {
+func TestKippRunnerRunsMetricsCheckInAContainerStage(t *testing.T) {
 	r := realEngine(t)
 	baseline := []byte(`{"store":"site","metrics":[{"name":"coverage","unit":"%","values":{"total":87.19},` +
 		`"from":{"total":{"job":"site-deploy","number":123,"at":"2026-10-29T03:00:00Z"}}}],` +
@@ -62,7 +62,7 @@ func TestKippAgentRunsMetricsCheckInAContainerStage(t *testing.T) {
 }
 
 // TestAContainerStageFindsTheSameInputsAtTheSamePath is artifacts_from in
-// a container: the agent there fetches what the stage is given from the
+// a container: the runner there fetches what the stage is given from the
 // server and puts it under $KIPP_WORKSPACE/.kipp/artifacts/<stage>/, as
 // the server does for a stage of its own.
 func TestAContainerStageFindsTheSameInputsAtTheSamePath(t *testing.T) {
@@ -76,8 +76,8 @@ func TestAContainerStageFindsTheSameInputsAtTheSamePath(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	meta := agenthub.StageMeta{BuildID: 1, Job: "real", Number: 1, Stage: "deploy",
-		Inputs:    []agentproto.Input{{Stage: "build", Size: 8}, {Stage: "empty"}},
+	meta := runnerhub.StageMeta{BuildID: 1, Job: "real", Number: 1, Stage: "deploy",
+		Inputs:    []runnerproto.Input{{Stage: "build", Size: 8}, {Stage: "empty"}},
 		InputDirs: map[string]string{"build": kept, "empty": filepath.Join(kept, "none")}}
 	command := `cd "$KIPP_WORKSPACE/.kipp/artifacts" && echo "app=$(cat build/dist/app.js) css=$(cat build/dist/css/site.css) empty=[$(ls -A empty)]"`
 	out, code := r.runMeta(t, command, meta)
@@ -88,18 +88,18 @@ func TestAContainerStageFindsTheSameInputsAtTheSamePath(t *testing.T) {
 }
 
 // TestAFileSecretInAContainerStageIsAPrivateFileOutsideTheWorkspaceAndGoneAfter
-// is a file secret in a container: the agent there writes it, of the exact
+// is a file secret in a container: the runner there writes it, of the exact
 // bytes, outside $KIPP_WORKSPACE, and removes it when the stage ends.
 func TestAFileSecretInAContainerStageIsAPrivateFileOutsideTheWorkspaceAndGoneAfter(t *testing.T) {
 	r := realEngine(t)
-	meta := agenthub.StageMeta{BuildID: 1, Job: "real", Number: 1, Stage: "s",
-		SecretFiles: []agentproto.SecretFile{{Name: "KEYFILE", Data: []byte("\x00\xff key\n")}}}
+	meta := runnerhub.StageMeta{BuildID: 1, Job: "real", Number: 1, Stage: "s",
+		SecretFiles: []runnerproto.SecretFile{{Name: "KEYFILE", Data: []byte("\x00\xff key\n")}}}
 	command := `case "$KEYFILE" in "$KIPP_WORKSPACE"/*) echo inside;; *) echo outside;; esac; ls -l "$KEYFILE" | cut -c1-10; od -An -tx1 "$KEYFILE" | tr -s ' \n' ' '; echo`
 	out, code := r.runMeta(t, command, meta)
 	if want := "outside\n-rw-------\n 00 ff 20 6b 65 79 0a \n"; code != 0 || out != want {
 		t.Fatalf("%d %q, want %q", code, out, want)
 	}
-	out, code = r.run(t, `find /tmp/kipp-agent-secrets-* -type f | wc -l`, nil)
+	out, code = r.run(t, `find /tmp/kipp-runner-secrets-* -type f | wc -l`, nil)
 	if code != 0 || strings.TrimSpace(out) != "0" {
 		t.Fatalf("%d: files are left after the stage: %q", code, out)
 	}
@@ -107,13 +107,13 @@ func TestAFileSecretInAContainerStageIsAPrivateFileOutsideTheWorkspaceAndGoneAft
 }
 
 // TestAContainerStagesKippEnvIsEmptyBeforeEveryTryAndItsFileReachesTheServer
-// is KIPP_ENV in a container: the agent there makes the file empty before
+// is KIPP_ENV in a container: the runner there makes the file empty before
 // each try, so that a try that failed leaves nothing, and sends the file of
 // the try that ended with the stage's done call, to be read on the server.
 func TestAContainerStagesKippEnvIsEmptyBeforeEveryTryAndItsFileReachesTheServer(t *testing.T) {
 	r := realEngine(t)
 	dir := t.TempDir()
-	meta := agenthub.StageMeta{BuildID: 1, Job: "real", Number: 1, Stage: "s", JunitDir: dir, Retries: 1}
+	meta := runnerhub.StageMeta{BuildID: 1, Job: "real", Number: 1, Stage: "s", JunitDir: dir, Retries: 1}
 	command := `test -f "$KIPP_ENV" && test ! -s "$KIPP_ENV" && echo empty
 n=$(cat runs 2>/dev/null || echo 0); n=$((n+1)); echo $n > runs
 if [ $n -lt 2 ]; then echo OLD=1 >> "$KIPP_ENV"; exit 7; fi
@@ -122,7 +122,7 @@ printf 'NEW<<E\nline one\nline two\nE\n' >> "$KIPP_ENV"`
 	if want := "empty\nkipp: try 2 of 2\nempty\n"; code != 0 || out != want {
 		t.Fatalf("%d %q, want %q", code, out, want)
 	}
-	got, err := os.ReadFile(filepath.Clean(filepath.Join(dir, filepath.FromSlash(agentproto.EnvTarName))))
+	got, err := os.ReadFile(filepath.Clean(filepath.Join(dir, filepath.FromSlash(runnerproto.EnvTarName))))
 	if want := "NEW<<E\nline one\nline two\nE\n"; err != nil || string(got) != want {
 		t.Fatalf("%v: the file the server got is %q, want %q", err, got, want)
 	}
@@ -130,13 +130,13 @@ printf 'NEW<<E\nline one\nline two\nE\n' >> "$KIPP_ENV"`
 }
 
 // TestAContainerStageIsGivenItsOwnTmpOsArchAndTryNumber is KIPP_TMP,
-// KIPP_OS, KIPP_ARCH and KIPP_ATTEMPT in a container: the agent there makes
+// KIPP_OS, KIPP_ARCH and KIPP_ATTEMPT in a container: the runner there makes
 // the directory, empty and outside the workspace, one for the stage and not
 // for each try, removes it when the stage ends, and gives its own system,
 // architecture and try.
 func TestAContainerStageIsGivenItsOwnTmpOsArchAndTryNumber(t *testing.T) {
 	r := realEngine(t)
-	meta := agenthub.StageMeta{BuildID: 1, Job: "real", Number: 1, Stage: "s", Retries: 1}
+	meta := runnerhub.StageMeta{BuildID: 1, Job: "real", Number: 1, Stage: "s", Retries: 1}
 	command := `echo "os=$KIPP_OS arch=$KIPP_ARCH attempt=$KIPP_ATTEMPT"
 case "$KIPP_TMP" in "$KIPP_WORKSPACE"/*) echo inside;; *) echo outside;; esac
 test -d "$KIPP_TMP" && if test -z "$(ls -A "$KIPP_TMP")"; then echo empty; else echo kept; fi
@@ -152,7 +152,7 @@ if [ $n -lt 2 ]; then exit 7; fi`
 	if want := line + "1\noutside\nempty\nkipp: try 2 of 2\n" + line + "2\noutside\nkept\n"; code != 0 || out != want {
 		t.Fatalf("%d %q, want %q", code, out, want)
 	}
-	out, code = r.run(t, `find /tmp/kipp-agent-tmp-* -mindepth 1 ! -path "$KIPP_TMP" | wc -l`, nil)
+	out, code = r.run(t, `find /tmp/kipp-runner-tmp-* -mindepth 1 ! -path "$KIPP_TMP" | wc -l`, nil)
 	if code != 0 || strings.TrimSpace(out) != "0" {
 		t.Fatalf("%d: directories are left after the stage: %q", code, out)
 	}
@@ -163,15 +163,15 @@ if [ $n -lt 2 ]; then exit 7; fi`
 // container of build 1 of the job real.
 type onEngine struct {
 	ctx  context.Context
-	hub  *agenthub.Hub
+	hub  *runnerhub.Hub
 	pool *Pool
 	b    *store.Build
 	name string
 }
 
 // realEngine is the whole path on the engine KIPP_TEST_DOCKER names: the
-// image pulled, the embedded agent put in, the agent dialling this test's
-// hub at KIPP_TEST_AGENT_HOST (an address of this machine a container
+// image pulled, the embedded runner put in, the runner dialling this test's
+// hub at KIPP_TEST_RUNNER_HOST (an address of this machine a container
 // there reaches).
 func realEngine(t *testing.T) *onEngine {
 	t.Helper()
@@ -179,15 +179,15 @@ func realEngine(t *testing.T) *onEngine {
 	if url == "" {
 		t.Skip("KIPP_TEST_DOCKER names no engine")
 	}
-	host := os.Getenv("KIPP_TEST_AGENT_HOST")
+	host := os.Getenv("KIPP_TEST_RUNNER_HOST")
 	if host == "" {
-		t.Fatal("KIPP_TEST_AGENT_HOST: the address a container on that engine reaches this machine at")
+		t.Fatal("KIPP_TEST_RUNNER_HOST: the address a container on that engine reaches this machine at")
 	}
 	image := os.Getenv("KIPP_TEST_DOCKER_IMAGE")
 	if image == "" {
 		image = "alpine:3.22"
 	}
-	hub := agenthub.New(agenthub.Options{Version: version.Version, Log: quiet, Heartbeat: time.Second})
+	hub := runnerhub.New(runnerhub.Options{Version: version.Version, Log: quiet, Heartbeat: time.Second})
 	ln, err := net.Listen("tcp", net.JoinHostPort(host, "0"))
 	if err != nil {
 		t.Fatal(err)
@@ -198,8 +198,8 @@ func realEngine(t *testing.T) *onEngine {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	t.Cleanup(cancel)
 	go hub.Run(ctx)
-	agentURL := "http://" + net.JoinHostPort(host, strconv.Itoa(ln.Addr().(*net.TCPAddr).Port))
-	pool := New(Options{Hub: hub, AgentURL: agentURL, ServerID: "kipp-real-test-" + time.Now().Format("150405.000"), Binary: agentbin.For, Log: quiet, SSHKey: os.Getenv("KIPP_TEST_DOCKER_SSH_KEY")})
+	runnerURL := "http://" + net.JoinHostPort(host, strconv.Itoa(ln.Addr().(*net.TCPAddr).Port))
+	pool := New(Options{Hub: hub, RunnerURL: runnerURL, ServerID: "kipp-real-test-" + time.Now().Format("150405.000"), Binary: runnerbin.For, Log: quiet, SSHKey: os.Getenv("KIPP_TEST_DOCKER_SSH_KEY")})
 	go pool.Run(ctx)
 	pool.SetEngines([]*store.Engine{{Name: "real", Kind: "docker", URL: url, Labels: []string{"linux"}, Max: 1, Enabled: true}})
 	eventually(t, "the engine is reachable", func() bool { cs := pool.Candidates(0, ""); return len(cs) == 1 && cs[0].Reachable })
@@ -217,14 +217,14 @@ func realEngine(t *testing.T) *onEngine {
 // baseline as its KIPP_METRICS, and is what it printed and its exit code.
 func (r *onEngine) run(t *testing.T, command string, baseline []byte) (string, int) {
 	t.Helper()
-	return r.runMeta(t, command, agenthub.StageMeta{BuildID: 1, Job: "real", Number: 1, Stage: "s", Baseline: baseline})
+	return r.runMeta(t, command, runnerhub.StageMeta{BuildID: 1, Job: "real", Number: 1, Stage: "s", Baseline: baseline})
 }
 
 // runMeta runs the command as the stage meta says in the build's container.
-func (r *onEngine) runMeta(t *testing.T, command string, meta agenthub.StageMeta) (string, int) {
+func (r *onEngine) runMeta(t *testing.T, command string, meta runnerhub.StageMeta) (string, int) {
 	t.Helper()
 	out := &syncBuffer{}
-	proc, err := r.hub.Start(r.ctx, agenthub.Who{Build: r.b.ID, Name: r.name}, runner.Spec{Command: command, Output: out}, meta)
+	proc, err := r.hub.Start(r.ctx, runnerhub.Who{Build: r.b.ID, Name: r.name}, runner.Spec{Command: command, Output: out}, meta)
 	if err != nil {
 		t.Fatal(err)
 	}

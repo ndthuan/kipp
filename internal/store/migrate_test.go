@@ -21,6 +21,7 @@ var migrationSums = []string{
 	"6346473418471fce7bf821829be55e4744d1c1b8c36435154d95c80752ff2177",
 	"daa010610b14e1df0bff344e5219104875c06234c40bc03de4fcb4af2c819bae",
 	"dd3565eb5e8cb8146c64b25071e70587a09f5aee5310f5cad240098efc277fc2",
+	"d9c619e2b4b12b76b732fa60e472f9c8dc181aa72e59de7859784707f13e8bb5",
 }
 
 func TestMigrationsAreAppendOnly(t *testing.T) {
@@ -295,5 +296,34 @@ func TestAFailedUpgradeLeavesTheDatabaseAsItWas(t *testing.T) {
 			t.Fatalf("%s: part of the failed upgrade stayed", name)
 		}
 		must(t, s.Close())
+	}
+}
+
+// Runners were called agents until the rename: the table is renamed with
+// its rows, so a token a standing runner holds still opens its session.
+func TestTheRowsOfTheAgentsTableAreTheRunnersAfterTheUpgrade(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "db.sqlite")
+	withMigrations(t, migrations[:4], func() {
+		s, err := Open(path)
+		must(t, err)
+		_, err = s.db.ExecContext(ctx, `INSERT INTO agents (name, labels, executors, enabled, token_hash, created_at) VALUES ('box', '["linux"]', 2, 1, 'hash-of-box', ?)`, ts(time.Now()))
+		must(t, err)
+		must(t, s.AppendAudit(ctx, Audit{At: time.Now(), Actor: "boss", Action: "agent.add", Target: "box"}))
+		must(t, s.Close())
+	})
+
+	s, err := Open(path)
+	must(t, err)
+	defer func() { must(t, s.Close()) }()
+	r, err := s.RunnerByTokenHash(ctx, "hash-of-box")
+	must(t, err)
+	if r.Name != "box" || r.Executors != 2 || !r.Enabled || !slices.Equal(r.Labels, []string{"linux"}) {
+		t.Fatalf("the runner reads %+v", r)
+	}
+	// An audit log keeps what happened under the names of the time.
+	rows, err := s.AuditBefore(ctx, 0, 10)
+	must(t, err)
+	if len(rows) != 1 || rows[0].Action != "agent.add" {
+		t.Fatalf("the audit reads %+v", rows)
 	}
 }

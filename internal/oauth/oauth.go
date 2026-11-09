@@ -32,7 +32,7 @@ const (
 )
 
 // AccessPrefix and RefreshPrefix tell the tokens apart from API tokens
-// (kipp_) and agent tokens (kippa_), and from each other.
+// (kipp_) and runner tokens (kippa_), and from each other.
 const (
 	AccessPrefix  = "kippo_"
 	RefreshPrefix = "kippr_"

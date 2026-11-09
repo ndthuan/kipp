@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ndthuan/kipp/internal/agenthub"
+	"github.com/ndthuan/kipp/internal/runnerhub"
 	"github.com/ndthuan/kipp/internal/store"
 )
 
@@ -92,8 +92,8 @@ func TestACancelDuringATryStartsNoOther(t *testing.T) {
 	}
 }
 
-func TestAStageOnAnAgentIsRetriedByTheAgentAndSaysHowManyTries(t *testing.T) {
-	ag := newAgents(t, agenthub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
+func TestAStageOnAnRunnerIsRetriedByTheRunnerAndSaysHowManyTries(t *testing.T) {
+	ag := newRunners(t, runnerhub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
 	ag.runBox(t.TempDir())
 	h := newHarness(t, map[string]string{"r": "name: r\nstages:\n  s: {runs_on: linux, run: '" + flaky(3, 7) + "', retries: 2}\n"}, ag.opts)
 	b := h.wait(t, h.trigger(t, "r").ID)
@@ -107,8 +107,8 @@ func TestAStageOnAnAgentIsRetriedByTheAgentAndSaysHowManyTries(t *testing.T) {
 	}
 }
 
-func TestAStageOnAnAgentThatAlwaysFailsEndsWithTheLastExitCode(t *testing.T) {
-	ag := newAgents(t, agenthub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
+func TestAStageOnAnRunnerThatAlwaysFailsEndsWithTheLastExitCode(t *testing.T) {
+	ag := newRunners(t, runnerhub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
 	ag.runBox(t.TempDir())
 	h := newHarness(t, map[string]string{"r": "name: r\nstages:\n  s: {runs_on: linux, run: 'n=$(cat runs 2>/dev/null || echo 0); n=$((n+1)); echo $n > runs; exit $((10+n))', retries: 1}\n"}, ag.opts)
 	b := h.wait(t, h.trigger(t, "r").ID)
@@ -118,8 +118,8 @@ func TestAStageOnAnAgentThatAlwaysFailsEndsWithTheLastExitCode(t *testing.T) {
 	}
 }
 
-func TestAnUnstableExitCodeOnAnAgentStageWithNoCacheEndsUnstableAndIsNotRetried(t *testing.T) {
-	ag := newAgents(t, agenthub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
+func TestAnUnstableExitCodeOnAnRunnerStageWithNoCacheEndsUnstableAndIsNotRetried(t *testing.T) {
+	ag := newRunners(t, runnerhub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
 	ag.runBox(t.TempDir())
 	h := newHarness(t, map[string]string{"r": "name: r\nstages:\n  s: {runs_on: linux, run: 'echo ran; exit 4', unstable_exit: [4], retries: 3}\n"}, ag.opts)
 	b := h.wait(t, h.trigger(t, "r").ID)
@@ -129,8 +129,8 @@ func TestAnUnstableExitCodeOnAnAgentStageWithNoCacheEndsUnstableAndIsNotRetried(
 	}
 }
 
-func TestACancelDuringATryOnAnAgentStartsNoOther(t *testing.T) {
-	ag := newAgents(t, agenthub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
+func TestACancelDuringATryOnAnRunnerStartsNoOther(t *testing.T) {
+	ag := newRunners(t, runnerhub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
 	ag.runBox(t.TempDir())
 	runs := filepath.Join(t.TempDir(), "runs")
 	h := newHarness(t, map[string]string{"r": "name: r\nstages:\n  s: {runs_on: linux, run: 'echo x >> " + runs + "; sleep 30', retries: 3}\n"}, ag.opts)

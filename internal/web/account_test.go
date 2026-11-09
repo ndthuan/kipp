@@ -52,9 +52,9 @@ func oneTimeFormPage(path string) string {
 		return strings.TrimSuffix(path, "/tokens")
 	case strings.HasPrefix(path, "/admin/users/") && strings.HasSuffix(path, "/password"):
 		return path
-	case path == "/admin/agents/agents":
-		return "/admin/agents"
-	case strings.HasPrefix(path, "/admin/agents/agents/") && strings.HasSuffix(path, "/token"):
+	case path == "/admin/runners/runners":
+		return "/admin/runners"
+	case strings.HasPrefix(path, "/admin/runners/runners/") && strings.HasSuffix(path, "/token"):
 		return path
 	}
 	return ""
@@ -115,7 +115,7 @@ func TestAFormThatShowsAValueOnceMakesItOnceAndSentAgainSaysItWasSent(t *testing
 	}{
 		{"/account", "/account/tokens", "tokens of admin", url.Values{"label": {"ci"}, "days": {"30"}}},
 		{"/admin/users", "/admin/users", "users", url.Values{"name": {"carol"}}},
-		{"/admin/users/bob", "/admin/users/bob/tokens", "tokens of bob", url.Values{"label": {"agent"}, "days": {"30"}}},
+		{"/admin/users/bob", "/admin/users/bob/tokens", "tokens of bob", url.Values{"label": {"runner"}, "days": {"30"}}},
 		{"/admin/users/bob/password", "/admin/users/bob/password", "bob's hash", url.Values{}},
 	} {
 		_, page := get(t, admin, e.srv.URL+c.page)

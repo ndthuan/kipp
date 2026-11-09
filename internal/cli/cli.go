@@ -27,7 +27,7 @@ const usage = `usage: kipp <command> [flags]
   token     create, revoke, list
   secret    set, unset, list
   engine    add, set, rm, ls: the Docker engines a stage with an image runs on
-  agent     run a standing agent, or add, set, token, rm, ls them
+  runner     run a standing runner, or add, set, token, rm, ls them
   metrics   check, put, forget, ls: a stage's guards, what the metrics stores remember
   cache     restore, save, hash: a stage's keyed cache, kept by the server; ls, rm: what it keeps
   version   print the version
@@ -44,7 +44,7 @@ var commands = map[string]Command{
 	"token":   cmdToken,
 	"secret":  cmdSecret,
 	"engine":  cmdEngine,
-	"agent":   cmdAgent,
+	"runner":  cmdRunner,
 	"metrics": cmdMetrics,
 	"cache":   cmdCache,
 	"version": cmdVersion,
@@ -66,7 +66,7 @@ func Main(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 
 // cmdCache is inside a stage: no data directory, only the URL and token the
 // server gave it.
-// ls and rm are the admin's, on the data directory as engine and agent are;
+// ls and rm are the admin's, on the data directory as engine and runner are;
 // the rest is the stage's.
 func cmdCache(args []string, _ io.Reader, stdout, stderr io.Writer) int {
 	if len(args) > 0 && (args[0] == "ls" || args[0] == "rm") {

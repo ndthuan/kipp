@@ -9,7 +9,7 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-// Labels name a place a stage may run: a stage asks for labels, an agent
+// Labels name a place a stage may run: a stage asks for labels, a runner
 // or an engine carries them, and a stage runs where every label it asks
 // for is carried. A job file writes one label or a list of them.
 type Labels []string

@@ -237,16 +237,16 @@ type ServerInfo struct {
 	// Executors is the server's own stages at once, 0 for none; Builds the
 	// builds with something running at once.
 	Executors, Builds int
-	// Where stages on agents come from and what they get: the labels of a
+	// Where stages on runners come from and what they get: the labels of a
 	// stage that names none on a server of no executors, the variables of
-	// the server's they are given, the URL a container's agent dials, and
-	// the listener of /agent/ apart from Listen.
-	DefaultRunsOn, AgentEnv []string
-	AgentURL, AgentListen   string
-	Shell                   string
-	SessionTTL              time.Duration
-	TimeZone                string
-	DataDir, JobsDir        string
+	// the server's they are given, the URL a container's runner dials, and
+	// the listener of /runner/ apart from Listen.
+	DefaultRunsOn, RunnerEnv []string
+	RunnerURL, RunnerListen  string
+	Shell                    string
+	SessionTTL               time.Duration
+	TimeZone                 string
+	DataDir, JobsDir         string
 	// FreeDisk is the bytes free to kipp on the data directory's disk,
 	// when FreeDiskKnown; DBSize is the database file's size, -1 when it
 	// cannot be read.

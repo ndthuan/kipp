@@ -18,7 +18,7 @@ import (
 // cache is, a token of the build that reaches those scopes and nothing else,
 // and the first scope as the one a command names by default. The token dies
 // with the build. url is where this stage reaches the server: loopback for
-// one on the server, the operator's --agent-url for one on an agent, which
+// one on the server, the operator's --runner-url for one on a runner, which
 // is never guessed.
 func (d *Dispatcher) cacheVars(b *store.Build, e *buildEnv, s *config.Stage, url string) ([]string, error) {
 	if len(s.CacheScopes) == 0 && len(s.Cache) == 0 {
@@ -30,7 +30,7 @@ func (d *Dispatcher) cacheVars(b *store.Build, e *buildEnv, s *config.Stage, url
 	scopes := d.cacheScopes(b, s)
 	if url == "" {
 		if d.remote(s) {
-			return nil, errors.New("a stage on an agent reaches the cache through --agent-url, which this server was not given")
+			return nil, errors.New("a stage on a runner reaches the cache through --runner-url, which this server was not given")
 		}
 		url = d.opts.BaseURL
 	}

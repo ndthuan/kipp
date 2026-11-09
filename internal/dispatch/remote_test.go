@@ -14,14 +14,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ndthuan/kipp/internal/agent"
-	"github.com/ndthuan/kipp/internal/agenthub"
 	"github.com/ndthuan/kipp/internal/auth"
+	"github.com/ndthuan/kipp/internal/runnerd"
+	"github.com/ndthuan/kipp/internal/runnerhub"
 	"github.com/ndthuan/kipp/internal/store"
 )
 
 // A stage's workdir is a path inside the directory its build runs in, on
-// the server as on an agent.
+// the server as on a runner.
 func TestALocalStagesWorkdirIsInsideTheBuildsDirectory(t *testing.T) {
 	h := newHarness(t, map[string]string{"a": "name: a\nstages:\n  s: {workdir: sub/dir, run: pwd}\n"})
 	b := h.wait(t, h.trigger(t, "a").ID)
@@ -39,7 +39,7 @@ func TestALocalStagesWorkdirIsInsideTheBuildsDirectory(t *testing.T) {
 	}
 }
 
-// Nothing carries a label on a server that knows no agent or engine:
+// Nothing carries a label on a server that knows no runner or engine:
 // that is a mistake in the file, and waiting would hide it.
 func TestAStageWhoseLabelsNothingCarriesFailsAtOnce(t *testing.T) {
 	h := newHarness(t, map[string]string{"a": "name: a\nstages:\n  s: {runs_on: [mars, arm64], run: echo ran}\n"})
@@ -48,40 +48,40 @@ func TestAStageWhoseLabelsNothingCarriesFailsAtOnce(t *testing.T) {
 	if b.Status != store.Failed || h.stages(t, b.ID)["s"].Status != store.StageFailed {
 		t.Fatalf("%s: %s", b.Status, log)
 	}
-	if !strings.Contains(log, "kipp: no agent or engine carries labels [mars, arm64]") || strings.Contains(log, "ran") {
+	if !strings.Contains(log, "kipp: no runner or engine carries labels [mars, arm64]") || strings.Contains(log, "ran") {
 		t.Fatalf("log %q", log)
 	}
 }
 
-// agents is a hub behind an httptest server, its standing agents by token.
-type agents struct {
+// runners is a hub behind an httptest server, its standing runners by token.
+type runners struct {
 	t    *testing.T
-	hub  *agenthub.Hub
+	hub  *runnerhub.Hub
 	srv  *httptest.Server
-	ids  map[string]*agenthub.Identity // by token hash
-	down atomic.Bool                   // every call is answered 503
+	ids  map[string]*runnerhub.Identity // by token hash
+	down atomic.Bool                    // every call is answered 503
 	// clock is the hub's time, which stands still until a test moves it: a
-	// loaded machine that delays an agent's call cannot make the hub think
+	// loaded machine that delays a runner's call cannot make the hub think
 	// it silent.
 	clock atomic.Int64
 }
 
-func (a *agents) now() time.Time { return time.Unix(0, a.clock.Load()) }
+func (a *runners) now() time.Time { return time.Unix(0, a.clock.Load()) }
 
 // advance moves the hub's time on by d.
-func (a *agents) advance(d time.Duration) { a.clock.Add(int64(d)) }
+func (a *runners) advance(d time.Duration) { a.clock.Add(int64(d)) }
 
-func newAgents(t *testing.T, ids ...agenthub.Identity) *agents {
+func newRunners(t *testing.T, ids ...runnerhub.Identity) *runners {
 	t.Helper()
-	a := &agents{t: t, ids: map[string]*agenthub.Identity{}}
+	a := &runners{t: t, ids: map[string]*runnerhub.Identity{}}
 	a.clock.Store(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).UnixNano())
 	for _, id := range ids {
 		a.ids[auth.HashToken(tokenOf(id.Name))] = &id
 	}
-	// An agent is offline after three heartbeats without a call, by the
+	// A runner is offline after three heartbeats without a call, by the
 	// hub's clock, which only a test moves.
-	a.hub = agenthub.New(agenthub.Options{Version: "v-test", Log: slog.New(slog.DiscardHandler), Now: a.now, Heartbeat: time.Second, ClaimWait: 200 * time.Millisecond,
-		Standing: func(_ context.Context, hash string) (*agenthub.Identity, error) {
+	a.hub = runnerhub.New(runnerhub.Options{Version: "v-test", Log: slog.New(slog.DiscardHandler), Now: a.now, Heartbeat: time.Second, ClaimWait: 200 * time.Millisecond,
+		Standing: func(_ context.Context, hash string) (*runnerhub.Identity, error) {
 			if id := a.ids[hash]; id != nil {
 				c := *id
 				return &c, nil
@@ -106,29 +106,29 @@ func newAgents(t *testing.T, ids ...agenthub.Identity) *agents {
 
 func tokenOf(name string) string { return "kippa_token-of-" + name }
 
-// runBox starts the agent called box, with env as its own environment,
+// runBox starts the runner called box, with env as its own environment,
 // and waits until it is online.
-func (a *agents) runBox(workdir string, env ...string) {
+func (a *runners) runBox(workdir string, env ...string) {
 	a.t.Helper()
 	const name = "box"
 	ctx, cancel := context.WithCancel(context.Background())
 	ended := make(chan struct{})
 	go func() {
 		defer close(ended)
-		_ = agent.Run(ctx, agent.Config{URL: a.srv.URL, Token: tokenOf(name), Workdir: workdir, Version: "v-test",
+		_ = runnerd.Run(ctx, runnerd.Config{URL: a.srv.URL, Token: tokenOf(name), Workdir: workdir, Version: "v-test",
 			Env: append([]string{"PATH=" + os.Getenv("PATH")}, env...), Log: slog.New(slog.DiscardHandler), Retry: 20 * time.Millisecond})
 	}()
 	a.t.Cleanup(func() { cancel(); <-ended })
-	eventually(a.t, name+" is online", func() bool { return a.hub.Free(agenthub.Who{Name: name}) })
+	eventually(a.t, name+" is online", func() bool { return a.hub.Free(runnerhub.Who{Name: name}) })
 }
 
-func (a *agents) opts(o *Options) { o.Hub = a.hub }
+func (a *runners) opts(o *Options) { o.Hub = a.hub }
 
-func TestAStageWithRunsOnRunsOnTheAgentAndSaysWhere(t *testing.T) {
-	ag := newAgents(t, agenthub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
+func TestAStageWithRunsOnRunsOnTheRunnerAndSaysWhere(t *testing.T) {
+	ag := newRunners(t, runnerhub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
 	dir := t.TempDir()
 	ag.runBox(dir)
-	h := newHarness(t, map[string]string{"a": "name: a\nsecrets: [TOKEN]\nstages:\n  s: {runs_on: linux, run: 'echo \"on $KIPP_AGENT in $KIPP_WORKSPACE as $KIPP_JOB/$KIPP_STAGE $TOKEN\"'}\n  t: {needs: [s], run: echo local}\n"}, ag.opts)
+	h := newHarness(t, map[string]string{"a": "name: a\nsecrets: [TOKEN]\nstages:\n  s: {runs_on: linux, run: 'echo \"on $KIPP_RUNNER in $KIPP_WORKSPACE as $KIPP_JOB/$KIPP_STAGE $TOKEN\"'}\n  t: {needs: [s], run: echo local}\n"}, ag.opts)
 	b := h.wait(t, h.trigger(t, "a").ID)
 	log := h.log(t, b, "s")
 	if b.Status != store.Success {
@@ -142,14 +142,14 @@ func TestAStageWithRunsOnRunsOnTheAgentAndSaysWhere(t *testing.T) {
 	if st["s"].RanOn != "box" || st["t"].RanOn != "local" {
 		t.Fatalf("ran on %q and %q", st["s"].RanOn, st["t"].RanOn)
 	}
-	eventually(t, "the build's workspace on the agent is gone", func() bool {
+	eventually(t, "the build's workspace on the runner is gone", func() bool {
 		_, err := os.Stat(filepath.Join(dir, "a", "1"))
 		return errors.Is(err, os.ErrNotExist)
 	})
 }
 
-func TestAStageThatAgentsCarryButCannotTakeWaitsAndSaysWhy(t *testing.T) {
-	ag := newAgents(t, agenthub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
+func TestAStageThatRunnersCarryButCannotTakeWaitsAndSaysWhy(t *testing.T) {
+	ag := newRunners(t, runnerhub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
 	ag.runBox(t.TempDir())
 	ready := filepath.Join(t.TempDir(), "go")
 	// Both stages hold the one executor until ready: either may take it
@@ -157,10 +157,10 @@ func TestAStageThatAgentsCarryButCannotTakeWaitsAndSaysWhy(t *testing.T) {
 	hold := "'while [ ! -e " + ready + " ]; do sleep 0.05; done'"
 	h := newHarness(t, map[string]string{"a": "name: a\nstages:\n  one: {runs_on: linux, run: " + hold + "}\n  two: {runs_on: linux, run: " + hold + "}\n"}, ag.opts)
 	b := h.trigger(t, "a")
-	eventually(t, "a stage waits for the agent", func() bool {
+	eventually(t, "a stage waits for the runner", func() bool {
 		q, err := h.d.Queue(context.Background())
 		return err == nil && len(q.Running) == 1 && len(q.Running[0].Waiting) == 1 &&
-			(q.Running[0].Waiting["one"] == "waiting for an agent with labels [linux]" || q.Running[0].Waiting["two"] == "waiting for an agent with labels [linux]")
+			(q.Running[0].Waiting["one"] == "waiting for a runner with labels [linux]" || q.Running[0].Waiting["two"] == "waiting for a runner with labels [linux]")
 	})
 	if err := os.WriteFile(ready, nil, 0o600); err != nil {
 		t.Fatal(err)
@@ -170,7 +170,7 @@ func TestAStageThatAgentsCarryButCannotTakeWaitsAndSaysWhy(t *testing.T) {
 		t.Fatalf("%s", b.Status)
 	}
 	logs := h.log(t, b, "one") + h.log(t, b, "two")
-	if !strings.Contains(logs, "kipp: waiting for an agent with labels [linux]\n") {
+	if !strings.Contains(logs, "kipp: waiting for a runner with labels [linux]\n") {
 		t.Fatalf("the wait is not in the log: %q", logs)
 	}
 }
@@ -183,10 +183,10 @@ func TestAServerThatRunsNoStagesRefusesAStageThatNamesNoPlace(t *testing.T) {
 	}
 }
 
-func TestDefaultRunsOnSendsAStageThatNamesNoPlaceToAnAgent(t *testing.T) {
-	ag := newAgents(t, agenthub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
+func TestDefaultRunsOnSendsAStageThatNamesNoPlaceToAnRunner(t *testing.T) {
+	ag := newRunners(t, runnerhub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
 	ag.runBox(t.TempDir())
-	h := newHarness(t, map[string]string{"a": "name: a\nstages:\n  s: {run: echo on $KIPP_AGENT}\non_success: {run: echo hook}\n"}, ag.opts, func(o *Options) {
+	h := newHarness(t, map[string]string{"a": "name: a\nstages:\n  s: {run: echo on $KIPP_RUNNER}\non_success: {run: echo hook}\n"}, ag.opts, func(o *Options) {
 		o.RunsNoStages, o.DefaultRunsOn = true, []string{"linux"}
 	})
 	b := h.wait(t, h.trigger(t, "a").ID)
@@ -198,8 +198,8 @@ func TestDefaultRunsOnSendsAStageThatNamesNoPlaceToAnAgent(t *testing.T) {
 	}
 }
 
-func TestAStageOnAnAgentTakesNoneOfTheServersExecutors(t *testing.T) {
-	ag := newAgents(t, agenthub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
+func TestAStageOnAnRunnerTakesNoneOfTheServersExecutors(t *testing.T) {
+	ag := newRunners(t, runnerhub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
 	ag.runBox(t.TempDir())
 	ready := filepath.Join(t.TempDir(), "go")
 	h := newHarness(t, map[string]string{
@@ -237,8 +237,8 @@ func TestTheBuildsLimitIsApartFromTheServersExecutors(t *testing.T) {
 	h.wait(t, second.ID)
 }
 
-func TestTheJunitOfAStageOnAnAgentIsRead(t *testing.T) {
-	ag := newAgents(t, agenthub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
+func TestTheJunitOfAStageOnAnRunnerIsRead(t *testing.T) {
+	ag := newRunners(t, runnerhub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
 	ag.runBox(t.TempDir())
 	h := newHarness(t, map[string]string{"a": `name: a
 stages:
@@ -257,44 +257,44 @@ stages:
 	}
 }
 
-func TestAStageOnAnAgentGetsOnlyTheServersVariablesItIsGivenByName(t *testing.T) {
-	ag := newAgents(t, agenthub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
-	ag.runBox(t.TempDir(), "HOME=/agent/home")
+func TestAStageOnAnRunnerGetsOnlyTheServersVariablesItIsGivenByName(t *testing.T) {
+	ag := newRunners(t, runnerhub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
+	ag.runBox(t.TempDir(), "HOME=/runner/home")
 	t.Setenv("KIPP_DRY", "0")
 	t.Setenv("KIPP_TEST_SERVER_ONLY", "leak")
 	h := newHarness(t, map[string]string{"a": "name: a\nstages:\n  s: {runs_on: linux, run: 'echo \"[$KIPP_DRY][$KIPP_TEST_SERVER_ONLY][$HOME][$TMPDIR]\"'}\n"}, ag.opts, func(o *Options) {
-		o.AgentEnv = []string{"KIPP_DRY"}
+		o.RunnerEnv = []string{"KIPP_DRY"}
 		o.PassEnv = []string{"*"}
 	})
 	b := h.wait(t, h.trigger(t, "a").ID)
-	if log := h.log(t, b, "s"); !strings.Contains(log, "[0][][/agent/home][]") {
+	if log := h.log(t, b, "s"); !strings.Contains(log, "[0][][/runner/home][]") {
 		t.Fatalf("%q", log)
 	}
 }
 
-func TestAgentEnvKeepsExactNamesOnly(t *testing.T) {
-	got := AgentEnv([]string{"KIPP_DRY=0", "KIPP_DRYER=1", "PATH=/bin", "HOME=/h", "TMPDIR=/t"}, []string{"KIPP_DRY"})
+func TestRunnerEnvKeepsExactNamesOnly(t *testing.T) {
+	got := RunnerEnv([]string{"KIPP_DRY=0", "KIPP_DRYER=1", "PATH=/bin", "HOME=/h", "TMPDIR=/t"}, []string{"KIPP_DRY"})
 	if !slices.Equal(got, []string{"KIPP_DRY=0"}) {
 		t.Fatal(got)
 	}
-	if _, err := ParseAgentEnv("KIPP_DRY, LC_*"); err == nil {
+	if _, err := ParseRunnerEnv("KIPP_DRY, LC_*"); err == nil {
 		t.Fatal("a prefix was taken")
 	}
-	if names, err := ParseAgentEnv("KIPP_DRY, HTTP_PROXY"); err != nil || !slices.Equal(names, []string{"KIPP_DRY", "HTTP_PROXY"}) {
+	if names, err := ParseRunnerEnv("KIPP_DRY, HTTP_PROXY"); err != nil || !slices.Equal(names, []string{"KIPP_DRY", "HTTP_PROXY"}) {
 		t.Fatal(names, err)
 	}
 }
 
-// A stage given to an agent that goes away mid-stage fails, with why.
-func TestAStageOnAnAgentThatGoesOfflineFails(t *testing.T) {
-	ag := newAgents(t, agenthub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
+// A stage given to a runner that goes away mid-stage fails, with why.
+func TestAStageOnAnRunnerThatGoesOfflineFails(t *testing.T) {
+	ag := newRunners(t, runnerhub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
 	ctx, cancel := context.WithCancel(context.Background())
 	ended := make(chan struct{})
 	go func() {
 		defer close(ended)
-		_ = agent.Run(ctx, agent.Config{URL: ag.srv.URL, Token: tokenOf("box"), Workdir: t.TempDir(), Version: "v-test", Env: []string{"PATH=" + os.Getenv("PATH")}, Log: slog.New(slog.DiscardHandler)})
+		_ = runnerd.Run(ctx, runnerd.Config{URL: ag.srv.URL, Token: tokenOf("box"), Workdir: t.TempDir(), Version: "v-test", Env: []string{"PATH=" + os.Getenv("PATH")}, Log: slog.New(slog.DiscardHandler)})
 	}()
-	eventually(t, "box is online", func() bool { return ag.hub.Free(agenthub.Who{Name: "box"}) })
+	eventually(t, "box is online", func() bool { return ag.hub.Free(runnerhub.Who{Name: "box"}) })
 	h := newHarness(t, map[string]string{"a": "name: a\nstages:\n  s: {runs_on: linux, run: 'echo started; sleep 30'}\n"}, ag.opts)
 	b := h.trigger(t, "a")
 	eventually(t, "the stage started", func() bool {
@@ -307,7 +307,7 @@ func TestAStageOnAnAgentThatGoesOfflineFails(t *testing.T) {
 	b = h.wait(t, b.ID)
 	cancel()
 	<-ended
-	if log := h.log(t, b, "s"); b.Status != store.Failed || !strings.Contains(log, "kipp: the agent went offline") {
+	if log := h.log(t, b, "s"); b.Status != store.Failed || !strings.Contains(log, "kipp: the runner went offline") {
 		t.Fatalf("%s: %q", b.Status, log)
 	}
 }

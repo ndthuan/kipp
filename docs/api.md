@@ -2,7 +2,7 @@
 
 Everything a machine calls on a kipp server is under `/api/v1`: the JSON
 API, the webhooks GitHub delivers to, and the calls between kipp and an
-agent of the same version (tagged `internal`, with no promise of
+runner of the same version (tagged `internal`, with no promise of
 stability).
 
 - [The description](#the-description)
@@ -36,8 +36,8 @@ fails them, and so does a route it leaves out.
   changes something carries the session's CSRF token in `X-CSRF-Token`.
 
 `GET /api/v1/health` and `GET /api/v1/openapi.yaml` need neither. The
-webhooks are authenticated by their signature, the agent calls by the
-agent's token, and the cache calls by the build's cache token. Anything
+webhooks are authenticated by their signature, the runner calls by the
+runner's token, and the cache calls by the build's cache token. Anything
 else without a token or a session is 401.
 
 `GET /api/v1/health` answers `{"ok":true}` to anyone, and adds `version`
@@ -74,7 +74,7 @@ view is 404, as one that does not exist is.
 - A build is `{id, job, number, status}` wherever another answer refers
   to one (a `BuildRef`): the build a remembered metric came from, a
   queued build's `blocker`, the `saved_by` of a cache entry, a stage an
-  agent runs. Its `status` is `null` once retention has removed the
+  runner runs. Its `status` is `null` once retention has removed the
   build.
 - A build in a list, in a job's `last` and in the answer to a trigger has
   no `stages`; `GET /api/v1/builds/<id>` has its `stages` and `complete`,
@@ -146,10 +146,10 @@ an admin may read is below `/admin/`.
 | `POST /admin/reload` | admin | Reads the job files again; a refused set is a 422 `jobs_refused` with the errors. |
 | `GET`, `POST`, `DELETE /admin/quiet` | admin | Quiet mode ([Restarting without losing builds](operations.md#restarting-without-losing-builds)). |
 | `GET`, `POST`, `DELETE /admin/upgrade`, `POST /admin/upgrade/rollback` | admin | Upgrading the server ([Upgrade](#upgrade)). |
-| `GET /admin/users`, `/admin/users/<name>`, `/admin/secrets`, `/admin/server`, `/admin/engines`, `/admin/agents`, `/admin/cache`, `/admin/audit` | admin | [Admin reads](#admin-reads). |
+| `GET /admin/users`, `/admin/users/<name>`, `/admin/secrets`, `/admin/server`, `/admin/engines`, `/admin/runners`, `/admin/cache`, `/admin/audit` | admin | [Admin reads](#admin-reads). |
 | `POST /hooks/github/<job>` | a signature | A GitHub delivery for a job ([webhook](jobs.md#webhook)). |
 | `POST /hooks/github-app/<app>` | a signature | A GitHub App's delivery ([GitHub App](organization-folders.md#github-app)). |
-| `/agent/...` | an agent's token | Between the server and its agents; `internal`. |
+| `/runner/...` | a runner's token | Between the server and its runners; `internal`. |
 | `/cache/<scope>/...` | a build's cache token | The keyed cache ([Cache](builds.md#cache)); `internal`. |
 
 Every path in the table is under `/api/v1`. Limits that hold across
@@ -180,7 +180,7 @@ and none answers a password, a token, a hash or a secret's value.
   its deliveries with.
 - `GET /api/v1/admin/server`: `version`, `go_version`, `schema`,
   `started_at`, `listen`, `base_url`, `executors`, `builds`,
-  `default_runs_on`, `agent_env`, `agent_url`, `agent_listen`, `shell`,
+  `default_runs_on`, `runner_env`, `runner_url`, `runner_listen`, `shell`,
   `session_ttl_seconds`, `timezone`, `data_dir`, `jobs_dir`,
   `free_disk_bytes` and `db_size_bytes` (null when they cannot be read),
   `last_reload_at`, `last_reload_error` (empty when the last reload was
@@ -194,7 +194,7 @@ and none answers a password, a token, a hash or a secret's value.
 - `GET /api/v1/admin/engines`: each engine's `name`, `kind`, `url` (with
   no credentials in it), `labels`, `executors`, `enabled`, `reachable`,
   `since`, `version`, `last_error` and `running`, the stages that run on it as `job#number/stage`.
-- `GET /api/v1/admin/agents`: each standing agent's `name`, `labels`,
+- `GET /api/v1/admin/runners`: each standing runner's `name`, `labels`,
   `executors`, `busy`, `enabled`, `online`, `since`, `version`, `os`,
   `arch`, the `stages` it runs and `last_seen_at`.
 - `GET /api/v1/admin/cache`: the cache entries, paged: `id`, `scope`,

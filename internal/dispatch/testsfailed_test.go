@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ndthuan/kipp/internal/agenthub"
+	"github.com/ndthuan/kipp/internal/runnerhub"
 	"github.com/ndthuan/kipp/internal/store"
 )
 
@@ -81,8 +81,8 @@ stages:
 	}
 }
 
-func TestTestsFailedReadsTheReportOfAStageOnAnAgent(t *testing.T) {
-	ag := newAgents(t, agenthub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
+func TestTestsFailedReadsTheReportOfAStageOnAnRunner(t *testing.T) {
+	ag := newRunners(t, runnerhub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
 	ag.runBox(t.TempDir())
 	h := newHarness(t, map[string]string{"t": `name: t
 stages:

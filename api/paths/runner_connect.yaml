@@ -1,0 +1,30 @@
+post:
+  operationId: runnerConnect
+  tags: [internal]
+  summary: A runner says who it is
+  description: |
+    Sent when the runner starts and again every heartbeat. The server refuses
+    a runner that is not its own version (409), and counts one offline after
+    three missed. Every runner call carries the runner's token.
+  x-kipp-package: runnerhub
+  security:
+    - runnerToken: []
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: ../schemas/ConnectRequest.yaml
+  responses:
+    "200":
+      description: Who the server says the runner is.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/ConnectResponse.yaml
+    "400":
+      $ref: ../responses/RunnerRefusal.yaml
+    "401":
+      $ref: ../responses/RunnerRefusal.yaml
+    "409":
+      $ref: ../responses/RunnerRefusal.yaml

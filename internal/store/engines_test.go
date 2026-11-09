@@ -43,57 +43,57 @@ func TestAnEngineIsKeptByNameAndReplacedKeepingWhenItWasAdded(t *testing.T) {
 	}
 }
 
-func TestAnAgentIsFoundByTheHashOfItsToken(t *testing.T) {
+func TestAnRunnerIsFoundByTheHashOfItsToken(t *testing.T) {
 	s := open(t)
-	must(t, s.PutAgent(ctx, Agent{Name: "build-1", Labels: []string{"linux"}, Executors: 2, Enabled: true, TokenHash: "h1"}))
-	a, err := s.AgentByTokenHash(ctx, "h1")
+	must(t, s.PutRunner(ctx, Runner{Name: "build-1", Labels: []string{"linux"}, Executors: 2, Enabled: true, TokenHash: "h1"}))
+	a, err := s.RunnerByTokenHash(ctx, "h1")
 	must(t, err)
 	if a.Name != "build-1" || a.Executors != 2 || !a.Enabled || !slices.Equal(a.Labels, []string{"linux"}) || a.LastSeenAt != nil {
 		t.Fatalf("%+v", a)
 	}
-	if _, err := s.AgentByTokenHash(ctx, "nope"); !errors.Is(err, ErrNotFound) {
+	if _, err := s.RunnerByTokenHash(ctx, "nope"); !errors.Is(err, ErrNotFound) {
 		t.Fatal(err)
 	}
-	if err := s.PutAgent(ctx, Agent{Name: "build-2", Executors: 1, TokenHash: "h1"}); err == nil {
-		t.Fatal("two agents with one token hash")
+	if err := s.PutRunner(ctx, Runner{Name: "build-2", Executors: 1, TokenHash: "h1"}); err == nil {
+		t.Fatal("two runners with one token hash")
 	}
 	at := time.Now()
-	must(t, s.SetAgentSeen(ctx, "build-1", at, "linux", "amd64", "v0.2.0"))
-	a, err = s.Agent(ctx, "build-1")
+	must(t, s.SetRunnerSeen(ctx, "build-1", at, "linux", "amd64", "v0.2.0"))
+	a, err = s.Runner(ctx, "build-1")
 	must(t, err)
 	if a.LastSeenAt == nil || !a.LastSeenAt.Equal(at.UTC().Truncate(time.Nanosecond)) || a.OS != "linux" || a.Arch != "amd64" || a.Version != "v0.2.0" {
 		t.Fatalf("%+v", a)
 	}
-	if err := s.SetAgentSeen(ctx, "gone", at, "", "", ""); !errors.Is(err, ErrNotFound) {
+	if err := s.SetRunnerSeen(ctx, "gone", at, "", "", ""); !errors.Is(err, ErrNotFound) {
 		t.Fatal(err)
 	}
 }
 
-// A new token for an agent is a replace of its row: what the server saw
+// A new token for a runner is a replace of its row: what the server saw
 // of it stays, and the old hash finds nothing.
-func TestReplacingAnAgentKeepsWhatWasSeenOfIt(t *testing.T) {
+func TestReplacingAnRunnerKeepsWhatWasSeenOfIt(t *testing.T) {
 	s := open(t)
-	must(t, s.PutAgent(ctx, Agent{Name: "a", Executors: 1, Enabled: true, TokenHash: "old"}))
-	must(t, s.SetAgentSeen(ctx, "a", time.Now(), "linux", "arm64", "v1"))
-	a, err := s.Agent(ctx, "a")
+	must(t, s.PutRunner(ctx, Runner{Name: "a", Executors: 1, Enabled: true, TokenHash: "old"}))
+	must(t, s.SetRunnerSeen(ctx, "a", time.Now(), "linux", "arm64", "v1"))
+	a, err := s.Runner(ctx, "a")
 	must(t, err)
 	a.TokenHash = "new"
-	must(t, s.PutAgent(ctx, *a))
-	if _, err := s.AgentByTokenHash(ctx, "old"); !errors.Is(err, ErrNotFound) {
+	must(t, s.PutRunner(ctx, *a))
+	if _, err := s.RunnerByTokenHash(ctx, "old"); !errors.Is(err, ErrNotFound) {
 		t.Fatal(err)
 	}
-	b, err := s.AgentByTokenHash(ctx, "new")
+	b, err := s.RunnerByTokenHash(ctx, "new")
 	must(t, err)
 	if b.OS != "linux" || b.LastSeenAt == nil || !b.CreatedAt.Equal(a.CreatedAt) {
 		t.Fatalf("%+v", b)
 	}
-	all, err := s.Agents(ctx)
+	all, err := s.Runners(ctx)
 	must(t, err)
 	if len(all) != 1 {
 		t.Fatalf("%+v", all)
 	}
-	must(t, s.DeleteAgent(ctx, "a"))
-	if err := s.DeleteAgent(ctx, "a"); !errors.Is(err, ErrNotFound) {
+	must(t, s.DeleteRunner(ctx, "a"))
+	if err := s.DeleteRunner(ctx, "a"); !errors.Is(err, ErrNotFound) {
 		t.Fatal(err)
 	}
 }

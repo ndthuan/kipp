@@ -78,7 +78,7 @@ kipp records two metrics of every build by itself: `kipp.stage_seconds`
 and `kipp.case_seconds` (item `<suite> / <case>`: each JUnit case that
 was not skipped).
 
-On an agent or in a container the files are read there and sent back.
+On a runner or in a container the files are read there and sent back.
 
 ## What a store remembers
 
@@ -103,7 +103,7 @@ refused in a stage's `when`.
 
 Before a stage that declares `metrics` starts (`metrics: {}` reads and
 reports nothing), kipp writes what its store remembers to a file in the
-build's workspace and names it in `KIPP_METRICS`, on an agent too, so the
+build's workspace and names it in `KIPP_METRICS`, on a runner too, so the
 stage reads the numbers with no token:
 
 ```json
@@ -169,7 +169,7 @@ A guard after the stage comes too late for a stage that decides
 something itself, such as one that checks a branch and merges it in one
 command. Such a stage runs the same guards before it decides, with
 `"$KIPP_BIN" metrics check <glob>` ([Commands](#commands)): offline, with
-no token, on the server, an agent and in a container alike. The guard
+no token, on the server, a runner and in a container alike. The guard
 after the stage still runs.
 
 ## Pages
@@ -274,7 +274,7 @@ It needs no data directory, no server and no token. It exits:
 
 What 2 and 3 mean is the caller's to decide: a script that must not merge
 unchecked fails on both 1 and 2, and a job with no guard declared has
-chosen none. In a container `$KIPP_BIN` is `kipp-agent`, which has the
+chosen none. In a container `$KIPP_BIN` is `kipp-runner`, which has the
 same command:
 
 ```sh

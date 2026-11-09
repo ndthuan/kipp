@@ -59,7 +59,7 @@ type env struct {
 	dir    string
 	active atomic.Int64 // handlers that have not returned
 	admin  string       // tokens
-	agent  string       // build on smoke
+	aide   string       // build on smoke
 	viewer string       // view on smoke
 	// reloadErr is what a reload fails with; nil, the default, is one
 	// that is taken.
@@ -116,7 +116,7 @@ func newEnv(t *testing.T, tune ...func(*API)) *env {
 	}))
 	t.Cleanup(func() { stop(); <-stopped; e.srv.Close(); _ = st.Close() })
 	e.admin = token(t, st, "admin", true, nil)
-	e.agent = token(t, st, "agent", false, map[string][]string{"smoke": {"view", "build"}})
+	e.aide = token(t, st, "aide", false, map[string][]string{"smoke": {"view", "build"}})
 	e.viewer = token(t, st, "viewer", false, map[string][]string{"smoke": {"view"}})
 	return e
 }
@@ -283,12 +283,12 @@ func TestHealthNeedsNoLoginAndEverythingElseDoes(t *testing.T) {
 
 func TestANarrowTokenSeesOneJobAndGets404ForTheRest(t *testing.T) {
 	e := newEnv(t)
-	list := e.list(t, e.agent, "/api/v1/jobs")
-	eq(t, "jobs the agent sees", len(list), 1)
+	list := e.list(t, e.aide, "/api/v1/jobs")
+	eq(t, "jobs aide sees", len(list), 1)
 	eq(t, "name", list[0]["name"], any("smoke"))
 	eq(t, "group", list[0]["group"], any("backend"))
-	eq(t, "error", e.object(t, 404, e.agent, "GET", "/api/v1/jobs/gc", "")["detail"], any("not found"))
-	e.call(t, 404, e.agent, "POST", "/api/v1/jobs/gc/builds", "{}")
+	eq(t, "error", e.object(t, 404, e.aide, "GET", "/api/v1/jobs/gc", "")["detail"], any("not found"))
+	e.call(t, 404, e.aide, "POST", "/api/v1/jobs/gc/builds", "{}")
 	gc := e.object(t, 200, e.admin, "GET", "/api/v1/jobs/gc", "")
 	eq(t, "cron", gc["cron"], any("*/10 * * * *"))
 	eq(t, "concurrency", gc["concurrency"], any("queue"))
@@ -323,7 +323,7 @@ func TestAHiddenJobAnswersExactlyLikeAMissingOne(t *testing.T) {
 		if strings.Contains(r.path, "/builds/%s") {
 			there, missing = hidden, "99999"
 		}
-		for _, tok := range []string{e.agent, e.viewer} {
+		for _, tok := range []string{e.aide, e.viewer} {
 			body, h := e.call(t, 404, tok, r.method, fmt.Sprintf(r.path, there), "{}", "Accept", r.accept)
 			body2, h2 := e.call(t, 404, tok, r.method, fmt.Sprintf(r.path, missing), "{}", "Accept", r.accept)
 			eq(t, r.method+" "+r.path+": body", body, body2)
@@ -345,7 +345,7 @@ func TestAJobOneMayViewButNotActOnIs403(t *testing.T) {
 	}
 	eq(t, "builds after a refused trigger", len(e.list(t, e.admin, "/api/v1/jobs/smoke/builds")), 0)
 	id := e.trigger(t, "smoke", "")
-	for _, tok := range []string{e.viewer, e.agent} {
+	for _, tok := range []string{e.viewer, e.aide} {
 		e.call(t, 403, tok, "POST", "/api/v1/builds/"+id+"/cancel", "")
 		eq(t, "job", e.object(t, 200, tok, "GET", "/api/v1/builds/"+id, "")["job"], any("smoke"))
 	}
@@ -354,13 +354,13 @@ func TestAJobOneMayViewButNotActOnIs403(t *testing.T) {
 
 func TestBuildWaitLogAndCancelPermissions(t *testing.T) {
 	e := newEnv(t)
-	b := e.object(t, 201, e.agent, "POST", "/api/v1/jobs/smoke/builds", `{"params": {"TIER": "full"}}`)
+	b := e.object(t, 201, e.aide, "POST", "/api/v1/jobs/smoke/builds", `{"params": {"TIER": "full"}}`)
 	eq(t, "number", b["number"], any(float64(1)))
-	eq(t, "started_by", b["started_by"], any("agent"))
+	eq(t, "started_by", b["started_by"], any("aide"))
 	eq(t, "trigger", b["trigger"], any("api"))
-	// The agent may build but not cancel: 403, not 404 (it can see the job).
-	e.call(t, 403, e.agent, "POST", "/api/v1/builds/1/cancel", "")
-	done := e.object(t, 200, e.agent, "GET", "/api/v1/builds/1?wait=true", "")
+	// aide may build but not cancel: 403, not 404 (it can see the job).
+	e.call(t, 403, e.aide, "POST", "/api/v1/builds/1/cancel", "")
+	done := e.object(t, 200, e.aide, "GET", "/api/v1/builds/1?wait=true", "")
 	eq(t, "status", done["status"], any("success"))
 	stages := done["stages"].([]any)
 	eq(t, "stages", len(stages), 1)
@@ -371,13 +371,13 @@ func TestBuildWaitLogAndCancelPermissions(t *testing.T) {
 	if done["finished_at"] == nil {
 		t.Fatal("a finished build has no finished_at", done)
 	}
-	e.object(t, 403, e.agent, "POST", "/api/v1/admin/reload", "")
+	e.object(t, 403, e.aide, "POST", "/api/v1/admin/reload", "")
 	e.object(t, 200, e.admin, "POST", "/api/v1/admin/reload", "")
-	contains(t, e.object(t, 400, e.agent, "POST", "/api/v1/jobs/smoke/builds", `{"params": {"TIER": "nightly"}}`)["detail"].(string), "TIER")
-	tests, _ := e.call(t, 200, e.agent, "GET", "/api/v1/builds/1/results", "")
+	contains(t, e.object(t, 400, e.aide, "POST", "/api/v1/jobs/smoke/builds", `{"params": {"TIER": "nightly"}}`)["detail"].(string), "TIER")
+	tests, _ := e.call(t, 200, e.aide, "GET", "/api/v1/builds/1/results", "")
 	eq(t, "tests", strings.TrimSpace(tests), `{"items":[],"next_cursor":null}`)
-	eq(t, "last build's status", e.list(t, e.agent, "/api/v1/jobs")[0]["last"].(map[string]any)["status"], any("success"))
-	job := e.object(t, 200, e.agent, "GET", "/api/v1/jobs/smoke", "")
+	eq(t, "last build's status", e.list(t, e.aide, "/api/v1/jobs")[0]["last"].(map[string]any)["status"], any("success"))
+	job := e.object(t, 200, e.aide, "GET", "/api/v1/jobs/smoke", "")
 	param := job["params"].([]any)[0].(map[string]any)
 	eq(t, "param name", param["name"], any("TIER"))
 	eq(t, "param default", param["default"], any("quick"))
@@ -390,17 +390,17 @@ func TestTheLogComesInChunksFromAnOffset(t *testing.T) {
 	id := e.trigger(t, "smoke", `{"params": {"TIER": "full"}}`)
 	e.finished(t, id)
 	for offset, want := range map[string]string{"0": "tier=full\ndone\n", "10": "done\n", "15": ""} {
-		text, h := e.call(t, 200, e.agent, "GET", "/api/v1/builds/"+id+"/stages/s/log?offset="+offset, "")
+		text, h := e.call(t, 200, e.aide, "GET", "/api/v1/builds/"+id+"/stages/s/log?offset="+offset, "")
 		eq(t, "log from "+offset, text, want)
 		eq(t, "next offset from "+offset, h.Get("X-Kipp-Offset"), "15")
 		eq(t, "more from "+offset, h.Get("X-Kipp-More"), "false")
 		eq(t, "content type", h.Get("Content-Type"), "text/plain; charset=utf-8")
 	}
 	for _, offset := range []string{"-3", "x"} {
-		e.asProblem(t, 400, "bad_input", e.agent, "GET", "/api/v1/builds/"+id+"/stages/s/log?offset="+offset, "")
+		e.asProblem(t, 400, "bad_input", e.aide, "GET", "/api/v1/builds/"+id+"/stages/s/log?offset="+offset, "")
 	}
 	// A stage that has printed nothing yet has an empty log, not a missing one.
-	text, h := e.call(t, 200, e.agent, "GET", "/api/v1/builds/"+id+"/stages/hooks/log", "")
+	text, h := e.call(t, 200, e.aide, "GET", "/api/v1/builds/"+id+"/stages/hooks/log", "")
 	eq(t, "a log not written yet", text+h.Get("X-Kipp-Offset"), "0")
 }
 
@@ -816,7 +816,7 @@ func TestAStoreThatIsDownIsA500NotA401OrA404(t *testing.T) {
 	e := newEnv(t)
 	must(t, e.st.Close())
 	for _, path := range []string{"/api/v1/jobs", "/api/v1/jobs/smoke", "/api/v1/builds/1"} {
-		eq(t, path, e.object(t, 500, e.agent, "GET", path, "")["detail"], any("internal error"))
+		eq(t, path, e.object(t, 500, e.aide, "GET", path, "")["detail"], any("internal error"))
 	}
 	e.call(t, 500, "", "GET", "/api/v1/jobs", "", "Cookie", SessionCookie+"=abc")
 	// A probe is answered whatever it sends along, and says only ok when
@@ -846,7 +846,7 @@ func TestServiceBoundsWhatItAsksTheStoreFor(t *testing.T) {
 		must(t, err)
 		eq(t, fmt.Sprint("test rows for ", asked), len(rows), want)
 	}
-	if _, err := svc.TestHistory(ctx, e.user(t, "agent"), "gc", 5); !errors.Is(err, ErrNotFound) {
+	if _, err := svc.TestHistory(ctx, e.user(t, "aide"), "gc", 5); !errors.Is(err, ErrNotFound) {
 		t.Fatal(err)
 	}
 }
@@ -866,10 +866,10 @@ func TestACookieNeitherRescuesNorWidensABearerToken(t *testing.T) {
 	eq(t, "builds", len(e.list(t, e.admin, "/api/v1/jobs/smoke/builds")), 0)
 	// A valid narrow token acts as its own user, not as the cookie's.
 	for _, scheme := range []string{"Bearer ", "bearer "} {
-		e.call(t, 403, "", "POST", "/api/v1/admin/reload", "", "Cookie", cookie, "Authorization", scheme+e.agent)
-		e.call(t, 404, "", "GET", "/api/v1/jobs/gc", "", "Cookie", cookie, "Authorization", scheme+e.agent)
-		b := e.object(t, 201, "", "POST", "/api/v1/jobs/smoke/builds", "{}", "Cookie", cookie, "Authorization", scheme+e.agent)
-		eq(t, "started_by", b["started_by"], any("agent"))
+		e.call(t, 403, "", "POST", "/api/v1/admin/reload", "", "Cookie", cookie, "Authorization", scheme+e.aide)
+		e.call(t, 404, "", "GET", "/api/v1/jobs/gc", "", "Cookie", cookie, "Authorization", scheme+e.aide)
+		b := e.object(t, 201, "", "POST", "/api/v1/jobs/smoke/builds", "{}", "Cookie", cookie, "Authorization", scheme+e.aide)
+		eq(t, "started_by", b["started_by"], any("aide"))
 	}
 }
 
@@ -935,8 +935,8 @@ func TestEveryAnswerIsNotSniffedAndNotStored(t *testing.T) {
 		{401, "", "GET", "/api/v1/jobs", ""},
 		{200, e.admin, "GET", "/api/v1/jobs", ""},
 		{200, e.admin, "GET", "/api/v1/builds/" + id, ""},
-		{404, e.agent, "GET", "/api/v1/jobs/gc", ""},
-		{403, e.agent, "POST", "/api/v1/admin/reload", ""},
+		{404, e.aide, "GET", "/api/v1/jobs/gc", ""},
+		{403, e.aide, "POST", "/api/v1/admin/reload", ""},
 		{200, e.admin, "GET", "/api/v1/builds/" + id + "/stages/s/log", ""},
 		{200, e.admin, "GET", "/api/v1/builds/" + id + "/stages/s/log/events", sseAccept},
 	} {
@@ -949,16 +949,16 @@ func TestEveryAnswerIsNotSniffedAndNotStored(t *testing.T) {
 func TestATriggerChecksPermissionBeforeItReadsTheBody(t *testing.T) {
 	e := newEnv(t)
 	for _, bad := range []string{`{"params": `, `{"params": {}} trailing`, `{"params": {}}{"params": {}}`} {
-		e.call(t, 404, e.agent, "POST", "/api/v1/jobs/gc/builds", bad)
-		e.call(t, 404, e.agent, "POST", "/api/v1/jobs/nope/builds", bad)
+		e.call(t, 404, e.aide, "POST", "/api/v1/jobs/gc/builds", bad)
+		e.call(t, 404, e.aide, "POST", "/api/v1/jobs/nope/builds", bad)
 		e.call(t, 403, e.viewer, "POST", "/api/v1/jobs/smoke/builds", bad)
-		msg := e.object(t, 400, e.agent, "POST", "/api/v1/jobs/smoke/builds", bad)["detail"].(string)
+		msg := e.object(t, 400, e.aide, "POST", "/api/v1/jobs/smoke/builds", bad)["detail"].(string)
 		if msg == "" || strings.Contains(msg, "\n") || strings.HasPrefix(msg, "bad input") {
 			t.Fatalf("%q", msg)
 		}
 	}
 	eq(t, "builds", len(e.list(t, e.admin, "/api/v1/jobs/smoke/builds")), 0)
-	e.call(t, 201, e.agent, "POST", "/api/v1/jobs/smoke/builds", "{\"params\": {}}\n \n")
+	e.call(t, 201, e.aide, "POST", "/api/v1/jobs/smoke/builds", "{\"params\": {}}\n \n")
 }
 
 func TestReloadThatWasNotWiredIsAnInternalProblemWhoseCauseIsLogged(t *testing.T) {
@@ -974,7 +974,7 @@ func TestReloadThatWasNotWiredIsAnInternalProblemWhoseCauseIsLogged(t *testing.T
 // whoever is not an admin is told that the set is stale and nothing more.
 func TestTheReloadErrorIsToldInFullToAdminsAndInOneFixedSentenceToTheRest(t *testing.T) {
 	e := newEnv(t)
-	admin, narrow := &store.User{Name: "admin", Admin: true}, &store.User{Name: "agent"}
+	admin, narrow := &store.User{Name: "admin", Admin: true}, &store.User{Name: "aide"}
 	for _, u := range []*store.User{admin, narrow, nil} {
 		eq(t, "with nothing wired", e.api.Service().ReloadError(u), "")
 	}

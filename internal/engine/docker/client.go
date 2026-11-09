@@ -271,7 +271,7 @@ func (c *Client) Wait(ctx context.Context, id string) (int, error) {
 }
 
 // Logs writes what the container printed, stdout and stderr, to out: the
-// agent's own words, which say why a container that never connected did
+// runner's own words, which say why a container that never connected did
 // not.
 func (c *Client) Logs(ctx context.Context, id string, out io.Writer) error {
 	resp, err := c.do(ctx, http.MethodGet, "/containers/"+url.PathEscape(id)+"/logs", url.Values{"stdout": {"1"}, "stderr": {"1"}, "tail": {"200"}}, nil, "")

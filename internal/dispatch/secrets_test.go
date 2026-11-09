@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ndthuan/kipp/internal/agenthub"
 	"github.com/ndthuan/kipp/internal/config"
+	"github.com/ndthuan/kipp/internal/runnerhub"
 	"github.com/ndthuan/kipp/internal/store"
 )
 
@@ -171,8 +171,8 @@ func TestAUserAndPasswordSecretRefusesTheNamesItGivesWhenAnEnvOrAParamHasThem(t 
 	}
 }
 
-func TestAFileSecretOnAnAgentIsWrittenByTheAgentOutsideItsWorkspaceAndRemoved(t *testing.T) {
-	ag := newAgents(t, agenthub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
+func TestAFileSecretOnAnRunnerIsWrittenByTheRunnerOutsideItsWorkspaceAndRemoved(t *testing.T) {
+	ag := newRunners(t, runnerhub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
 	dir := t.TempDir()
 	ag.runBox(dir)
 	job := strings.Replace(fileJob, "stages:\n  s:\n    run:", "stages:\n  s:\n    runs_on: linux\n    run:", 1)
@@ -190,9 +190,9 @@ func TestAFileSecretOnAnAgentIsWrittenByTheAgentOutsideItsWorkspaceAndRemoved(t 
 	}
 	path := pathOf(t, log)
 	if strings.HasPrefix(path, dir) {
-		t.Errorf("the file %s is inside the agent's workdir %s", path, dir)
+		t.Errorf("the file %s is inside the runner's workdir %s", path, dir)
 	}
-	eventually(t, "the agent removed the file", func() bool {
+	eventually(t, "the runner removed the file", func() bool {
 		_, err := os.Stat(path)
 		return os.IsNotExist(err)
 	})

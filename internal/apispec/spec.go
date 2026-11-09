@@ -28,7 +28,7 @@ const (
 )
 
 // PackageExt names, on an operation, the package whose tests must reach it
-// (api, webhook, agenthub or cachesrv).
+// (api, webhook, runnerhub or cachesrv).
 const PackageExt = "x-kipp-package"
 
 // Load reads the root file of the sources in dir and every file it refers

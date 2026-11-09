@@ -13,6 +13,23 @@ lines and the data directory are the public surface.
   chose). "Previous problem" and "Next problem" buttons, with a count, jump
   between the lines drawn in red or yellow or saying error, warning, FAIL or
   panic among the lines the page keeps.
+- Changed: agents are now runners, the word GitHub and GitLab use, and the
+  old name is gone with no alias. The command is `kipp runner` (`kipp runner
+  add|ls|set|token|rm` on the server's data directory, and `kipp runner
+  --url ...` for a standing runner); the server's flags are `--runner-listen`,
+  `--runner-url` and `--runner-env`; a runner reads its token from
+  `KIPP_RUNNER_TOKEN`; a stage that runs on one gets `KIPP_RUNNER`; the binary
+  kipp puts into a container is `kipp-runner`, and the example unit is
+  `examples/systemd/kipp-runner.service`. In the API the list is
+  `/api/v1/admin/runners`, the runners' own calls are under `/runner/`, the
+  security scheme is `runnerToken`, and the admin settings carry
+  `runner_env`, `runner_url` and `runner_listen`. In the web UI the page is
+  `/admin/runners`, "Runners". The audit log names new changes `runner.add`,
+  `runner.set`, `runner.token` and `runner.rm`; earlier rows keep their
+  `agent.*` names. The store is renamed by the upgrade itself (the table
+  keeps its rows and every token keeps working), but an existing
+  installation must change its server flags, and each runner its
+  `KIPP_RUNNER_TOKEN` and command line, when it upgrades.
 - Cancel asks first: the queue's and the build page's button lead to a page
   that names the build and how long it has run, and only the button there
   cancels, then returns to the page you came from. A page the queue refreshes

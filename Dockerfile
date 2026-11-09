@@ -12,7 +12,7 @@
 # jobs.
 
 # The build runs on the builder's own platform and cross-compiles: no
-# emulated Go toolchain, and the Linux agents every kipp embeds are the
+# emulated Go toolchain, and the Linux runners every kipp embeds are the
 # same for both images.
 FROM --platform=$BUILDPLATFORM golang:1.27-trixie@sha256:c65ecfe613b539ac74c62a4c3b2c27e8f8a6076384c8f27e8a3c0f3be17cc385 AS build
 ARG TARGETOS TARGETARCH
@@ -28,7 +28,7 @@ RUN set -eu; \
     ldflags="-s -w -buildid= -X github.com/ndthuan/kipp/internal/version.Version=$VERSION"; \
     for arch in amd64 arm64; do \
       CGO_ENABLED=0 GOOS=linux GOARCH=$arch go build -trimpath -buildvcs=false -ldflags "$ldflags" \
-        -o internal/agentbin/bin/kipp-agent_linux_$arch ./cmd/kipp-agent; \
+        -o internal/runnerbin/bin/kipp-runner_linux_$arch ./cmd/kipp-runner; \
     done; \
     CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build ${TAGS:+-tags "$TAGS"} -trimpath -buildvcs=false -ldflags "$ldflags" \
       -o /out/kipp ./cmd/kipp

@@ -1,7 +1,7 @@
 // Package cache is the cache's side that runs in a stage: the namespaces a
 // build reads and writes, the tar.zst a cache entry is, the hash of files,
 // and the kipp cache command that restores and saves entries through the
-// server. It holds no database, so that kipp-agent, which carries it into a
+// server. It holds no database, so that kipp-runner, which carries it into a
 // container, does not carry SQLite.
 package cache
 

@@ -55,9 +55,9 @@
 <div><dt>Executors</dt><dd>{{if .Executors}}{{.Executors}}{{else}}0: the server runs no stage itself{{end}}</dd></div>
 <div><dt>Builds</dt><dd>{{.Builds}} at once</dd></div>
 <div><dt>Default runs_on</dt><dd>{{with .DefaultRunsOn}}<code>{{join .}}</code>{{else}}<span class="sub">none</span>{{end}}</dd></div>
-<div><dt>Agent env</dt><dd>{{with .AgentEnv}}<code>{{join .}}</code>{{else}}<span class="sub">none</span>{{end}}</dd></div>
-<div><dt>Agent URL</dt><dd><code>{{.AgentURL}}</code></dd></div>
-<div><dt>Agent listen</dt><dd>{{with .AgentListen}}<code>{{.}}</code>{{else}}<span class="sub">on Listen</span>{{end}}</dd></div>
+<div><dt>Runner env</dt><dd>{{with .RunnerEnv}}<code>{{join .}}</code>{{else}}<span class="sub">none</span>{{end}}</dd></div>
+<div><dt>Runner URL</dt><dd><code>{{.RunnerURL}}</code></dd></div>
+<div><dt>Runner listen</dt><dd>{{with .RunnerListen}}<code>{{.}}</code>{{else}}<span class="sub">on Listen</span>{{end}}</dd></div>
 <div><dt>Shell</dt><dd><code>{{.Shell}}</code></dd></div>
 <div><dt>Session TTL</dt><dd>{{.SessionTTL}}</dd></div>
 <div><dt>Time zone</dt><dd>{{.TimeZone}}</dd></div>

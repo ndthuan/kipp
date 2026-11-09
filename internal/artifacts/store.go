@@ -153,8 +153,8 @@ func (zeros) Read(p []byte) (int, error) {
 
 // ForgedError is a tar member no stage's files could have made: a link,
 // or a name that is absolute or climbs out with "..". A stage in a
-// container runs as root beside its agent and can write the tar the
-// agent sends, so the receiving end checks it.
+// container runs as root beside its runner and can write the tar the
+// runner sends, so the receiving end checks it.
 type ForgedError struct {
 	Name string
 	Why  string

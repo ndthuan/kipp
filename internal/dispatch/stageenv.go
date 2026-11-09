@@ -12,8 +12,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ndthuan/kipp/internal/agentproto"
 	"github.com/ndthuan/kipp/internal/config"
+	"github.com/ndthuan/kipp/internal/runnerproto"
 	"github.com/ndthuan/kipp/internal/store"
 )
 
@@ -170,7 +170,7 @@ func resetEnvFile(workspace, stage string) (string, error) {
 		return "", err
 	}
 	defer func() { _ = root.Close() }()
-	rel := filepath.FromSlash(agentproto.EnvFile(stage))
+	rel := filepath.FromSlash(runnerproto.EnvFile(stage))
 	if err := root.MkdirAll(filepath.Dir(rel), 0o750); err != nil {
 		return "", err
 	}
@@ -197,8 +197,8 @@ func (d *Dispatcher) collectEnv(b *store.Build, e *buildEnv, s *config.Stage, st
 	switch {
 	case err != nil:
 		say("the file could not be read: %v", err)
-	case len(data) > agentproto.MaxEnvFile:
-		say("the file is over %d KiB and is refused whole", agentproto.MaxEnvFile>>10)
+	case len(data) > runnerproto.MaxEnvFile:
+		say("the file is over %d KiB and is refused whole", runnerproto.MaxEnvFile>>10)
 	default:
 		vars, problems := parseEnvFile(data)
 		for _, p := range problems {
@@ -223,9 +223,9 @@ func (d *Dispatcher) collectEnv(b *store.Build, e *buildEnv, s *config.Stage, st
 // most it may hold of a longer one: where the stage ran decides where it
 // is. A stage that left none has written nothing.
 func (d *Dispatcher) readEnvFile(e *buildEnv, s *config.Stage) ([]byte, error) {
-	dir, rel := e.workspace, filepath.FromSlash(agentproto.EnvFile(s.Name))
+	dir, rel := e.workspace, filepath.FromSlash(runnerproto.EnvFile(s.Name))
 	if d.remote(s) {
-		dir, rel = junitDir(e, s), filepath.FromSlash(agentproto.EnvTarName)
+		dir, rel = junitDir(e, s), filepath.FromSlash(runnerproto.EnvTarName)
 	}
 	root, err := os.OpenRoot(dir)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -243,7 +243,7 @@ func (d *Dispatcher) readEnvFile(e *buildEnv, s *config.Stage) ([]byte, error) {
 		return nil, err
 	}
 	defer func() { _ = f.Close() }()
-	return io.ReadAll(io.LimitReader(f, agentproto.MaxEnvFile+1))
+	return io.ReadAll(io.LimitReader(f, runnerproto.MaxEnvFile+1))
 }
 
 // refuseEnvName is why a stage may not set name through its KIPP_ENV file:

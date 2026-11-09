@@ -11,11 +11,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ndthuan/kipp/internal/agenthub"
 	"github.com/ndthuan/kipp/internal/api"
 	"github.com/ndthuan/kipp/internal/apispec"
 	"github.com/ndthuan/kipp/internal/cachesrv"
 	"github.com/ndthuan/kipp/internal/route"
+	"github.com/ndthuan/kipp/internal/runnerhub"
 	"github.com/ndthuan/kipp/internal/webhook"
 )
 
@@ -143,10 +143,10 @@ func TestTheSpecDescribesEveryV1RouteAndNothingElse(t *testing.T) {
 		apiRoutes = append(apiRoutes, r.Method+" "+r.Path)
 	}
 	tables := map[string][]string{
-		"api":      apiRoutes,
-		"webhook":  v1(webhook.New(nil, webhook.Options{}).Routes()),
-		"agenthub": v1(agenthub.New(agenthub.Options{}).Routes()),
-		"cachesrv": v1(cachesrv.New(cachesrv.Options{}).Routes()),
+		"api":       apiRoutes,
+		"webhook":   v1(webhook.New(nil, webhook.Options{}).Routes()),
+		"runnerhub": v1(runnerhub.New(runnerhub.Options{}).Routes()),
+		"cachesrv":  v1(cachesrv.New(cachesrv.Options{}).Routes()),
 	}
 	for pkg, routes := range tables {
 		if len(routes) == 0 {

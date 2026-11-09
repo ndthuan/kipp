@@ -28,7 +28,7 @@ kipp serve --data /var/lib/kipp --jobs /etc/kipp --mcp
 
 Without `--mcp`, `/mcp` is a path nothing serves, like any other, and no
 MCP code runs. With it, `/mcp` is on `--listen` and never on
-`--agent-listen`. It speaks streamable HTTP and keeps no session between
+`--runner-listen`. It speaks streamable HTTP and keeps no session between
 requests, so a restart or a revoked token never leaves one behind. A
 reverse proxy in front must pass the `Authorization` header and `POST`
 through, as it does for the API ([Operations](operations.md)).
@@ -58,7 +58,7 @@ user's [grants](accounts.md#users-and-grants) allow:
 - A job the user may not view is "not found" to every tool, as in the API.
 - `run_build` and `build_again` need the `build` grant, `cancel_build` the
   `cancel` grant.
-- No tool touches users, tokens, secrets, engines, agents, caches, the
+- No tool touches users, tokens, secrets, engines, runners, caches, the
   quiet mode, reloads or metrics stores. Create the token of a user whose
   grants are just what you want Claude to have.
 

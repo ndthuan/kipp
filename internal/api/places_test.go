@@ -8,27 +8,27 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ndthuan/kipp/internal/agenthub"
 	"github.com/ndthuan/kipp/internal/cachesrv"
 	"github.com/ndthuan/kipp/internal/enginepool"
+	"github.com/ndthuan/kipp/internal/runnerhub"
 	"github.com/ndthuan/kipp/internal/store"
 )
 
-func TestTheEnginesAndAgentsAreReadWithWhatTheServerSeesOfThem(t *testing.T) {
+func TestTheEnginesAndRunnersAreReadWithWhatTheServerSeesOfThem(t *testing.T) {
 	since := time.Date(2026, 10, 24, 14, 2, 0, 0, time.UTC)
 	e := newEnv(t, func(a *API) {
 		a.deps.Engines = func() []enginepool.EngineStatus {
 			return []enginepool.EngineStatus{{Name: "mac", Kind: "docker", URL: "ssh://me@host", Labels: []string{"linux"}, Max: 2, Enabled: true, Since: since, LastError: "dial tcp: refused", Running: []string{"mac/1"}}}
 		}
-		a.deps.Agents = func() []agenthub.Status {
-			return []agenthub.Status{{Name: "box", Online: true, Since: since, Version: "test", OS: "linux", Arch: "amd64", Stages: []string{"smoke#3/s"}}}
+		a.deps.Runners = func() []runnerhub.Status {
+			return []runnerhub.Status{{Name: "box", Online: true, Since: since, Version: "test", OS: "linux", Arch: "amd64", Stages: []string{"smoke#3/s"}}}
 		}
 	})
 	ctx := context.Background()
 	must(t, e.st.PutEngine(ctx, store.Engine{Name: "mac", Kind: "docker", URL: "ssh://me@host", Labels: []string{"linux"}, Max: 2, Enabled: true}))
 	must(t, e.st.PutEngine(ctx, store.Engine{Name: "new", Kind: "docker", URL: "unix:///d.sock", Labels: []string{"linux"}, Max: 1}))
-	must(t, e.st.PutAgent(ctx, store.Agent{Name: "box", Labels: []string{"linux"}, Executors: 2, Enabled: true, TokenHash: "h1"}))
-	must(t, e.st.PutAgent(ctx, store.Agent{Name: "idle", Labels: []string{"arm64"}, Executors: 1, TokenHash: "h2"}))
+	must(t, e.st.PutRunner(ctx, store.Runner{Name: "box", Labels: []string{"linux"}, Executors: 2, Enabled: true, TokenHash: "h1"}))
+	must(t, e.st.PutRunner(ctx, store.Runner{Name: "idle", Labels: []string{"arm64"}, Executors: 1, TokenHash: "h2"}))
 	var engines []map[string]any
 	text := e.decode(t, "/api/v1/admin/engines", &engines)
 	utc(t, text)
@@ -36,18 +36,18 @@ func TestTheEnginesAndAgentsAreReadWithWhatTheServerSeesOfThem(t *testing.T) {
 		engines[0]["since"] != "2026-10-24T14:02:00.000Z" || engines[0]["executors"] != 2.0 {
 		t.Fatalf("%s", text)
 	}
-	var agents []map[string]any
-	text = e.decode(t, "/api/v1/admin/agents", &agents)
-	if len(agents) != 2 || agents[0]["name"] != "box" || agents[0]["online"] != true || agents[0]["version"] != "test" || agents[0]["os"] != "linux" ||
-		agents[1]["online"] != false || agents[1]["enabled"] != false || agents[1]["since"] != nil {
+	var runners []map[string]any
+	text = e.decode(t, "/api/v1/admin/runners", &runners)
+	if len(runners) != 2 || runners[0]["name"] != "box" || runners[0]["online"] != true || runners[0]["version"] != "test" || runners[0]["os"] != "linux" ||
+		runners[1]["online"] != false || runners[1]["enabled"] != false || runners[1]["since"] != nil {
 		t.Fatalf("%s", text)
 	}
 	if strings.Contains(text, "h1") || strings.Contains(text, "token") {
-		t.Fatalf("an agent's token hash is in %s", text)
+		t.Fatalf("a runner's token hash is in %s", text)
 	}
 }
 
-func TestAnEngineOrAnAgentIsChangedOnlyByAnAdminInSudoMode(t *testing.T) {
+func TestAnEngineOrAnRunnerIsChangedOnlyByAnAdminInSudoMode(t *testing.T) {
 	var changed atomic.Int32
 	e := newEnv(t, func(a *API) { a.deps.PlacesChanged = func(context.Context) { changed.Add(1) } })
 	ctx := context.Background()
@@ -56,40 +56,40 @@ func TestAnEngineOrAnAgentIsChangedOnlyByAnAdminInSudoMode(t *testing.T) {
 	engine := store.Engine{Name: "mac", URL: "unix:///var/run/docker.sock", Labels: []string{"linux"}, Max: 1}
 	is(t, "a user", e.api.svc.AddEngine(ctx, user.u, user.sess, engine), ErrForbidden)
 	is(t, "an admin not in sudo mode", e.api.svc.AddEngine(ctx, admin.u, admin.sess, engine), ErrSudoRequired)
-	_, err := e.api.svc.AddAgent(ctx, admin.u, admin.sess, "box", []string{"linux"}, 1)
-	is(t, "an agent from an admin not in sudo mode", err, ErrSudoRequired)
+	_, err := e.api.svc.AddRunner(ctx, admin.u, admin.sess, "box", []string{"linux"}, 1)
+	is(t, "a runner from an admin not in sudo mode", err, ErrSudoRequired)
 	e.sudo(t, admin)
 	must(t, e.api.svc.AddEngine(ctx, admin.u, admin.sess, engine))
 	is(t, "the same engine again", e.api.svc.AddEngine(ctx, admin.u, admin.sess, engine), ErrConflict)
 	is(t, "an engine kipp would not dial", e.api.svc.AddEngine(ctx, admin.u, admin.sess, store.Engine{Name: "tcp", URL: "tcp://host:2376", Labels: []string{"linux"}, Max: 1}), ErrBadInput)
 	must(t, e.api.svc.SetEngineEnabled(ctx, admin.u, admin.sess, "mac", false))
-	plain, err := e.api.svc.AddAgent(ctx, admin.u, admin.sess, "box", []string{"linux"}, 2)
+	plain, err := e.api.svc.AddRunner(ctx, admin.u, admin.sess, "box", []string{"linux"}, 2)
 	must(t, err)
 	if !strings.HasPrefix(plain, "kippa_") {
 		t.Fatal(plain)
 	}
-	again, err := e.api.svc.NewAgentToken(ctx, admin.u, admin.sess, "box")
+	again, err := e.api.svc.NewRunnerToken(ctx, admin.u, admin.sess, "box")
 	must(t, err)
 	if again == plain {
 		t.Fatal("the same token again")
 	}
-	must(t, e.api.svc.SetAgentEnabled(ctx, admin.u, admin.sess, "box", false))
-	must(t, e.api.svc.DeleteAgent(ctx, admin.u, admin.sess, "box"))
+	must(t, e.api.svc.SetRunnerEnabled(ctx, admin.u, admin.sess, "box", false))
+	must(t, e.api.svc.DeleteRunner(ctx, admin.u, admin.sess, "box"))
 	must(t, e.api.svc.DeleteEngine(ctx, admin.u, admin.sess, "mac"))
 	is(t, "an engine that is gone", e.api.svc.DeleteEngine(ctx, admin.u, admin.sess, "mac"), ErrNotFound)
 	var got []string
 	for _, a := range e.audit(t) {
-		if strings.HasPrefix(a.Action, "engine.") || strings.HasPrefix(a.Action, "agent.") {
+		if strings.HasPrefix(a.Action, "engine.") || strings.HasPrefix(a.Action, "runner.") {
 			got = append(got, a.Actor+" "+a.Action+" "+a.Target+": "+a.Detail)
 		}
 	}
 	want := []string{
 		"boss engine.add mac: unix:///var/run/docker.sock, labels linux, max 1, enabled",
 		"boss engine.set mac: unix:///var/run/docker.sock, labels linux, max 1, disabled",
-		"boss agent.add box: labels linux, executors 2, enabled",
-		"boss agent.token box: the old token no longer works",
-		"boss agent.set box: labels linux, executors 2, disabled",
-		"boss agent.rm box: ",
+		"boss runner.add box: labels linux, executors 2, enabled",
+		"boss runner.token box: the old token no longer works",
+		"boss runner.set box: labels linux, executors 2, disabled",
+		"boss runner.rm box: ",
 		"boss engine.rm mac: ",
 	}
 	eq(t, "the audit", strings.Join(got, "\n"), strings.Join(want, "\n"))

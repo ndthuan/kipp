@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ndthuan/kipp/internal/agenthub"
 	"github.com/ndthuan/kipp/internal/config"
+	"github.com/ndthuan/kipp/internal/runnerhub"
 	"github.com/ndthuan/kipp/internal/store"
 )
 
@@ -281,8 +281,8 @@ func TestAPullRequestsBuildKnowsItsTitleItsPageAndItsAuthorAndABranchsAreEmpty(t
 	}
 }
 
-func TestAPullRequestsBuildOnAnAgentKnowsItsTitleItsPageAndItsAuthor(t *testing.T) {
-	ag := newAgents(t, agenthub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
+func TestAPullRequestsBuildOnAnRunnerKnowsItsTitleItsPageAndItsAuthor(t *testing.T) {
+	ag := newRunners(t, runnerhub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
 	ag.runBox(t.TempDir())
 	r, _, head := prRepo(t, strings.Replace(prVarsStages, "  s:\n", "  s:\n    runs_on: linux\n", 1))
 	h := newHarness(t, map[string]string{"site": parentFile("file://"+r.dir, "")}, ag.opts)
@@ -293,8 +293,8 @@ func TestAPullRequestsBuildOnAnAgentKnowsItsTitleItsPageAndItsAuthor(t *testing.
 	}
 }
 
-func TestAStageOnAnAgentGetsTheSameVariablesAndTheAgentsOwnTmpOsAndArch(t *testing.T) {
-	ag := newAgents(t, agenthub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
+func TestAStageOnAnRunnerGetsTheSameVariablesAndTheRunnersOwnTmpOsAndArch(t *testing.T) {
+	ag := newRunners(t, runnerhub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
 	dir := t.TempDir()
 	ag.runBox(dir)
 	marker := filepath.Join(t.TempDir(), "failed-once")
@@ -306,7 +306,7 @@ func TestAStageOnAnAgentGetsTheSameVariablesAndTheAgentsOwnTmpOsAndArch(t *testi
 		"  gone: {needs: [s], run: 'test ! -e \"$(cat " + rec + ")\" && echo gone'}\n"
 	h := newHarness(t, map[string]string{"a": job}, ag.opts, func(o *Options) { o.PublicURL = "https://ci.example.com" })
 	h.triggerAs(t, TriggerRequest{Job: "a", Kind: "webhook", Detail: "c1", Branch: "main", By: "github"})
-	// the first build above failed once on the agent too, so the marker is there
+	// the first build above failed once on the runner too, so the marker is there
 	b := h.triggerAs(t, TriggerRequest{Job: "a", Kind: "webhook", Detail: "c2", Branch: "main", By: "github"})
 	log := h.log(t, b, "s")
 	want := "CI=[true] BUILD_ID=[" + strconv.FormatInt(b.ID, 10) + "] URL=[https://ci.example.com/jobs/a/2] JOB_URL=[https://ci.example.com/jobs/a] BY=[] REF=[refs/heads/main] PREV=[c1] OK=[c1] OS=[" + runtime.GOOS + "] ARCH=[" + runtime.GOARCH + "] ATTEMPT=[1]"
@@ -314,12 +314,12 @@ func TestAStageOnAnAgentGetsTheSameVariablesAndTheAgentsOwnTmpOsAndArch(t *testi
 		t.Fatalf("%v: log %q, want it to hold %q", b.Status, log, want)
 	}
 	if got := h.log(t, b, "gone"); got != "gone\n" {
-		t.Fatalf("the stage's KIPP_TMP on the agent outlived it: %q", got)
+		t.Fatalf("the stage's KIPP_TMP on the runner outlived it: %q", got)
 	}
 }
 
-func TestAnAgentsStageIsTriedAgainAndKnowsWhichTryItIs(t *testing.T) {
-	ag := newAgents(t, agenthub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
+func TestAnRunnersStageIsTriedAgainAndKnowsWhichTryItIs(t *testing.T) {
+	ag := newRunners(t, runnerhub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
 	ag.runBox(t.TempDir())
 	marker := filepath.Join(t.TempDir(), "failed-once")
 	h := newHarness(t, map[string]string{"a": "name: a\nstages:\n  s:\n    runs_on: linux\n    retries: 1\n    run: |\n      echo \"attempt=$KIPP_ATTEMPT\"\n      if [ ! -e " + marker + " ]; then touch " + marker + "; exit 1; fi\n"}, ag.opts)

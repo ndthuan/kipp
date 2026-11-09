@@ -104,16 +104,16 @@ func TestLoginGivesASessionAndOneErrorForEveryFailure(t *testing.T) {
 func TestATokenResolvesToItsUserAndBuildOrCancelIncludesView(t *testing.T) {
 	svc, st := service(t)
 	ctx := context.Background()
-	agent := addUser(t, st, "ci-agent", "x", false)
+	runner := addUser(t, st, "ci-runner", "x", false)
 	admin := addUser(t, st, "admin", "x", true)
-	grant(t, st, agent.ID, "site-smoke", []string{"view", "build", "cancel"})
+	grant(t, st, runner.ID, "site-smoke", []string{"view", "build", "cancel"})
 	plain, hash, _ := NewToken()
 	if HashToken(plain) != hash || len(plain) < 40 {
 		t.Fatal("token hash")
 	}
-	addToken(t, st, agent.ID, "ci", hash)
+	addToken(t, st, runner.ID, "ci", hash)
 	u, err := svc.UserFromToken(ctx, plain)
-	if err != nil || u.ID != agent.ID {
+	if err != nil || u.ID != runner.ID {
 		t.Fatal(err)
 	}
 	if _, err := svc.UserFromToken(ctx, "not-a-token"); !errors.Is(err, store.ErrNotFound) {
@@ -125,15 +125,15 @@ func TestATokenResolvesToItsUserAndBuildOrCancelIncludesView(t *testing.T) {
 		action string
 		want   bool
 	}{
-		{agent, "site-smoke", "view", true}, {agent, "site-smoke", "build", true}, {agent, "site-smoke", "cancel", true},
-		{agent, "cleanup", "view", false}, {admin, "cleanup", "cancel", true},
+		{runner, "site-smoke", "view", true}, {runner, "site-smoke", "build", true}, {runner, "site-smoke", "cancel", true},
+		{runner, "cleanup", "view", false}, {admin, "cleanup", "cancel", true},
 	} {
 		got, err := svc.Can(ctx, c.u, c.job, c.action)
 		if err != nil || got != c.want {
 			t.Errorf("%s %s %s: %v %v", c.u.Name, c.job, c.action, got, err)
 		}
 	}
-	vis, _ := svc.Visible(ctx, agent, []string{"cleanup", "site-smoke"})
+	vis, _ := svc.Visible(ctx, runner, []string{"cleanup", "site-smoke"})
 	if len(vis) != 1 || vis[0] != "site-smoke" {
 		t.Fatal(vis)
 	}

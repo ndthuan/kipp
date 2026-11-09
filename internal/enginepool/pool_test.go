@@ -13,11 +13,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ndthuan/kipp/internal/agent"
-	"github.com/ndthuan/kipp/internal/agenthub"
 	"github.com/ndthuan/kipp/internal/engine/docker"
 	"github.com/ndthuan/kipp/internal/engine/docker/dockertest"
 	"github.com/ndthuan/kipp/internal/placement"
+	"github.com/ndthuan/kipp/internal/runnerd"
+	"github.com/ndthuan/kipp/internal/runnerhub"
 	"github.com/ndthuan/kipp/internal/store"
 	"github.com/ndthuan/kipp/internal/waitfor"
 )
@@ -25,34 +25,34 @@ import (
 var quiet = slog.New(slog.DiscardHandler)
 
 // fixture is a pool of one fake engine, called fake, whose containers run
-// the agent in this process when they start.
+// the runner in this process when they start.
 type fixture struct {
-	t      *testing.T
-	pool   *Pool
-	hub    *agenthub.Hub
-	engine *dockertest.Engine
-	agents sync.WaitGroup
-	stop   context.CancelFunc
+	t       *testing.T
+	pool    *Pool
+	hub     *runnerhub.Hub
+	engine  *dockertest.Engine
+	runners sync.WaitGroup
+	stop    context.CancelFunc
 
 	mu     sync.Mutex
-	killed map[string]context.CancelFunc // stops a container's agent, by container id
+	killed map[string]context.CancelFunc // stops a container's runner, by container id
 }
 
 func newFixture(t *testing.T, max int, opts ...func(*Options)) *fixture {
 	t.Helper()
 	f := &fixture{t: t, engine: dockertest.New(t, "golang:1.27")}
 	// A second between heartbeats, so that a claim that comes late on a
-	// loaded machine does not mark a container's agent offline.
-	f.hub = agenthub.New(agenthub.Options{Version: "v-test", Log: quiet, Heartbeat: time.Second, ClaimWait: 200 * time.Millisecond})
+	// loaded machine does not mark a container's runner offline.
+	f.hub = runnerhub.New(runnerhub.Options{Version: "v-test", Log: quiet, Heartbeat: time.Second, ClaimWait: 200 * time.Millisecond})
 	srv := httptest.NewServer(f.hub.Handler())
 	t.Cleanup(srv.Close)
 	ctx, cancel := context.WithCancel(context.Background())
 	f.stop = cancel
-	t.Cleanup(func() { cancel(); f.agents.Wait() })
+	t.Cleanup(func() { cancel(); f.runners.Wait() })
 	go f.hub.Run(ctx)
-	f.engine.OnStart = func(c *dockertest.Container) { f.runAgentOf(ctx, c, srv.URL) }
-	o := Options{Hub: f.hub, AgentURL: srv.URL, ServerID: "http://kipp.test", Log: quiet, Probe: time.Hour, ConnectWait: waitfor.Safety,
-		Binary: func(goos, goarch string) ([]byte, error) { return []byte("agent for " + goos + "/" + goarch), nil }}
+	f.engine.OnStart = func(c *dockertest.Container) { f.runRunnerOf(ctx, c, srv.URL) }
+	o := Options{Hub: f.hub, RunnerURL: srv.URL, ServerID: "http://kipp.test", Log: quiet, Probe: time.Hour, ConnectWait: waitfor.Safety,
+		Binary: func(goos, goarch string) ([]byte, error) { return []byte("runner for " + goos + "/" + goarch), nil }}
 	for _, fn := range opts {
 		fn(&o)
 	}
@@ -62,15 +62,15 @@ func newFixture(t *testing.T, max int, opts ...func(*Options)) *fixture {
 	return f
 }
 
-// runAgentOf does what the container's command would: run the agent with
+// runRunnerOf does what the container's command would: run the runner with
 // the URL and the token it was given.
-func (f *fixture) runAgentOf(ctx context.Context, c *dockertest.Container, url string) {
+func (f *fixture) runRunnerOf(ctx context.Context, c *dockertest.Container, url string) {
 	if !slices.Contains(strs(c.Create["Cmd"]), url) {
-		return // a container of a test that wants no agent
+		return // a container of a test that wants no runner
 	}
 	token := ""
 	for _, kv := range strs(c.Create["Env"]) {
-		if v, ok := strings.CutPrefix(kv, agent.TokenEnv+"="); ok {
+		if v, ok := strings.CutPrefix(kv, runnerd.TokenEnv+"="); ok {
 			token = v
 		}
 	}
@@ -82,8 +82,8 @@ func (f *fixture) runAgentOf(ctx context.Context, c *dockertest.Container, url s
 	}
 	f.killed[c.ID] = cancel
 	f.mu.Unlock()
-	f.agents.Go(func() {
-		_ = agent.Run(ctx, agent.Config{URL: url, Token: token, Workdir: dir, Version: "v-test", Env: []string{"PATH=" + os.Getenv("PATH")}, Log: quiet, Retry: 20 * time.Millisecond})
+	f.runners.Go(func() {
+		_ = runnerd.Run(ctx, runnerd.Config{URL: url, Token: token, Workdir: dir, Version: "v-test", Env: []string{"PATH=" + os.Getenv("PATH")}, Log: quiet, Retry: 20 * time.Millisecond})
 	})
 }
 
@@ -123,7 +123,7 @@ func (f *fixture) acquire(b *store.Build, image string) string {
 	return name
 }
 
-func TestAcquireStartsAContainerWithTheAgentInItAndATokenForTheBuild(t *testing.T) {
+func TestAcquireStartsAContainerWithTheRunnerInItAndATokenForTheBuild(t *testing.T) {
 	f := newFixture(t, 2)
 	f.reachable()
 	var out bytes.Buffer
@@ -139,28 +139,28 @@ func TestAcquireStartsAContainerWithTheAgentInItAndATokenForTheBuild(t *testing.
 		t.Fatalf("%d containers", len(cs))
 	}
 	for _, c := range cs {
-		checkContainer(t, c, f.pool.o.AgentURL)
+		checkContainer(t, c, f.pool.o.RunnerURL)
 	}
-	if !f.hub.Free(agenthub.Who{Build: 7, Name: "fake/1"}) {
-		t.Fatal("the container's agent is not connected")
+	if !f.hub.Free(runnerhub.Who{Build: 7, Name: "fake/1"}) {
+		t.Fatal("the container's runner is not connected")
 	}
 }
 
-// checkContainer holds a container to what kipp starts: the agent with
+// checkContainer holds a container to what kipp starts: the runner with
 // the server's URL, the build's token and nothing else of the server's,
-// the labels a server that starts again finds it by, the agent's binary.
+// the labels a server that starts again finds it by, the runner's binary.
 func checkContainer(t *testing.T, c *dockertest.Container, url string) {
 	t.Helper()
-	if got := strs(c.Create["Cmd"]); !slices.Equal(got, []string{"/kipp/agent", "--url", url, "--workdir", "/kipp/workspace"}) {
+	if got := strs(c.Create["Cmd"]); !slices.Equal(got, []string{"/kipp/runner", "--url", url, "--workdir", "/kipp/workspace"}) {
 		t.Fatalf("cmd %v", got)
 	}
-	if env := strs(c.Create["Env"]); len(env) != 1 || !strings.HasPrefix(env[0], "KIPP_AGENT_TOKEN=kippa_") {
+	if env := strs(c.Create["Env"]); len(env) != 1 || !strings.HasPrefix(env[0], "KIPP_RUNNER_TOKEN=kippa_") {
 		t.Fatalf("env %v: the token and nothing of the server's", env)
 	}
 	if c.Labels[LabelServer] != "http://kipp.test" || c.Labels[LabelBuild] != "7" || c.Labels[LabelJob] != "linux-tests" || c.Create["WorkingDir"] != "/kipp/workspace" {
 		t.Fatalf("%+v %v", c.Labels, c.Create["WorkingDir"])
 	}
-	if mode, data, ok := c.File("/kipp/agent"); !ok || mode != 0o755 || string(data) != "agent for linux/arm64" {
+	if mode, data, ok := c.File("/kipp/runner"); !ok || mode != 0o755 || string(data) != "runner for linux/arm64" {
 		t.Fatal(mode, string(data), ok)
 	}
 }
@@ -195,7 +195,7 @@ func TestAnEnginesRoomIsItsMaxLessWhatItRuns(t *testing.T) {
 		t.Fatalf("%+v", cs[0])
 	}
 	_, err := f.pool.Acquire(context.Background(), build(2), "fake", "golang:1.27", &bytes.Buffer{})
-	if !errors.Is(err, agenthub.ErrNoAgent) {
+	if !errors.Is(err, runnerhub.ErrNoRunner) {
 		t.Fatalf("a full engine took a container: %v", err)
 	}
 }
@@ -220,13 +220,13 @@ func TestTheEndOfABuildRemovesItsContainers(t *testing.T) {
 	}
 }
 
-func TestAContainerWhoseAgentNeverConnectsIsRemovedWithWhatItSaid(t *testing.T) {
-	f := newFixture(t, 2, func(o *Options) { o.AgentURL = "http://nobody.invalid"; o.ConnectWait = 300 * time.Millisecond })
-	f.engine.Logs = "kipp-agent: cannot reach the server\n"
+func TestAContainerWhoseRunnerNeverConnectsIsRemovedWithWhatItSaid(t *testing.T) {
+	f := newFixture(t, 2, func(o *Options) { o.RunnerURL = "http://nobody.invalid"; o.ConnectWait = 300 * time.Millisecond })
+	f.engine.Logs = "kipp-runner: cannot reach the server\n"
 	f.reachable()
 	var out bytes.Buffer
 	_, err := f.pool.Acquire(context.Background(), build(1), "fake", "golang:1.27", &out)
-	if err == nil || !strings.Contains(err.Error(), "did not connect") || !strings.Contains(out.String(), "kipp-agent: cannot reach the server") {
+	if err == nil || !strings.Contains(err.Error(), "did not connect") || !strings.Contains(out.String(), "kipp-runner: cannot reach the server") {
 		t.Fatalf("%v: %q", err, out.String())
 	}
 	if n := len(f.engine.Containers()); n != 0 {
@@ -290,10 +290,10 @@ func TestAnEngineThatStopsAnsweringIsSaidToSinceWhenAndWhy(t *testing.T) {
 	if cs := f.pool.Candidates(2, ""); !strings.HasPrefix(cs[0].Why, "unreachable since ") {
 		t.Fatal(cs[0].Why)
 	}
-	// The container is forgotten under the pool's lock and its agent is
+	// The container is forgotten under the pool's lock and its runner is
 	// revoked a moment after, by the goroutine that removes it.
-	eventually(t, "the agent of the given-up container is forgotten", func() bool {
-		for _, a := range f.hub.Agents() {
+	eventually(t, "the runner of the given-up container is forgotten", func() bool {
+		for _, a := range f.hub.Runners() {
 			if a.Name == name {
 				return false
 			}
@@ -336,9 +336,9 @@ func TestAnEnginesURLIsShownWithoutAPassword(t *testing.T) {
 	}
 }
 
-// killAgents stops the agents of every container, as an agent killed for
+// killRunners stops the runners of every container, as a runner killed for
 // its memory would.
-func (f *fixture) killAgents() {
+func (f *fixture) killRunners() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	for _, cancel := range f.killed {
@@ -368,13 +368,13 @@ func TestParallelStagesOfABuildAndImageMakeOneContainer(t *testing.T) {
 	}
 }
 
-// A container whose agent died is not the build's container any more:
+// A container whose runner died is not the build's container any more:
 // the next stage gets a new one, and the dead one is removed.
-func TestAContainerWhoseAgentIsGoneIsReplaced(t *testing.T) {
+func TestAContainerWhoseRunnerIsGoneIsReplaced(t *testing.T) {
 	f := newFixture(t, 1)
 	f.reachable()
 	first := f.acquire(build(1), "golang:1.27")
-	f.killAgents()
+	f.killRunners()
 	eventually(t, "the engine has room again", func() bool {
 		cs := f.pool.Candidates(1, "golang:1.27")
 		return !cs[0].Reuse && cs[0].Free

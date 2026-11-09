@@ -4,7 +4,7 @@ The guide for whoever changes kipp, people and coding agents alike.
 
 kipp is a job-first CI and scheduler in a single binary: jobs are YAML
 files in a directory, builds run as shell commands on the server's machine,
-an agent or a container, and the rest is one SQLite file. README.md and
+a runner or a container, and the rest is one SQLite file. README.md and
 docs/ are the user's view: the job file, the commands, the data directory.
 
 ## Layout
@@ -23,7 +23,7 @@ docs/ are the user's view: the job file, the commands, the data directory.
   imported upwards: `config.ValidName`, `config.ValidEnvName`, the names
   of a build's own logs, `api.MaxBody`.
 - No interface before a second implementation needs it. `runner.Runner`
-  is the one exception (a remote agent would be the second).
+  is the one exception (a remote runner would be the second).
 
 ## Tests and the gate
 

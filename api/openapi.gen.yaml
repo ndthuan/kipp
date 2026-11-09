@@ -4,7 +4,7 @@ info:
     Everything a machine calls on a kipp server lives under `/api/v1`: the
     JSON API (jobs, builds, logs, artifacts, metrics, the queue and the
     admin reads), the webhook endpoints GitHub delivers to, and the two
-    protocols between kipp and an agent of the same version (the agent
+    protocols between kipp and a runner of the same version (the runner
     protocol and the build cache), which are tagged `internal`.
 
     This file is generated: the sources are `api/openapi.yaml` and the files
@@ -35,34 +35,13 @@ tags:
     name: metrics
   - description: What runs and what waits.
     name: queue
-  - description: Reads of users, secrets, engines, agents, the cache and the audit, the server's quiet mode and its upgrade; for an admin.
+  - description: Reads of users, secrets, engines, runners, the cache and the audit, the server's quiet mode and its upgrade; for an admin.
     name: admin
   - description: Deliveries from GitHub.
     name: webhooks
-  - description: Between kipp and an agent of the same version. No stability promise.
+  - description: Between kipp and a runner of the same version. No stability promise.
     name: internal
 paths:
-  /admin/agents:
-    get:
-      description: For an admin; a token may read it.
-      operationId: listAgents
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AgentList"
-          description: The agents by name.
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-        "500":
-          $ref: "#/components/responses/InternalError"
-      summary: The standing agents
-      tags:
-        - admin
-      x-kipp-package: api
   /admin/audit:
     get:
       description: For an admin; a token may read it.
@@ -233,6 +212,27 @@ paths:
         - csrfToken: []
           sessionCookie: []
       summary: Read the job files again
+      tags:
+        - admin
+      x-kipp-package: api
+  /admin/runners:
+    get:
+      description: For an admin; a token may read it.
+      operationId: listRunners
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunnerList"
+          description: The runners by name.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: The standing runners
       tags:
         - admin
       x-kipp-package: api
@@ -461,225 +461,6 @@ paths:
       tags:
         - admin
       x-kipp-package: api
-  /agent/claim:
-    get:
-      description: |
-        A long-poll: it answers as soon as there is a stage for the agent, or a
-        build ended, or when the server's wait is over with neither.
-      operationId: agentClaim
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Claim"
-          description: An assignment, or none, and the builds that ended since the last answer.
-        "400":
-          $ref: "#/components/responses/AgentRefusal"
-        "401":
-          $ref: "#/components/responses/AgentRefusal"
-      security:
-        - agentToken: []
-      summary: An agent asks for a stage to run
-      tags:
-        - internal
-      x-kipp-package: agenthub
-  /agent/connect:
-    post:
-      description: |
-        Sent when the agent starts and again every heartbeat. The server refuses
-        an agent that is not its own version (409), and counts one offline after
-        three missed. Every agent call carries the agent's token.
-      operationId: agentConnect
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ConnectRequest"
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ConnectResponse"
-          description: Who the server says the agent is.
-        "400":
-          $ref: "#/components/responses/AgentRefusal"
-        "401":
-          $ref: "#/components/responses/AgentRefusal"
-        "409":
-          $ref: "#/components/responses/AgentRefusal"
-      security:
-        - agentToken: []
-      summary: An agent says who it is
-      tags:
-        - internal
-      x-kipp-package: agenthub
-  /agent/stages/{id}/artifacts:
-    put:
-      description: |
-        Once the stage's command has ended and before it is done. The body is a
-        tar of the files; one the stage's files could not have made, or one over
-        the stage's `max_size`, is refused.
-      operationId: agentPutArtifacts
-      parameters:
-        - $ref: "#/components/parameters/AssignmentId"
-        - description: What the files come to, in bytes.
-          in: query
-          name: size
-          schema:
-            format: int64
-            minimum: 0
-            type: integer
-      requestBody:
-        content:
-          application/x-tar:
-            schema:
-              format: binary
-              type: string
-        required: true
-      responses:
-        "204":
-          description: The files were kept.
-        "400":
-          $ref: "#/components/responses/AgentRefusal"
-        "401":
-          $ref: "#/components/responses/AgentRefusal"
-        "409":
-          $ref: "#/components/responses/AgentRefusal"
-        "410":
-          $ref: "#/components/responses/AgentRefusal"
-        "413":
-          $ref: "#/components/responses/AgentRefusal"
-      security:
-        - agentToken: []
-      summary: An agent sends the files a stage keeps
-      tags:
-        - internal
-      x-kipp-package: agenthub
-  /agent/stages/{id}/control:
-    get:
-      description: A long-poll. It answers `cancel` once the stage is to be killed, and `none` when the server's wait is over first.
-      operationId: agentControl
-      parameters:
-        - $ref: "#/components/parameters/AssignmentId"
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Control"
-          description: What to do.
-        "401":
-          $ref: "#/components/responses/AgentRefusal"
-        "410":
-          $ref: "#/components/responses/AgentRefusal"
-      security:
-        - agentToken: []
-      summary: An agent asks whether to stop a stage
-      tags:
-        - internal
-      x-kipp-package: agenthub
-  /agent/stages/{id}/done:
-    post:
-      description: The body is a tar of the stage's junit and metrics files.
-      operationId: agentDone
-      parameters:
-        - $ref: "#/components/parameters/AssignmentId"
-        - description: The stage's exit code.
-          in: query
-          name: exit
-          required: true
-          schema:
-            type: integer
-        - description: How many times the agent ran the command; absent is once.
-          in: query
-          name: tries
-          schema:
-            minimum: 1
-            type: integer
-        - description: Why the stage could not run, when it could not.
-          in: query
-          name: error
-          schema:
-            type: string
-      requestBody:
-        content:
-          application/x-tar:
-            schema:
-              format: binary
-              type: string
-      responses:
-        "204":
-          description: The stage is over.
-        "400":
-          $ref: "#/components/responses/AgentRefusal"
-        "401":
-          $ref: "#/components/responses/AgentRefusal"
-        "410":
-          $ref: "#/components/responses/AgentRefusal"
-      security:
-        - agentToken: []
-      summary: An agent says a stage has ended
-      tags:
-        - internal
-      x-kipp-package: agenthub
-  /agent/stages/{id}/inputs/{stage}:
-    get:
-      description: Only those of a stage the assignment is given the artifacts of; the agent puts them under the workspace before the command.
-      operationId: agentGetInputs
-      parameters:
-        - $ref: "#/components/parameters/AssignmentId"
-        - $ref: "#/components/parameters/StageName"
-      responses:
-        "200":
-          content:
-            application/x-tar:
-              schema:
-                format: binary
-                type: string
-          description: A tar of the files.
-        "401":
-          $ref: "#/components/responses/AgentRefusal"
-        "404":
-          $ref: "#/components/responses/AgentRefusal"
-        "410":
-          $ref: "#/components/responses/AgentRefusal"
-      security:
-        - agentToken: []
-      summary: An agent fetches the files another stage kept
-      tags:
-        - internal
-      x-kipp-package: agenthub
-  /agent/stages/{id}/log:
-    post:
-      description: The body is the stage's output as a chunked stream, copied into its log as it arrives. Once per stage.
-      operationId: agentSendLog
-      parameters:
-        - $ref: "#/components/parameters/AssignmentId"
-      requestBody:
-        content:
-          application/octet-stream:
-            schema:
-              format: binary
-              type: string
-        required: true
-      responses:
-        "204":
-          description: The output ended and was kept.
-        "401":
-          $ref: "#/components/responses/AgentRefusal"
-        "409":
-          $ref: "#/components/responses/AgentRefusal"
-        "410":
-          $ref: "#/components/responses/AgentRefusal"
-      security:
-        - agentToken: []
-      summary: An agent sends a stage's output
-      tags:
-        - internal
-      x-kipp-package: agenthub
   /builds/{id}:
     get:
       operationId: getBuild
@@ -2004,6 +1785,225 @@ paths:
       tags:
         - queue
       x-kipp-package: api
+  /runner/claim:
+    get:
+      description: |
+        A long-poll: it answers as soon as there is a stage for the runner, or a
+        build ended, or when the server's wait is over with neither.
+      operationId: runnerClaim
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Claim"
+          description: An assignment, or none, and the builds that ended since the last answer.
+        "400":
+          $ref: "#/components/responses/RunnerRefusal"
+        "401":
+          $ref: "#/components/responses/RunnerRefusal"
+      security:
+        - runnerToken: []
+      summary: A runner asks for a stage to run
+      tags:
+        - internal
+      x-kipp-package: runnerhub
+  /runner/connect:
+    post:
+      description: |
+        Sent when the runner starts and again every heartbeat. The server refuses
+        a runner that is not its own version (409), and counts one offline after
+        three missed. Every runner call carries the runner's token.
+      operationId: runnerConnect
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConnectRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConnectResponse"
+          description: Who the server says the runner is.
+        "400":
+          $ref: "#/components/responses/RunnerRefusal"
+        "401":
+          $ref: "#/components/responses/RunnerRefusal"
+        "409":
+          $ref: "#/components/responses/RunnerRefusal"
+      security:
+        - runnerToken: []
+      summary: A runner says who it is
+      tags:
+        - internal
+      x-kipp-package: runnerhub
+  /runner/stages/{id}/artifacts:
+    put:
+      description: |
+        Once the stage's command has ended and before it is done. The body is a
+        tar of the files; one the stage's files could not have made, or one over
+        the stage's `max_size`, is refused.
+      operationId: runnerPutArtifacts
+      parameters:
+        - $ref: "#/components/parameters/AssignmentId"
+        - description: What the files come to, in bytes.
+          in: query
+          name: size
+          schema:
+            format: int64
+            minimum: 0
+            type: integer
+      requestBody:
+        content:
+          application/x-tar:
+            schema:
+              format: binary
+              type: string
+        required: true
+      responses:
+        "204":
+          description: The files were kept.
+        "400":
+          $ref: "#/components/responses/RunnerRefusal"
+        "401":
+          $ref: "#/components/responses/RunnerRefusal"
+        "409":
+          $ref: "#/components/responses/RunnerRefusal"
+        "410":
+          $ref: "#/components/responses/RunnerRefusal"
+        "413":
+          $ref: "#/components/responses/RunnerRefusal"
+      security:
+        - runnerToken: []
+      summary: A runner sends the files a stage keeps
+      tags:
+        - internal
+      x-kipp-package: runnerhub
+  /runner/stages/{id}/control:
+    get:
+      description: A long-poll. It answers `cancel` once the stage is to be killed, and `none` when the server's wait is over first.
+      operationId: runnerControl
+      parameters:
+        - $ref: "#/components/parameters/AssignmentId"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Control"
+          description: What to do.
+        "401":
+          $ref: "#/components/responses/RunnerRefusal"
+        "410":
+          $ref: "#/components/responses/RunnerRefusal"
+      security:
+        - runnerToken: []
+      summary: A runner asks whether to stop a stage
+      tags:
+        - internal
+      x-kipp-package: runnerhub
+  /runner/stages/{id}/done:
+    post:
+      description: The body is a tar of the stage's junit and metrics files.
+      operationId: runnerDone
+      parameters:
+        - $ref: "#/components/parameters/AssignmentId"
+        - description: The stage's exit code.
+          in: query
+          name: exit
+          required: true
+          schema:
+            type: integer
+        - description: How many times the runner ran the command; absent is once.
+          in: query
+          name: tries
+          schema:
+            minimum: 1
+            type: integer
+        - description: Why the stage could not run, when it could not.
+          in: query
+          name: error
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/x-tar:
+            schema:
+              format: binary
+              type: string
+      responses:
+        "204":
+          description: The stage is over.
+        "400":
+          $ref: "#/components/responses/RunnerRefusal"
+        "401":
+          $ref: "#/components/responses/RunnerRefusal"
+        "410":
+          $ref: "#/components/responses/RunnerRefusal"
+      security:
+        - runnerToken: []
+      summary: A runner says a stage has ended
+      tags:
+        - internal
+      x-kipp-package: runnerhub
+  /runner/stages/{id}/inputs/{stage}:
+    get:
+      description: Only those of a stage the assignment is given the artifacts of; the runner puts them under the workspace before the command.
+      operationId: runnerGetInputs
+      parameters:
+        - $ref: "#/components/parameters/AssignmentId"
+        - $ref: "#/components/parameters/StageName"
+      responses:
+        "200":
+          content:
+            application/x-tar:
+              schema:
+                format: binary
+                type: string
+          description: A tar of the files.
+        "401":
+          $ref: "#/components/responses/RunnerRefusal"
+        "404":
+          $ref: "#/components/responses/RunnerRefusal"
+        "410":
+          $ref: "#/components/responses/RunnerRefusal"
+      security:
+        - runnerToken: []
+      summary: A runner fetches the files another stage kept
+      tags:
+        - internal
+      x-kipp-package: runnerhub
+  /runner/stages/{id}/log:
+    post:
+      description: The body is the stage's output as a chunked stream, copied into its log as it arrives. Once per stage.
+      operationId: runnerSendLog
+      parameters:
+        - $ref: "#/components/parameters/AssignmentId"
+      requestBody:
+        content:
+          application/octet-stream:
+            schema:
+              format: binary
+              type: string
+        required: true
+      responses:
+        "204":
+          description: The output ended and was kept.
+        "401":
+          $ref: "#/components/responses/RunnerRefusal"
+        "409":
+          $ref: "#/components/responses/RunnerRefusal"
+        "410":
+          $ref: "#/components/responses/RunnerRefusal"
+      security:
+        - runnerToken: []
+      summary: A runner sends a stage's output
+      tags:
+        - internal
+      x-kipp-package: runnerhub
 components:
   parameters:
     AssignmentId:
@@ -2079,15 +2079,6 @@ components:
       schema:
         type: string
   responses:
-    AgentRefusal:
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/Refusal"
-      description: |
-        The agent protocol's own refusal: why, and for a 409 the version the
-        server is. A 401 is an agent token that is missing or that nobody holds;
-        a 410 a stage that is not running on this agent.
     BadRequest:
       content:
         application/problem+json:
@@ -2129,6 +2120,15 @@ components:
           schema:
             $ref: "#/components/schemas/Problem"
       description: The request body is over the limit, 64 KiB for the JSON API and the webhook's own cap for a delivery.
+    RunnerRefusal:
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Refusal"
+      description: |
+        The runner protocol's own refusal: why, and for a 409 the version the
+        server is. A 401 is a runner token that is missing or that nobody holds;
+        a 410 a stage that is not running on this runner.
     ServiceUnavailable:
       content:
         application/problem+json:
@@ -2193,147 +2193,6 @@ components:
         - items
         - next_cursor
       type: object
-    Agent:
-      additionalProperties: false
-      description: A standing agent, its record and, once it has connected, what the server sees of it now. Never its token.
-      properties:
-        arch:
-          type: string
-        busy:
-          description: How many stages it runs or has been given now.
-          type: integer
-        enabled:
-          type: boolean
-        executors:
-          description: 0 for as many at once as it is given.
-          type: integer
-        labels:
-          items:
-            type: string
-          type: array
-        last_seen_at:
-          $ref: "#/components/schemas/NullableTimestamp"
-        name:
-          type: string
-        online:
-          type: boolean
-        os:
-          type: string
-        since:
-          $ref: "#/components/schemas/NullableTimestamp"
-        stages:
-          description: What it runs or has been given.
-          items:
-            $ref: "#/components/schemas/AgentStage"
-          type: array
-        version:
-          type: string
-      required:
-        - name
-        - labels
-        - executors
-        - busy
-        - enabled
-        - online
-        - since
-        - version
-        - os
-        - arch
-        - stages
-        - last_seen_at
-      type: object
-    AgentArtifacts:
-      additionalProperties: false
-      description: A stage's artifacts key.
-      properties:
-        Max:
-          description: The most the matches may come to, in bytes.
-          format: int64
-          type: integer
-        Paths:
-          items:
-            type: string
-          type:
-            - array
-            - "null"
-      required:
-        - Paths
-        - Max
-      type: object
-    AgentCache:
-      additionalProperties: false
-      description: One declared cache of a stage, its keys already expanded.
-      properties:
-        Key:
-          type: string
-        Paths:
-          items:
-            type: string
-          type:
-            - array
-            - "null"
-        RestoreKeys:
-          items:
-            type: string
-          type: array
-        Scope:
-          type: string
-      required:
-        - Key
-        - Paths
-        - Scope
-      type: object
-    AgentEnded:
-      additionalProperties: false
-      description: A build whose stages on the agent are over; its workspace there goes.
-      properties:
-        Workspace:
-          type: string
-      required:
-        - Workspace
-      type: object
-    AgentInput:
-      additionalProperties: false
-      description: One stage whose artifacts a stage is given.
-      properties:
-        Size:
-          format: int64
-          type: integer
-        Stage:
-          type: string
-      required:
-        - Stage
-        - Size
-      type: object
-    AgentList:
-      additionalProperties: false
-      description: |
-        The rows of a list.
-        `next_cursor` is the `cursor` that reads the page after this one, and null
-        when this is the last (or the list is not paged).
-      properties:
-        items:
-          items:
-            $ref: "#/components/schemas/Agent"
-          type: array
-        next_cursor:
-          $ref: "#/components/schemas/NextCursor"
-      required:
-        - items
-        - next_cursor
-      type: object
-    AgentStage:
-      additionalProperties: false
-      description: A stage an agent runs or has been given.
-      properties:
-        build:
-          $ref: "#/components/schemas/BuildRef"
-        stage:
-          type: string
-      required:
-        - build
-        - stage
-      type: object
     Artifact:
       additionalProperties: false
       description: One file a stage kept.
@@ -2359,17 +2218,17 @@ components:
       description: One stage to run.
       properties:
         Artifacts:
-          $ref: "#/components/schemas/AgentArtifacts"
+          $ref: "#/components/schemas/RunnerArtifacts"
         Baseline:
           contentEncoding: base64
           description: What the stage's store remembers; absent for a stage that declares no metrics.
           type: string
         Cache:
           items:
-            $ref: "#/components/schemas/AgentCache"
+            $ref: "#/components/schemas/RunnerCache"
           type: array
         Command:
-          description: Run with the agent's shell, `-c`.
+          description: Run with the runner's shell, `-c`.
           type: string
         Env:
           description: The variables the server gives the stage, as `NAME=value`.
@@ -2382,7 +2241,7 @@ components:
           type: string
         Inputs:
           items:
-            $ref: "#/components/schemas/AgentInput"
+            $ref: "#/components/schemas/RunnerInput"
           type: array
         Job:
           type: string
@@ -2395,7 +2254,7 @@ components:
         Number:
           type: integer
         Retries:
-          description: How many more times the agent runs the command when it ends with a code that is neither 0 nor in UnstableExit; absent is none.
+          description: How many more times the runner runs the command when it ends with a code that is neither 0 nor in UnstableExit; absent is none.
           maximum: 10
           minimum: 0
           type: integer
@@ -2410,7 +2269,7 @@ components:
           description: A path inside the workspace the stage runs in.
           type: string
         Workspace:
-          description: The build's directory under the agent's workdir; empty is the workdir itself.
+          description: The build's directory under the runner's workdir; empty is the workdir itself.
           type: string
       required:
         - ID
@@ -2892,7 +2751,7 @@ components:
             - type: "null"
         Ended:
           items:
-            $ref: "#/components/schemas/AgentEnded"
+            $ref: "#/components/schemas/RunnerEnded"
           type:
             - array
             - "null"
@@ -2910,31 +2769,31 @@ components:
       type: string
     ConnectRequest:
       description: |
-        What an agent says of itself. It is sent when the agent starts and again
+        What a runner says of itself. It is sent when the runner starts and again
         every heartbeat as long as it runs; three missed and the server counts it
         offline. The field names are Go's.
       properties:
         Arch:
           type: string
         Fresh:
-          description: True on the first connect of the agent's process.
+          description: True on the first connect of the runner's process.
           type: boolean
         OS:
           type: string
         Running:
-          description: The assignments the agent is running now.
+          description: The assignments the runner is running now.
           items:
             type: string
           type:
             - array
             - "null"
         Version:
-          description: The agent's kipp version. The server refuses any but its own with a 409.
+          description: The runner's kipp version. The server refuses any but its own with a 409.
           type: string
       type: object
     ConnectResponse:
       additionalProperties: false
-      description: Who the server says the agent is. Labels and executors are the server's to set.
+      description: Who the server says the runner is. Labels and executors are the server's to set.
       properties:
         Executors:
           description: 0 for as many at once as it is given.
@@ -2944,7 +2803,7 @@ components:
           format: int64
           type: integer
         Kill:
-          description: Assignments the agent said it runs that the server does not know as running there.
+          description: Assignments the runner said it runs that the server does not know as running there.
           items:
             type: string
           type:
@@ -3937,12 +3796,12 @@ components:
       type: object
     Refusal:
       additionalProperties: false
-      description: The body of an agent-protocol answer that is not 2xx.
+      description: The body of a runner-protocol answer that is not 2xx.
       properties:
         Error:
           type: string
         ServerVersion:
-          description: For a 409, the version the server is, so that the agent can say which to run.
+          description: For a 409, the version the server is, so that the runner can say which to run.
           type: string
       required:
         - Error
@@ -4050,6 +3909,147 @@ components:
         - unit
         - values
       type: object
+    Runner:
+      additionalProperties: false
+      description: A standing runner, its record and, once it has connected, what the server sees of it now. Never its token.
+      properties:
+        arch:
+          type: string
+        busy:
+          description: How many stages it runs or has been given now.
+          type: integer
+        enabled:
+          type: boolean
+        executors:
+          description: 0 for as many at once as it is given.
+          type: integer
+        labels:
+          items:
+            type: string
+          type: array
+        last_seen_at:
+          $ref: "#/components/schemas/NullableTimestamp"
+        name:
+          type: string
+        online:
+          type: boolean
+        os:
+          type: string
+        since:
+          $ref: "#/components/schemas/NullableTimestamp"
+        stages:
+          description: What it runs or has been given.
+          items:
+            $ref: "#/components/schemas/RunnerStage"
+          type: array
+        version:
+          type: string
+      required:
+        - name
+        - labels
+        - executors
+        - busy
+        - enabled
+        - online
+        - since
+        - version
+        - os
+        - arch
+        - stages
+        - last_seen_at
+      type: object
+    RunnerArtifacts:
+      additionalProperties: false
+      description: A stage's artifacts key.
+      properties:
+        Max:
+          description: The most the matches may come to, in bytes.
+          format: int64
+          type: integer
+        Paths:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+      required:
+        - Paths
+        - Max
+      type: object
+    RunnerCache:
+      additionalProperties: false
+      description: One declared cache of a stage, its keys already expanded.
+      properties:
+        Key:
+          type: string
+        Paths:
+          items:
+            type: string
+          type:
+            - array
+            - "null"
+        RestoreKeys:
+          items:
+            type: string
+          type: array
+        Scope:
+          type: string
+      required:
+        - Key
+        - Paths
+        - Scope
+      type: object
+    RunnerEnded:
+      additionalProperties: false
+      description: A build whose stages on the runner are over; its workspace there goes.
+      properties:
+        Workspace:
+          type: string
+      required:
+        - Workspace
+      type: object
+    RunnerInput:
+      additionalProperties: false
+      description: One stage whose artifacts a stage is given.
+      properties:
+        Size:
+          format: int64
+          type: integer
+        Stage:
+          type: string
+      required:
+        - Stage
+        - Size
+      type: object
+    RunnerList:
+      additionalProperties: false
+      description: |
+        The rows of a list.
+        `next_cursor` is the `cursor` that reads the page after this one, and null
+        when this is the last (or the list is not paged).
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/Runner"
+          type: array
+        next_cursor:
+          $ref: "#/components/schemas/NextCursor"
+      required:
+        - items
+        - next_cursor
+      type: object
+    RunnerStage:
+      additionalProperties: false
+      description: A stage a runner runs or has been given.
+      properties:
+        build:
+          $ref: "#/components/schemas/BuildRef"
+        stage:
+          type: string
+      required:
+        - build
+        - stage
+      type: object
     RunningBuild:
       additionalProperties: false
       properties:
@@ -4076,7 +4076,7 @@ components:
         waiting_stages:
           additionalProperties:
             type: string
-          description: By stage, what one that waits for an agent or an engine waits for.
+          description: By stage, what one that waits for a runner or an engine waits for.
           type: object
       required:
         - id
@@ -4194,17 +4194,6 @@ components:
       additionalProperties: false
       description: What the server runs with.
       properties:
-        agent_env:
-          description: The variables of the server's environment that agents' stages are given.
-          items:
-            type: string
-          type: array
-        agent_listen:
-          description: The listener of the agent protocol and the cache apart from `listen`.
-          type: string
-        agent_url:
-          description: The URL a container's agent dials.
-          type: string
         base_url:
           type: string
         builds:
@@ -4255,6 +4244,17 @@ components:
         origin:
           description: Where the running binary came from, such as Homebrew, Docker image, or release archive or build; `data directory (the executable's own is vA.B.C)` when the server runs a newer binary kept in the data directory.
           type: string
+        runner_env:
+          description: The variables of the server's environment that runners' stages are given.
+          items:
+            type: string
+          type: array
+        runner_listen:
+          description: The listener of the runner protocol and the cache apart from `listen`.
+          type: string
+        runner_url:
+          description: The URL a container's runner dials.
+          type: string
         schema:
           description: The database's schema version.
           type: integer
@@ -4284,9 +4284,9 @@ components:
         - executors
         - builds
         - default_runs_on
-        - agent_env
-        - agent_url
-        - agent_listen
+        - runner_env
+        - runner_url
+        - runner_listen
         - shell
         - session_ttl_seconds
         - timezone
@@ -4322,7 +4322,7 @@ components:
             type: string
           type: array
         ran_on:
-          description: Where it ran, `local`, an agent's name, or `engine/n` for a container; empty before it starts.
+          description: Where it ran, `local`, a runner's name, or `engine/n` for a container; empty before it starts.
           type: string
         started_at:
           $ref: "#/components/schemas/NullableTimestamp"
@@ -4755,10 +4755,6 @@ components:
         - ignored
       type: object
   securitySchemes:
-    agentToken:
-      description: An agent's token (`kippa_` followed by the secret).
-      scheme: bearer
-      type: http
     bearerToken:
       description: A user's API token, made on the account page.
       scheme: bearer
@@ -4772,6 +4768,10 @@ components:
       in: header
       name: X-CSRF-Token
       type: apiKey
+    runnerToken:
+      description: A runner's token (`kippa_` followed by the secret).
+      scheme: bearer
+      type: http
     sessionCookie:
       description: |
         The browser session. A request that is not GET or HEAD must also

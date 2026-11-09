@@ -162,7 +162,7 @@ func TestNoCommandOrAskingForHelpPrintsTheUsageAndIsNotAFailure(t *testing.T) {
 }
 
 func TestEveryCommandInTheUsageExists(t *testing.T) {
-	for _, name := range []string{"serve", "check", "reload", "quiet", "upgrade", "run", "user", "token", "secret", "engine", "agent", "metrics", "cache", "version"} {
+	for _, name := range []string{"serve", "check", "reload", "quiet", "upgrade", "run", "user", "token", "secret", "engine", "runner", "metrics", "cache", "version"} {
 		if commands[name] == nil {
 			t.Errorf("no command %q", name)
 		}
@@ -226,23 +226,23 @@ func TestUsersAndTheirPermissions(t *testing.T) {
 	}
 	eq(t, "the generated password logs in", verifies(t, hashOf("admin"), generated), true)
 
-	out = ok(t, "from stdin, long enough\n", "user", "add", "agent", "--data", data, "--password-stdin")
+	out = ok(t, "from stdin, long enough\n", "user", "add", "runner", "--data", data, "--password-stdin")
 	lacks(t, out, "from stdin, long enough")
-	eq(t, "the given password logs in", verifies(t, hashOf("agent"), "from stdin, long enough"), true)
+	eq(t, "the given password logs in", verifies(t, hashOf("runner"), "from stdin, long enough"), true)
 
-	ok(t, "", "user", "grant", "agent", "deploy", "view,cancel,build,build", "--data", data)
-	ok(t, "", "user", "grant", "agent", "other", "view", "--data", data)
+	ok(t, "", "user", "grant", "runner", "deploy", "view,cancel,build,build", "--data", data)
+	ok(t, "", "user", "grant", "runner", "other", "view", "--data", data)
 	eq(t, "list", ok(t, "", "user", "list", "--data", data),
-		"admin  admin\nagent  user\nagent  deploy: view,build,cancel\nagent  other: view\n")
-	ok(t, "", "user", "revoke", "agent", "other", "--data", data)
+		"admin  admin\nrunner  user\nrunner  deploy: view,build,cancel\nrunner  other: view\n")
+	ok(t, "", "user", "revoke", "runner", "other", "--data", data)
 	lacks(t, ok(t, "", "user", "list", "--data", data), "other")
 
-	ok(t, "changed it to a new one\n", "user", "passwd", "agent", "--password-stdin", "--data", data)
-	eq(t, "the old password", verifies(t, hashOf("agent"), "from stdin, long enough"), false)
-	eq(t, "the new password", verifies(t, hashOf("agent"), "changed it to a new one"), true)
-	out = ok(t, "", "user", "passwd", "agent", "--data", data)
-	generated, _ = strings.CutPrefix(strings.TrimSpace(out), "agent password: ")
-	eq(t, "a generated replacement", verifies(t, hashOf("agent"), generated), true)
+	ok(t, "changed it to a new one\n", "user", "passwd", "runner", "--password-stdin", "--data", data)
+	eq(t, "the old password", verifies(t, hashOf("runner"), "from stdin, long enough"), false)
+	eq(t, "the new password", verifies(t, hashOf("runner"), "changed it to a new one"), true)
+	out = ok(t, "", "user", "passwd", "runner", "--data", data)
+	generated, _ = strings.CutPrefix(strings.TrimSpace(out), "runner password: ")
+	eq(t, "a generated replacement", verifies(t, hashOf("runner"), generated), true)
 
 	for what, c := range map[string]struct {
 		stdin string
@@ -250,19 +250,19 @@ func TestUsersAndTheirPermissions(t *testing.T) {
 		code  int
 		says  string
 	}{
-		"a second user of the same name":  {"", []string{"user", "add", "agent"}, 1, `"agent" already exists`},
+		"a second user of the same name":  {"", []string{"user", "add", "runner"}, 1, `"runner" already exists`},
 		"a password that is not there":    {"\n", []string{"user", "add", "nobody", "--password-stdin"}, 2, "no password on stdin"},
 		"a password of 14 characters":     {"fourteen chars\n", []string{"user", "add", "nobody", "--password-stdin"}, 2, "at least 15 characters"},
-		"a new password too short":        {"short\n", []string{"user", "passwd", "agent", "--password-stdin"}, 2, "at least 15 characters"},
+		"a new password too short":        {"short\n", []string{"user", "passwd", "runner", "--password-stdin"}, 2, "at least 15 characters"},
 		"a common password":               {"1q2w3e4r5t6y7u8i\n", []string{"user", "add", "nobody", "--password-stdin"}, 2, "common or leaked"},
-		"the user's name in the password": {"Agent, long enough\n", []string{"user", "passwd", "agent", "--password-stdin"}, 2, `"agent"`},
+		"the user's name in the password": {"Runner, long enough\n", []string{"user", "passwd", "runner", "--password-stdin"}, 2, `"runner"`},
 		"kipp in the password":            {"my kipp password\n", []string{"user", "add", "nobody", "--password-stdin"}, 2, `"kipp"`},
 		"a name a job could not have":     {"", []string{"user", "add", "No Body"}, 2, `"No Body" is not a name a user can have`},
 		"a name too long":                 {"", []string{"user", "add", strings.Repeat("n", 65)}, 2, "is not a name a user can have"},
-		"a permission that is not one":    {"", []string{"user", "grant", "agent", "x", "view,admin"}, 2, `"admin" is not view, build or cancel`},
+		"a permission that is not one":    {"", []string{"user", "grant", "runner", "x", "view,admin"}, 2, `"admin" is not view, build or cancel`},
 		"a grant to nobody":               {"", []string{"user", "grant", "ghost", "x", "view"}, 1, `no user called "ghost"`},
 		"a password for nobody":           {"", []string{"user", "passwd", "ghost"}, 1, `no user called "ghost"`},
-		"a subcommand that is not one":    {"", []string{"user", "rename", "agent"}, 2, "usage: kipp user"},
+		"a subcommand that is not one":    {"", []string{"user", "rename", "runner"}, 2, "usage: kipp user"},
 		"no subcommand":                   {"", []string{"user"}, 2, "usage: kipp user"},
 	} {
 		code, _, errOut := kipp(c.stdin, append(c.args, "--data", data)...)
@@ -273,8 +273,8 @@ func TestUsersAndTheirPermissions(t *testing.T) {
 	eq(t, "no data directory", code, 2)
 	contains(t, errOut, "--data is required")
 	lacks(t, ok(t, "", "user", "list", "--data", data), "nobody", "ghost", "No Body", "nnnn")
-	eq(t, "a refused password changed nothing", verifies(t, hashOf("agent"), generated), true)
-	ok(t, "fifteen chars!!\n", "user", "passwd", "agent", "--password-stdin", "--data", data)
+	eq(t, "a refused password changed nothing", verifies(t, hashOf("runner"), generated), true)
+	ok(t, "fifteen chars!!\n", "user", "passwd", "runner", "--password-stdin", "--data", data)
 }
 
 func TestAUserWhoseNameANewUserCouldNotHaveStillWorksForEveryOtherSubcommand(t *testing.T) {
@@ -294,15 +294,15 @@ func TestAUserWhoseNameANewUserCouldNotHaveStillWorksForEveryOtherSubcommand(t *
 
 func TestTokensAreShownOnceAndRevokedById(t *testing.T) {
 	data := newData(t)
-	ok(t, "a password long enough\n", "user", "add", "agent", "--password-stdin", "--data", data)
-	out := ok(t, "", "token", "create", "agent", "--label", "ci", "--data", data)
+	ok(t, "a password long enough\n", "user", "add", "runner", "--password-stdin", "--data", data)
+	out := ok(t, "", "token", "create", "runner", "--label", "ci", "--data", data)
 	token := strings.TrimSpace(out[strings.LastIndex(out, "kipp_"):])
 	st := openDB(t, data)
 	u, err := st.UserByTokenHash(context.Background(), auth.HashToken(token))
 	must(t, err)
-	eq(t, "the token's user", u.Name, "agent")
+	eq(t, "the token's user", u.Name, "runner")
 
-	list := ok(t, "", "token", "list", "agent", "--data", data)
+	list := ok(t, "", "token", "list", "runner", "--data", data)
 	contains(t, list, "1  ci  created ", "last used ")
 	lacks(t, list, token, auth.HashToken(token))
 
@@ -310,7 +310,7 @@ func TestTokensAreShownOnceAndRevokedById(t *testing.T) {
 	if _, err := st.UserByTokenHash(context.Background(), auth.HashToken(token)); err == nil {
 		t.Fatal("a revoked token still works")
 	}
-	eq(t, "list after revoke", ok(t, "", "token", "list", "agent", "--data", data), "")
+	eq(t, "list after revoke", ok(t, "", "token", "list", "runner", "--data", data), "")
 
 	for what, c := range map[string]struct {
 		args []string
@@ -319,7 +319,7 @@ func TestTokensAreShownOnceAndRevokedById(t *testing.T) {
 	}{
 		"a token nobody holds":       {[]string{"token", "revoke", "1"}, 1, "no token with id 1"},
 		"an id that is not a number": {[]string{"token", "revoke", "kipp_x"}, 2, "the id is the number"},
-		"a token with no label":      {[]string{"token", "create", "agent"}, 2, "usage: kipp token"},
+		"a token with no label":      {[]string{"token", "create", "runner"}, 2, "usage: kipp token"},
 		"a token for nobody":         {[]string{"token", "create", "ghost", "--label", "x"}, 1, `no user called "ghost"`},
 		"a list for nobody":          {[]string{"token", "list", "ghost"}, 1, `no user called "ghost"`},
 	} {
@@ -374,7 +374,7 @@ func TestSecretsAreSealedAndListedByNameOnly(t *testing.T) {
 
 func TestTheDatabaseIsItsOwnersOnly(t *testing.T) {
 	data := newData(t)
-	ok(t, "a password long enough\n", "user", "add", "agent", "--password-stdin", "--data", data)
+	ok(t, "a password long enough\n", "user", "add", "runner", "--password-stdin", "--data", data)
 	files, err := filepath.Glob(filepath.Join(data, "db.sqlite*"))
 	must(t, err)
 	if len(files) == 0 {
@@ -397,19 +397,19 @@ func TestAUserIsDeletedWithAllTheyHeldAndTheOnlyAdminLeftNever(t *testing.T) {
 	data := newData(t)
 	ok(t, "", "user", "add", "admin", "--admin", "--data", data)
 	ok(t, "", "user", "add", "second", "--admin", "--data", data)
-	ok(t, "", "user", "add", "agent", "--data", data)
-	ok(t, "", "user", "grant", "agent", "smoke", "view,build", "--data", data)
-	ok(t, "", "token", "create", "agent", "--label", "ci", "--data", data)
+	ok(t, "", "user", "add", "runner", "--data", data)
+	ok(t, "", "user", "grant", "runner", "smoke", "view,build", "--data", data)
+	ok(t, "", "token", "create", "runner", "--label", "ci", "--data", data)
 	st := openDB(t, data)
 	ctx := context.Background()
-	agent, err := st.UserByName(ctx, "agent")
+	runner, err := st.UserByName(ctx, "runner")
 	must(t, err)
 
-	eq(t, "what a delete says", ok(t, "", "user", "delete", "agent", "--data", data), "agent: deleted\n")
-	lacks(t, ok(t, "", "user", "list", "--data", data), "agent")
-	tokens, err := st.Tokens(ctx, agent.ID)
+	eq(t, "what a delete says", ok(t, "", "user", "delete", "runner", "--data", data), "runner: deleted\n")
+	lacks(t, ok(t, "", "user", "list", "--data", data), "runner")
+	tokens, err := st.Tokens(ctx, runner.ID)
 	must(t, err)
-	perms, err := st.Permissions(ctx, agent.ID)
+	perms, err := st.Permissions(ctx, runner.ID)
 	must(t, err)
 	eq(t, "what is left of the user's tokens and grants", len(tokens)+len(perms), 0)
 
@@ -431,32 +431,32 @@ func TestAUserIsDeletedWithAllTheyHeldAndTheOnlyAdminLeftNever(t *testing.T) {
 func TestAGrantNamesWhatAJobCouldBeCalledAndIsCheckedAgainstTheJobFilesWhenAsked(t *testing.T) {
 	data, jobs := newData(t), t.TempDir()
 	write(t, filepath.Join(jobs, "smoke.yml"), "name: smoke\nstages:\n  s: {run: 'true'}\n", 0o600)
-	ok(t, "", "user", "add", "agent", "--data", data)
+	ok(t, "", "user", "add", "runner", "--data", data)
 
-	code, _, errOut := kipp("", "user", "grant", "agent", "Not A Job", "view", "--data", data)
+	code, _, errOut := kipp("", "user", "grant", "runner", "Not A Job", "view", "--data", data)
 	eq(t, "a name no job can have", code, 2)
 	contains(t, errOut, `"Not A Job"`, "lower-case letters, digits")
 
-	lacks(t, ok(t, "", "user", "grant", "agent", "smoke", "view", "--data", data, "--jobs", jobs), "not checked")
-	code, _, errOut = kipp("", "user", "grant", "agent", "smok", "view", "--data", data, "--jobs", jobs)
+	lacks(t, ok(t, "", "user", "grant", "runner", "smoke", "view", "--data", data, "--jobs", jobs), "not checked")
+	code, _, errOut = kipp("", "user", "grant", "runner", "smok", "view", "--data", data, "--jobs", jobs)
 	eq(t, "a job that is not in the job files", code, 1)
 	contains(t, errOut, `no job called "smok" in `+jobs)
 
 	// Without the job files the grant is taken, and says it was not checked.
-	contains(t, ok(t, "", "user", "grant", "agent", "later", "view,build", "--data", data), "not checked against the job files")
-	eq(t, "list", ok(t, "", "user", "list", "--data", data), "agent  user\nagent  later: view,build\nagent  smoke: view\n")
+	contains(t, ok(t, "", "user", "grant", "runner", "later", "view,build", "--data", data), "not checked against the job files")
+	eq(t, "list", ok(t, "", "user", "list", "--data", data), "runner  user\nrunner  later: view,build\nrunner  smoke: view\n")
 
 	write(t, filepath.Join(jobs, "bad.yml"), "name: other\n", 0o600)
-	code, _, errOut = kipp("", "user", "grant", "agent", "smoke", "view,build", "--data", data, "--jobs", jobs)
+	code, _, errOut = kipp("", "user", "grant", "runner", "smoke", "view,build", "--data", data, "--jobs", jobs)
 	eq(t, "job files that do not load", code, 1)
 	contains(t, errOut, "bad.yml")
 
 	// A grant made before names were checked can still be taken back.
 	st := openDB(t, data)
-	agent, err := st.UserByName(context.Background(), "agent")
+	runner, err := st.UserByName(context.Background(), "runner")
 	must(t, err)
-	must(t, st.Grant(context.Background(), agent.ID, "Not A Job", []string{"view"}))
-	ok(t, "", "user", "revoke", "agent", "Not A Job", "--data", data)
+	must(t, st.Grant(context.Background(), runner.ID, "Not A Job", []string{"view"}))
+	ok(t, "", "user", "revoke", "runner", "Not A Job", "--data", data)
 	lacks(t, ok(t, "", "user", "list", "--data", data), "Not A Job")
 }
 
@@ -570,11 +570,11 @@ func TestASecretIsSetShownAndRescopedFromTheCommandLineAndEveryChangeIsAudited(t
 
 func TestAGrantOfBuildOrCancelWithoutViewIsRefusedWithTheReason(t *testing.T) {
 	data := newData(t)
-	ok(t, "", "user", "add", "agent", "--data", data)
+	ok(t, "", "user", "add", "runner", "--data", data)
 	for _, perms := range []string{"build", "cancel", "build,cancel"} {
-		code, _, errOut := kipp("", "user", "grant", "agent", "smoke", perms, "--data", data)
+		code, _, errOut := kipp("", "user", "grant", "runner", "smoke", perms, "--data", data)
 		eq(t, perms, code, 2)
 		contains(t, errOut, "build and cancel need view too: smoke has no view")
 	}
-	eq(t, "nothing was stored", ok(t, "", "user", "list", "--data", data), "agent  user\n")
+	eq(t, "nothing was stored", ok(t, "", "user", "list", "--data", data), "runner  user\n")
 }

@@ -15,7 +15,7 @@ or `--name`.
 | [`kipp token`](#kipp-token) | Makes, revokes and lists API tokens. | the data directory |
 | [`kipp secret`](#kipp-secret) | Sets, scopes, removes and lists secrets. | the data directory |
 | [`kipp engine`](#kipp-engine) | Registers the Docker engines containers run on. | the data directory |
-| [`kipp agent`](#kipp-agent) | Runs a standing agent, or registers them. | the server, or the data directory |
+| [`kipp runner`](#kipp-runner) | Runs a standing runner, or registers them. | the server, or the data directory |
 | [`kipp metrics`](#kipp-metrics) | Checks a stage's guards; reads and changes what metric stores remember. | the stage, or the data directory |
 | [`kipp cache`](#kipp-cache) | A stage's keyed cache; lists and removes entries. | the server, or the data directory |
 | `kipp version` | Prints the version, and on a second line where the binary was installed from. | nothing |
@@ -26,12 +26,12 @@ or `--name`.
 argument shows in the process list, so prefer either of the others.
 
 **Working on the data directory.** `user`, `token`, `secret`, `engine`,
-`agent add|set|token|rm|ls`, `metrics put|forget|ls` and `cache ls|rm`
+`runner add|set|token|rm|ls`, `metrics put|forget|ls` and `cache ls|rm`
 open the database in `--data` themselves, on the server's machine, as the
 user the server runs as, while it runs or not. Only `kipp serve` makes the
 data directory; these refuse one that does not exist, and one whose
 schema is not theirs ([Upgrading](operations.md#upgrading)). A running
-server takes a change to engines and agents at its next reload; users,
+server takes a change to engines and runners at its next reload; users,
 tokens and secrets at once. Every change they make is a row of the audit
 with the actor `cli`.
 
@@ -59,7 +59,7 @@ directory.
 | `--jobs <dir>` | required | The directory of job files. |
 | `--listen <addr>` | `127.0.0.1:8085` | The address to listen on, in plain HTTP. |
 | `--base-url <url>` | `http://<listen>` | The URL stages see as `KIPP_URL`. Build links, commit statuses' links, webhook URLs and GitHub App manifests need it given. |
-| `--executors <n>` | 4 | Stages the server runs itself at once; 0 runs none ([Agents and engines](agents.md#the-servers-flags)). |
+| `--executors <n>` | 4 | Stages the server runs itself at once; 0 runs none ([Runners and engines](runners.md#the-servers-flags)). |
 | `--flaky-flips <n>` | 4 | Changes of colour among a job's last 20 finished builds (at least 5 needed) that put it in the front page's Flaky section; 0 hides the section. |
 | `--builds <n>` | `--executors`, or 4 when that is 0 | Builds with something running at once. |
 | `--shell <sh>` | `sh` | The shell that runs stages, as `<shell> -c <command>`. |
@@ -70,9 +70,9 @@ directory.
 | `--trusted-proxy <cidrs>` | `127.0.0.0/8,::1/128` | The proxies whose `--client-ip-header` is believed. |
 | `--github-api <url>` | `https://api.github.com` | GitHub's API, for scans, commit statuses and webhooks (GitHub Enterprise has its own). |
 | `--default-runs-on <labels>` | none | Where a stage with no `runs_on` goes on a server with `--executors 0`. |
-| `--agent-env <names>` | none | The server's variables, by name, a stage on an agent is also given. |
-| `--agent-url <url>` | `--base-url` | The URL a container's agent dials, and stages on agents reach the cache at. |
-| `--agent-listen <addr>` | none | A second listener for `/api/v1/agent/` and `/api/v1/cache/` alone. |
+| `--runner-env <names>` | none | The server's variables, by name, a stage on a runner is also given. |
+| `--runner-url <url>` | `--base-url` | The URL a container's runner dials, and stages on runners reach the cache at. |
+| `--runner-listen <addr>` | none | A second listener for `/api/v1/runner/` and `/api/v1/cache/` alone. |
 | `--ssh-key <file>` | the user's own under `~/.ssh` | The private key for `ssh://` engines that name none. |
 | `--artifacts-max <size>` | `50GB` | The most every build's artifacts come to; past it the oldest builds' are removed. |
 | `--cache-max <size>` | `20GB` | The most every cache entry comes to; past it the least recently restored are removed. |
@@ -259,29 +259,29 @@ kipp engine ls --data <dir>
 
 `--max` is how many containers it runs at once (default 1). `--disable`
 takes no new container; what runs finishes. See
-[Engines](agents.md#engines).
+[Engines](runners.md#engines).
 
-## kipp agent
+## kipp runner
 
 ```
-kipp agent --url <server> --workdir <dir> [--token <token> | --token -] [--shell sh]
-kipp agent add <name> --labels <a,b> [--executors N] --data <dir>
-kipp agent set <name> [--labels <a,b>] [--executors N] [--disable | --enable] --data <dir>
-kipp agent token <name> --data <dir>
-kipp agent rm <name> --data <dir>
-kipp agent ls --data <dir>
+kipp runner --url <server> --workdir <dir> [--token <token> | --token -] [--shell sh]
+kipp runner add <name> --labels <a,b> [--executors N] --data <dir>
+kipp runner set <name> [--labels <a,b>] [--executors N] [--disable | --enable] --data <dir>
+kipp runner token <name> --data <dir>
+kipp runner rm <name> --data <dir>
+kipp runner ls --data <dir>
 ```
 
-With `--url` it runs a standing agent on this machine: it dials the
+With `--url` it runs a standing runner on this machine: it dials the
 server, which says its name and labels, and runs the stages placed on it.
 The token is `--token`, `-` to read it from stdin, or
-`$KIPP_AGENT_TOKEN`. It exits 3 when the server refuses its token and 5
+`$KIPP_RUNNER_TOKEN`. It exits 3 when the server refuses its token and 5
 when the server is another kipp version.
 
-`add` registers an agent and prints its token once; `--executors` is how
+`add` registers a runner and prints its token once; `--executors` is how
 many stages it runs at once (default 1). `set --disable` drains it: it
 takes nothing new, and what it runs finishes. `token` gives it a new
-token and ends the old one. See [Standing agents](agents.md#standing-agents).
+token and ends the old one. See [Standing runners](runners.md#standing-runners).
 
 ## kipp metrics
 

@@ -85,7 +85,7 @@ ${release:+$release
       %w[amd64 arm64].each do |arch|
         with_env(CGO_ENABLED: "0", GOOS: "linux", GOARCH: arch) do
           system "go", "build", "-trimpath", "-buildvcs=false", "-ldflags", ldflags,
-                 "-o", "internal/agentbin/bin/kipp-agent_linux_#{arch}", "./cmd/kipp-agent"
+                 "-o", "internal/runnerbin/bin/kipp-runner_linux_#{arch}", "./cmd/kipp-runner"
         end
       end
       with_env(CGO_ENABLED: "0") do

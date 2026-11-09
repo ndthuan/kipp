@@ -1,5 +1,5 @@
 // Package placement chooses where a stage with runs_on runs: an image asks
-// for a Docker engine, no image for a standing agent, and either must carry
+// for a Docker engine, no image for a standing runner, and either must carry
 // every label the stage names. It knows nothing of how a place is reached.
 package placement
 
@@ -12,7 +12,7 @@ import (
 
 // The two kinds of place.
 const (
-	KindAgent  = "agent"
+	KindRunner = "runner"
 	KindEngine = "engine"
 )
 
@@ -21,14 +21,14 @@ type Candidate struct {
 	Name   string
 	Kind   string
 	Labels []string
-	// Free is a place that takes a stage now: an agent online, enabled and
+	// Free is a place that takes a stage now: a runner online, enabled and
 	// with an executor to spare; an engine enabled and below its cap.
 	Free bool
 	// Reachable is false for an engine whose last probe failed, and for an
-	// agent that is offline. Why says what failed, and since when.
+	// runner that is offline. Why says what failed, and since when.
 	Reachable bool
 	Why       string
-	// Idle is since when an agent has had nothing to run.
+	// Idle is since when a runner has had nothing to run.
 	Idle time.Time
 	// Room is how many more containers an engine may start; Reuse is an
 	// engine that already runs a container of this build and image, which
@@ -57,7 +57,7 @@ const (
 
 // Pick is where w runs, or why nowhere yet, with a line that says it.
 func Pick(w Want, cs []Candidate) (Candidate, Why, string) {
-	kind := KindAgent
+	kind := KindRunner
 	if w.Image != "" {
 		kind = KindEngine
 	}
@@ -87,7 +87,7 @@ func Pick(w Want, cs []Candidate) (Candidate, Why, string) {
 }
 
 // better orders the places that may take a stage: a container of the build
-// first, then the agent idle longest, or the engine with the most room.
+// first, then the runner idle longest, or the engine with the most room.
 func better(a, b Candidate) int {
 	switch {
 	case a.Reuse != b.Reuse:
@@ -95,7 +95,7 @@ func better(a, b Candidate) int {
 			return -1
 		}
 		return 1
-	case a.Kind == KindAgent:
+	case a.Kind == KindRunner:
 		return a.Idle.Compare(b.Idle)
 	}
 	return b.Room - a.Room
@@ -118,16 +118,16 @@ func Show(labels []string) string { return "[" + strings.Join(labels, ", ") + "]
 func none(kind string, labels []string, other bool) string {
 	switch {
 	case !other:
-		return "no agent or engine carries labels " + Show(labels)
+		return "no runner or engine carries labels " + Show(labels)
 	case kind == KindEngine:
 		return "no engine carries labels " + Show(labels) + ": a stage with an image runs in a container on an engine"
 	}
-	return "no agent carries labels " + Show(labels) + ": a stage with no image runs on a standing agent"
+	return "no runner carries labels " + Show(labels) + ": a stage with no image runs on a standing runner"
 }
 
 func article(kind string) string {
 	if kind == KindEngine {
 		return "an engine"
 	}
-	return "an agent"
+	return "a runner"
 }

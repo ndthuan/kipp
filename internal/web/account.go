@@ -178,8 +178,8 @@ var notices = map[string]string{
 	"engine-added":      "The engine is added. A stage that waits for its labels is placed on it once it is reached.",
 	"engine-set":        "The engine is changed.",
 	"engine-gone":       "The engine is removed. The containers it runs finish.",
-	"agent-set":         "The agent is changed. A disabled agent takes nothing new; what it runs finishes.",
-	"agent-gone":        "The agent is removed, and its token refused.",
+	"runner-set":        "The runner is changed. A disabled runner takes nothing new; what it runs finishes.",
+	"runner-gone":       "The runner is removed, and its token refused.",
 	"cache-gone":        "The cache entry is removed.",
 	"cache-cleared":     "The scope's cache entries are removed.",
 }

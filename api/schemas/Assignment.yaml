@@ -13,7 +13,7 @@ properties:
     type: string
   Command:
     type: string
-    description: Run with the agent's shell, `-c`.
+    description: Run with the runner's shell, `-c`.
   Env:
     type: [array, "null"]
     items:
@@ -21,7 +21,7 @@ properties:
     description: The variables the server gives the stage, as `NAME=value`.
   Workspace:
     type: string
-    description: The build's directory under the agent's workdir; empty is the workdir itself.
+    description: The build's directory under the runner's workdir; empty is the workdir itself.
   Workdir:
     type: string
     description: A path inside the workspace the stage runs in.
@@ -36,15 +36,15 @@ properties:
     contentEncoding: base64
     description: What the stage's store remembers; absent for a stage that declares no metrics.
   Artifacts:
-    $ref: AgentArtifacts.yaml
+    $ref: RunnerArtifacts.yaml
   Inputs:
     type: array
     items:
-      $ref: AgentInput.yaml
+      $ref: RunnerInput.yaml
   Cache:
     type: array
     items:
-      $ref: AgentCache.yaml
+      $ref: RunnerCache.yaml
   UnstableExit:
     type: array
     items:
@@ -54,4 +54,4 @@ properties:
     type: integer
     minimum: 0
     maximum: 10
-    description: How many more times the agent runs the command when it ends with a code that is neither 0 nor in UnstableExit; absent is none.
+    description: How many more times the runner runs the command when it ends with a code that is neither 0 nor in UnstableExit; absent is none.

@@ -17,12 +17,12 @@ import (
 	"github.com/ndthuan/kipp/internal/store"
 )
 
-var adminReads = []string{"/api/v1/admin/users", "/api/v1/admin/users/agent", "/api/v1/admin/secrets", "/api/v1/admin/server", "/api/v1/admin/audit", "/api/v1/admin/engines", "/api/v1/admin/agents"}
+var adminReads = []string{"/api/v1/admin/users", "/api/v1/admin/users/aide", "/api/v1/admin/secrets", "/api/v1/admin/server", "/api/v1/admin/audit", "/api/v1/admin/engines", "/api/v1/admin/runners"}
 
 func TestTheAdminReadsAreRefusedToANonAdminWith403(t *testing.T) {
 	e := newEnv(t)
 	for _, path := range adminReads {
-		for _, tok := range []string{e.agent, e.viewer} {
+		for _, tok := range []string{e.aide, e.viewer} {
 			e.asProblem(t, 403, "forbidden", tok, "GET", path, "")
 		}
 		e.call(t, 401, "", "GET", path, "")
@@ -92,7 +92,7 @@ func TestUsersAnswerGrantsTokensAndSessionsAndNeverAHash(t *testing.T) {
 	for _, u := range all {
 		names = append(names, u.Name)
 	}
-	eq(t, "users", strings.Join(names, ","), "admin,agent,alice,viewer")
+	eq(t, "users", strings.Join(names, ","), "admin,aide,alice,viewer")
 
 	var one map[string]any
 	text = e.decode(t, "/api/v1/admin/users/alice", &one)

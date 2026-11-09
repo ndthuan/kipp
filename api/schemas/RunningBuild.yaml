@@ -26,4 +26,4 @@ properties:
     type: object
     additionalProperties:
       type: string
-    description: By stage, what one that waits for an agent or an engine waits for.
+    description: By stage, what one that waits for a runner or an engine waits for.

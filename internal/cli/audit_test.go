@@ -27,35 +27,35 @@ func TestEveryChangeTheCLIMakesIsAuditedAsCliAndNeverWithAValue(t *testing.T) {
 	data := newData(t)
 	const secret = "an obvious test secret value"
 	pw := strings.TrimPrefix(strings.TrimSpace(ok(t, "", "user", "add", "root", "--admin", "--data", data)), "root password: ")
-	ok(t, "a password long enough\n", "user", "add", "agent", "--password-stdin", "--data", data)
-	ok(t, "", "user", "admin", "agent", "on", "--data", data)
-	ok(t, "", "user", "admin", "agent", "off", "--data", data)
-	ok(t, "another password long enough\n", "user", "passwd", "agent", "--password-stdin", "--data", data)
-	ok(t, "", "user", "grant", "agent", "smoke", "build,view", "--data", data)
-	ok(t, "", "user", "revoke", "agent", "smoke", "--data", data)
-	out := ok(t, "", "token", "create", "agent", "--label", "ci", "--expires", "30", "--data", data)
+	ok(t, "a password long enough\n", "user", "add", "aide", "--password-stdin", "--data", data)
+	ok(t, "", "user", "admin", "aide", "on", "--data", data)
+	ok(t, "", "user", "admin", "aide", "off", "--data", data)
+	ok(t, "another password long enough\n", "user", "passwd", "aide", "--password-stdin", "--data", data)
+	ok(t, "", "user", "grant", "aide", "smoke", "build,view", "--data", data)
+	ok(t, "", "user", "revoke", "aide", "smoke", "--data", data)
+	out := ok(t, "", "token", "create", "aide", "--label", "ci", "--expires", "30", "--data", data)
 	token := strings.TrimSpace(out[strings.LastIndex(out, "kipp_"):])
 	ok(t, "", "token", "revoke", "1", "--data", data)
 	ok(t, secret, "secret", "set", "TOKEN", "--data", data)
 	ok(t, secret, "secret", "set", "TOKEN", "--data", data)
 	ok(t, "", "secret", "unset", "TOKEN", "--data", data)
-	ok(t, "", "user", "delete", "agent", "--data", data)
+	ok(t, "", "user", "delete", "aide", "--data", data)
 
 	expires := time.Now().AddDate(0, 0, 30).UTC().Format(time.DateOnly)
 	want := []string{
 		"cli user.add root: admin",
-		"cli user.add agent: user",
-		"cli user.admin agent: on",
-		"cli user.admin agent: off",
-		"cli user.password.reset agent: sessions ended",
-		"cli grants.set agent: smoke: view,build",
-		"cli grants.set agent: smoke: none",
-		`cli token.create agent: label "ci", id 1, expires ` + expires,
-		`cli token.revoke agent: label "ci", id 1`,
+		"cli user.add aide: user",
+		"cli user.admin aide: on",
+		"cli user.admin aide: off",
+		"cli user.password.reset aide: sessions ended",
+		"cli grants.set aide: smoke: view,build",
+		"cli grants.set aide: smoke: none",
+		`cli token.create aide: label "ci", id 1, expires ` + expires,
+		`cli token.revoke aide: label "ci", id 1`,
 		"cli secret.set TOKEN: new text",
 		"cli secret.set TOKEN: replaced text",
 		"cli secret.delete TOKEN: ",
-		"cli user.delete agent: ",
+		"cli user.delete aide: ",
 	}
 	got := audit(t, openDB(t, data))
 	eq(t, "the audit", strings.Join(got, "\n"), strings.Join(want, "\n"))
@@ -153,52 +153,52 @@ func TestTheSamePasswordIsUnchangedEvenWhenTheRuleWouldRefuseItNow(t *testing.T)
 
 func TestPasswdRevokesTheTokensOnlyWhenAsked(t *testing.T) {
 	data := newData(t)
-	ok(t, "a password long enough\n", "user", "add", "agent", "--password-stdin", "--data", data)
-	ok(t, "", "token", "create", "agent", "--label", "a", "--data", data)
-	ok(t, "", "token", "create", "agent", "--label", "b", "--data", data)
-	ok(t, "a second password, long\n", "user", "passwd", "agent", "--password-stdin", "--data", data)
-	contains(t, ok(t, "", "token", "list", "agent", "--data", data), "  a  ", "  b  ")
+	ok(t, "a password long enough\n", "user", "add", "aide", "--password-stdin", "--data", data)
+	ok(t, "", "token", "create", "aide", "--label", "a", "--data", data)
+	ok(t, "", "token", "create", "aide", "--label", "b", "--data", data)
+	ok(t, "a second password, long\n", "user", "passwd", "aide", "--password-stdin", "--data", data)
+	contains(t, ok(t, "", "token", "list", "aide", "--data", data), "  a  ", "  b  ")
 
-	out := ok(t, "a third password, long\n", "user", "passwd", "agent", "--password-stdin", "--revoke-tokens", "--data", data)
-	contains(t, out, "agent: password set", "agent: 2 tokens revoked")
-	eq(t, "tokens after --revoke-tokens", ok(t, "", "token", "list", "agent", "--data", data), "")
+	out := ok(t, "a third password, long\n", "user", "passwd", "aide", "--password-stdin", "--revoke-tokens", "--data", data)
+	contains(t, out, "aide: password set", "aide: 2 tokens revoked")
+	eq(t, "tokens after --revoke-tokens", ok(t, "", "token", "list", "aide", "--data", data), "")
 	got := audit(t, openDB(t, data))
-	eq(t, "the row", got[len(got)-1], "cli user.password.reset agent: sessions ended, 2 tokens revoked")
+	eq(t, "the row", got[len(got)-1], "cli user.password.reset aide: sessions ended, 2 tokens revoked")
 }
 
 func TestUserAdminTurnsAdminOnAndOffButNeverOffTheLastOne(t *testing.T) {
 	data := newData(t)
 	ok(t, "", "user", "add", "root", "--admin", "--data", data)
-	ok(t, "", "user", "add", "agent", "--data", data)
-	eq(t, "on", ok(t, "", "user", "admin", "agent", "on", "--data", data), "agent: admin\n")
-	contains(t, ok(t, "", "user", "list", "--data", data), "agent  admin\n")
+	ok(t, "", "user", "add", "aide", "--data", data)
+	eq(t, "on", ok(t, "", "user", "admin", "aide", "on", "--data", data), "aide: admin\n")
+	contains(t, ok(t, "", "user", "list", "--data", data), "aide  admin\n")
 	eq(t, "off", ok(t, "", "user", "admin", "root", "off", "--data", data), "root: not an admin\n")
 	for what, c := range map[string]struct {
 		args []string
 		code int
 		says string
 	}{
-		"the last admin":     {[]string{"agent", "off"}, 1, "agent is the last admin"},
+		"the last admin":     {[]string{"aide", "off"}, 1, "aide is the last admin"},
 		"nobody":             {[]string{"ghost", "on"}, 1, `no user called "ghost"`},
-		"neither on nor off": {[]string{"agent", "yes"}, 2, "usage: kipp user"},
-		"no state":           {[]string{"agent"}, 2, "usage: kipp user"},
+		"neither on nor off": {[]string{"aide", "yes"}, 2, "usage: kipp user"},
+		"no state":           {[]string{"aide"}, 2, "usage: kipp user"},
 	} {
 		code, _, errOut := kipp("", append(append([]string{"user", "admin"}, c.args...), "--data", data)...)
 		eq(t, what, code, c.code)
 		contains(t, errOut, c.says)
 	}
-	eq(t, "the list", ok(t, "", "user", "list", "--data", data), "agent  admin\nroot  user\n")
+	eq(t, "the list", ok(t, "", "user", "list", "--data", data), "aide  admin\nroot  user\n")
 }
 
 func TestATokenExpiresWhenAskedAndTheListSaysWhen(t *testing.T) {
 	data := newData(t)
-	ok(t, "", "user", "add", "agent", "--data", data)
+	ok(t, "", "user", "add", "aide", "--data", data)
 	for _, days := range []string{"30", "90", "365"} {
-		ok(t, "", "token", "create", "agent", "--label", "d"+days, "--expires", days, "--data", data)
+		ok(t, "", "token", "create", "aide", "--label", "d"+days, "--expires", days, "--data", data)
 	}
-	ok(t, "", "token", "create", "agent", "--label", "forever", "--data", data)
+	ok(t, "", "token", "create", "aide", "--label", "forever", "--data", data)
 	st := openDB(t, data)
-	u, err := st.UserByName(context.Background(), "agent")
+	u, err := st.UserByName(context.Background(), "aide")
 	must(t, err)
 	tokens, err := st.Tokens(context.Background(), u.ID)
 	must(t, err)
@@ -215,13 +215,13 @@ func TestATokenExpiresWhenAskedAndTheListSaysWhen(t *testing.T) {
 	must(t, err)
 	_, err = st.CreateTokenUntil(context.Background(), u.ID, "old", hash, new(time.Now().Add(-time.Hour)))
 	must(t, err)
-	list := ok(t, "", "token", "list", "agent", "--data", data)
+	list := ok(t, "", "token", "list", "aide", "--data", data)
 	contains(t, list,
 		"  d30  created ", "  expires "+tokens[0].ExpiresAt.Local().Format(time.DateOnly)+"\n",
 		"  forever  created ", "  never expires\n",
 		"  old  created ", "  expired "+time.Now().Add(-time.Hour).Local().Format(time.DateOnly)+"\n")
 	for _, bad := range []string{"0", "7", "x", "-30"} {
-		code, _, errOut := kipp("", "token", "create", "agent", "--label", "x", "--expires", bad, "--data", data)
+		code, _, errOut := kipp("", "token", "create", "aide", "--label", "x", "--expires", bad, "--data", data)
 		eq(t, "--expires "+bad, code, 2)
 		contains(t, errOut, "30, 90 or 365")
 	}
@@ -229,10 +229,10 @@ func TestATokenExpiresWhenAskedAndTheListSaysWhen(t *testing.T) {
 
 func TestAGrantThatChangesNothingIsNotAudited(t *testing.T) {
 	data := newData(t)
-	ok(t, "a password long enough\n", "user", "add", "agent", "--password-stdin", "--data", data)
-	ok(t, "", "user", "grant", "agent", "smoke", "view,build", "--data", data)
-	ok(t, "", "user", "grant", "agent", "smoke", "build,view", "--data", data)
-	ok(t, "", "user", "revoke", "agent", "other", "--data", data)
+	ok(t, "a password long enough\n", "user", "add", "aide", "--password-stdin", "--data", data)
+	ok(t, "", "user", "grant", "aide", "smoke", "view,build", "--data", data)
+	ok(t, "", "user", "grant", "aide", "smoke", "build,view", "--data", data)
+	ok(t, "", "user", "revoke", "aide", "other", "--data", data)
 	eq(t, "the audit", strings.Join(audit(t, openDB(t, data)), "\n"),
-		"cli user.add agent: user\ncli grants.set agent: smoke: view,build")
+		"cli user.add aide: user\ncli grants.set aide: smoke: view,build")
 }

@@ -116,7 +116,7 @@ type Stage struct {
 	ExitCode   *int
 	StartedAt  *time.Time
 	FinishedAt *time.Time
-	// RanOn is where the stage ran: local, an agent's name, or an engine's
+	// RanOn is where the stage ran: local, a runner's name, or an engine's
 	// container as engine/ordinal. Empty before it started.
 	RanOn string
 	// Tries is how many times the stage's command ran: 1 unless its

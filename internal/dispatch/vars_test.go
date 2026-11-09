@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ndthuan/kipp/internal/agenthub"
 	"github.com/ndthuan/kipp/internal/config"
+	"github.com/ndthuan/kipp/internal/runnerhub"
 	"github.com/ndthuan/kipp/internal/store"
 )
 
@@ -166,8 +166,8 @@ func TestAChildTakesTheEnvOfItsBranchsStagesFile(t *testing.T) {
 	}
 }
 
-func TestAStageOnAnAgentGetsTheSameVariablesAsOneOnTheServer(t *testing.T) {
-	ag := newAgents(t, agenthub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
+func TestAStageOnAnRunnerGetsTheSameVariablesAsOneOnTheServer(t *testing.T) {
+	ag := newRunners(t, runnerhub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
 	ag.runBox(t.TempDir())
 	const echo = "echo $G $PAT $J $F $S $P"
 	h := newHarness(t, map[string]string{
@@ -185,6 +185,6 @@ func TestAStageOnAnAgentGetsTheSameVariablesAsOneOnTheServer(t *testing.T) {
 	}
 	const want = "g p j f s param\n"
 	if local, remote := h.log(t, b, "s"), h.log(t, b, "r"); local != want || remote != want {
-		t.Fatalf("server %q agent %q, want %q", local, remote, want)
+		t.Fatalf("server %q runner %q, want %q", local, remote, want)
 	}
 }

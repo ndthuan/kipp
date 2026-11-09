@@ -372,46 +372,46 @@ func toEngineV1(e enginepool.EngineStatus) engineV1 {
 	return engineV1{e.Name, e.Kind, e.URL, nonNil(slices.Clone(e.Labels)), e.Max, e.Enabled, e.Reachable, stampSince(e.Since), e.Version, e.LastError, nonNil(slices.Clone(e.Running))}
 }
 
-// agentStageV1 is a stage an agent runs or has been given.
-type agentStageV1 struct {
+// runnerStageV1 is a stage a runner runs or has been given.
+type runnerStageV1 struct {
 	Build buildRefV1 `json:"build"`
 	Stage string     `json:"stage"`
 }
 
-type agentV1 struct {
-	Name       string         `json:"name"`
-	Labels     []string       `json:"labels"`
-	Executors  int            `json:"executors"`
-	Busy       int            `json:"busy"`
-	Enabled    bool           `json:"enabled"`
-	Online     bool           `json:"online"`
-	Since      *stamp         `json:"since"`
-	Version    string         `json:"version"`
-	OS         string         `json:"os"`
-	Arch       string         `json:"arch"`
-	Stages     []agentStageV1 `json:"stages"`
-	LastSeenAt *stamp         `json:"last_seen_at"`
+type runnerV1 struct {
+	Name       string          `json:"name"`
+	Labels     []string        `json:"labels"`
+	Executors  int             `json:"executors"`
+	Busy       int             `json:"busy"`
+	Enabled    bool            `json:"enabled"`
+	Online     bool            `json:"online"`
+	Since      *stamp          `json:"since"`
+	Version    string          `json:"version"`
+	OS         string          `json:"os"`
+	Arch       string          `json:"arch"`
+	Stages     []runnerStageV1 `json:"stages"`
+	LastSeenAt *stamp          `json:"last_seen_at"`
 }
 
-// toAgentV1 is an agent with its stages' builds as they stand: builds says
+// toRunnerV1 is a runner with its stages' builds as they stand: builds says
 // how each ended, if it has.
-func toAgentV1(a AgentInfo, builds map[int64]*store.Build) agentV1 {
-	out := agentV1{Name: a.Name, Labels: nonNil(slices.Clone(a.Labels)), Executors: a.Executors, Busy: a.Busy, Enabled: a.Enabled, Online: a.Online,
-		Since: stampSince(a.Since), Version: a.Version, OS: a.OS, Arch: a.Arch, Stages: []agentStageV1{}, LastSeenAt: stampPtr(a.LastSeenAt)}
+func toRunnerV1(a RunnerInfo, builds map[int64]*store.Build) runnerV1 {
+	out := runnerV1{Name: a.Name, Labels: nonNil(slices.Clone(a.Labels)), Executors: a.Executors, Busy: a.Busy, Enabled: a.Enabled, Online: a.Online,
+		Since: stampSince(a.Since), Version: a.Version, OS: a.OS, Arch: a.Arch, Stages: []runnerStageV1{}, LastSeenAt: stampPtr(a.LastSeenAt)}
 	for _, s := range a.Running {
 		ref := buildRefV1{ID: s.BuildID, Job: s.Job, Number: s.Number}
 		if b := builds[s.BuildID]; b != nil {
 			ref.Status = &b.Status
 		}
-		out.Stages = append(out.Stages, agentStageV1{ref, s.Stage})
+		out.Stages = append(out.Stages, runnerStageV1{ref, s.Stage})
 	}
 	return out
 }
 
-// stageBuildIDs are the builds an agent's stages belong to.
-func stageBuildIDs(agents []AgentInfo) []int64 {
+// stageBuildIDs are the builds a runner's stages belong to.
+func stageBuildIDs(runners []RunnerInfo) []int64 {
 	var ids []int64
-	for _, a := range agents {
+	for _, a := range runners {
 		for _, s := range a.Running {
 			ids = append(ids, s.BuildID)
 		}

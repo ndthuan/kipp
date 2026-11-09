@@ -38,7 +38,7 @@ func TestScanNowNeedsTheBuildGrant(t *testing.T) {
 	e := newEnv(t)
 	viewer := e.withScanner(t, "view")
 	e.call(t, http.StatusForbidden, viewer, "POST", "/api/v1/jobs/site/scan", "")
-	e.call(t, http.StatusNotFound, e.agent, "POST", "/api/v1/jobs/site/scan", "")
+	e.call(t, http.StatusNotFound, e.aide, "POST", "/api/v1/jobs/site/scan", "")
 	builder := token(t, e.st, "site-builder", false, map[string][]string{"site": {"view", "build"}})
 	e.call(t, http.StatusAccepted, builder, "POST", "/api/v1/jobs/site/scan", "")
 	// The scan reads a GitHub with nothing: it ends, and says how.
@@ -57,5 +57,5 @@ func TestScanNowOfAJobThatIsNotMultibranchIsRefused(t *testing.T) {
 	e := newEnv(t)
 	e.withScanner(t, "view")
 	// smoke is a job of its own, not a repo: nothing to scan.
-	e.call(t, http.StatusNotFound, e.agent, "POST", "/api/v1/jobs/smoke/scan", "")
+	e.call(t, http.StatusNotFound, e.aide, "POST", "/api/v1/jobs/smoke/scan", "")
 }

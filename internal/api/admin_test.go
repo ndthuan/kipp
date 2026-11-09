@@ -67,8 +67,8 @@ func TestTheLastAdminIsNotTurnedOff(t *testing.T) {
 	err := e.api.svc.SetAdmin(ctx, root.u, root.sess, "root", false)
 	is(t, "the last admin", err, ErrConflict)
 	contains(t, err.Error(), "root is the last admin")
-	must(t, e.api.svc.SetAdmin(ctx, root.u, root.sess, "agent", true))
-	eq(t, "audit", e.lastAudit(t), "root user.admin agent: on")
+	must(t, e.api.svc.SetAdmin(ctx, root.u, root.sess, "aide", true))
+	eq(t, "audit", e.lastAudit(t), "root user.admin aide: on")
 	must(t, e.api.svc.SetAdmin(ctx, root.u, root.sess, "root", false))
 	eq(t, "audit", e.lastAudit(t), "root user.admin root: off")
 	is(t, "nobody", e.api.svc.SetAdmin(ctx, root.u, root.sess, "nobody", true), ErrNotFound)
@@ -118,47 +118,47 @@ func TestGrantsAreGivenOnlyOnLoadedJobsAndAGoneJobsGrantStaysUntilRemoved(t *tes
 	e := newEnv(t)
 	ctx := context.Background()
 	root := e.root(t)
-	agent := e.user(t, "agent")
-	must(t, e.st.Grant(ctx, agent.ID, "gone", []string{"view"}))
+	aide := e.user(t, "aide")
+	must(t, e.st.Grant(ctx, aide.ID, "gone", []string{"view"}))
 
-	err := e.api.svc.SetGrants(ctx, root.u, root.sess, "agent", map[string]store.Perm{"smoke": {View: true}, "nosuch": {View: true}})
+	err := e.api.svc.SetGrants(ctx, root.u, root.sess, "aide", map[string]store.Perm{"smoke": {View: true}, "nosuch": {View: true}})
 	is(t, "an unknown job", err, ErrBadInput)
 	contains(t, err.Error(), `"nosuch"`)
 
-	must(t, e.api.svc.SetGrants(ctx, root.u, root.sess, "agent", map[string]store.Perm{"gc": {View: true, Build: true}, "smoke": {}}))
-	perms, err := e.st.Permissions(ctx, agent.ID)
+	must(t, e.api.svc.SetGrants(ctx, root.u, root.sess, "aide", map[string]store.Perm{"gc": {View: true, Build: true}, "smoke": {}}))
+	perms, err := e.st.Permissions(ctx, aide.ID)
 	must(t, err)
 	if len(perms) != 2 || perms["gc"] != (store.Perm{View: true, Build: true}) || perms["gone"] != (store.Perm{View: true}) {
 		t.Fatalf("grants %v", perms)
 	}
-	eq(t, "audit", e.lastAudit(t), "root grants.set agent: gc: view,build")
+	eq(t, "audit", e.lastAudit(t), "root grants.set aide: gc: view,build")
 
-	err = e.api.svc.RemoveGoneGrant(ctx, root.u, root.sess, "agent", "gc")
+	err = e.api.svc.RemoveGoneGrant(ctx, root.u, root.sess, "aide", "gc")
 	is(t, "a loaded job", err, ErrConflict)
-	is(t, "no grant", e.api.svc.RemoveGoneGrant(ctx, root.u, root.sess, "agent", "never"), ErrNotFound)
-	must(t, e.api.svc.RemoveGoneGrant(ctx, root.u, root.sess, "agent", "gone"))
-	perms, err = e.st.Permissions(ctx, agent.ID)
+	is(t, "no grant", e.api.svc.RemoveGoneGrant(ctx, root.u, root.sess, "aide", "never"), ErrNotFound)
+	must(t, e.api.svc.RemoveGoneGrant(ctx, root.u, root.sess, "aide", "gone"))
+	perms, err = e.st.Permissions(ctx, aide.ID)
 	must(t, err)
 	if len(perms) != 1 || perms["gc"] == (store.Perm{}) {
 		t.Fatalf("grants after the removal %v", perms)
 	}
-	eq(t, "audit", e.lastAudit(t), "root grant.remove agent: gone")
+	eq(t, "audit", e.lastAudit(t), "root grant.remove aide: gone")
 }
 
 func TestAnAdminMakesAndRevokesAnyUsersToken(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
 	root := e.root(t)
-	plain, tok, err := e.api.svc.CreateToken(ctx, root.u, root.sess, "agent", "deploys", 365)
+	plain, tok, err := e.api.svc.CreateToken(ctx, root.u, root.sess, "aide", "deploys", 365)
 	must(t, err)
 	u, err := e.api.deps.Auth.UserFromToken(ctx, plain)
 	must(t, err)
-	eq(t, "the token's user", u.Name, "agent")
-	contains(t, e.lastAudit(t), "root token.create agent: label \"deploys\", id "+itoa(tok.ID)+", expires ")
+	eq(t, "the token's user", u.Name, "aide")
+	contains(t, e.lastAudit(t), "root token.create aide: label \"deploys\", id "+itoa(tok.ID)+", expires ")
 	_, _, err = e.api.svc.CreateToken(ctx, root.u, root.sess, "nobody", "x", 0)
 	is(t, "nobody", err, ErrNotFound)
 	must(t, e.api.svc.RevokeToken(ctx, root.u, root.sess, tok.ID))
-	eq(t, "audit", e.lastAudit(t), "root token.revoke agent: label \"deploys\", id "+itoa(tok.ID))
+	eq(t, "audit", e.lastAudit(t), "root token.revoke aide: label \"deploys\", id "+itoa(tok.ID))
 	is(t, "again", e.api.svc.RevokeToken(ctx, root.u, root.sess, tok.ID), ErrNotFound)
 }
 
@@ -220,12 +220,12 @@ func TestAnAdminReadsEveryUserWithGrantsTokensAndSessions(t *testing.T) {
 	for _, u := range users {
 		names = append(names, u.Name)
 	}
-	eq(t, "users", strings.Join(names, ","), "admin,agent,alice,viewer")
+	eq(t, "users", strings.Join(names, ","), "admin,aide,alice,viewer")
 	a := users[2]
 	if a.Grants["smoke"] != (store.Perm{View: true, Build: true}) || !slices.Equal(a.GoneGrants, []string{"gone"}) || a.Sessions != 1 || a.LastLoginAt == nil || a.Admin {
 		t.Fatalf("alice: %+v", a)
 	}
-	eq(t, "agent's tokens", len(users[1].Tokens), 1)
+	eq(t, "aide's tokens", len(users[1].Tokens), 1)
 	one, err := e.api.svc.User(ctx, admin, "alice")
 	must(t, err)
 	eq(t, "one user", one.Name, "alice")
@@ -312,7 +312,7 @@ func TestNoAuditRowOrErrorHoldsAPasswordATokenOrASecretValue(t *testing.T) {
 	plain, _, err := svc.CreateOwnToken(ctx, alice.u, alice.sess, "laptop", 30)
 	keep(err)
 	values = append(values, plain)
-	for _, who := range []string{"agent", "nobody"} {
+	for _, who := range []string{"aide", "nobody"} {
 		pw, err := svc.ResetPassword(ctx, root.u, root.sess, who, true)
 		keep(err)
 		if pw != "" {
@@ -504,9 +504,9 @@ func TestSetGrantsRefusesBuildOrCancelWithoutViewAsBadInputAndStoresNothing(t *t
 	e := newEnv(t)
 	ctx := context.Background()
 	root := e.root(t)
-	before, err := e.st.Permissions(ctx, e.user(t, "agent").ID)
+	before, err := e.st.Permissions(ctx, e.user(t, "aide").ID)
 	must(t, err)
-	err = e.api.svc.SetGrants(ctx, root.u, root.sess, "agent", map[string]store.Perm{"smoke": {Build: true}})
+	err = e.api.svc.SetGrants(ctx, root.u, root.sess, "aide", map[string]store.Perm{"smoke": {Build: true}})
 	if !errors.Is(err, ErrBadInput) {
 		t.Fatalf("got %v", err)
 	}
@@ -514,7 +514,7 @@ func TestSetGrantsRefusesBuildOrCancelWithoutViewAsBadInputAndStoresNothing(t *t
 	if !errors.As(err, &nv) || !slices.Equal(nv.Jobs, []string{"smoke"}) {
 		t.Fatalf("the job is not named: %v", err)
 	}
-	perms, err := e.st.Permissions(ctx, e.user(t, "agent").ID)
+	perms, err := e.st.Permissions(ctx, e.user(t, "aide").ID)
 	must(t, err)
 	if !maps.Equal(perms, before) {
 		t.Fatalf("stored %v, was %v", perms, before)

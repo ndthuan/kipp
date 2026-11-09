@@ -18,8 +18,8 @@ has a start for the others:
 - [`examples/systemd/kipp.service`](../examples/systemd/kipp.service): a
   user of its own, the filesystem read-only but for `/var/lib/kipp`, and
   `systemctl reload kipp` for `SIGHUP`.
-- [`examples/systemd/kipp-agent.service`](../examples/systemd/kipp-agent.service):
-  a standing agent on another machine, its token in an environment file.
+- [`examples/systemd/kipp-runner.service`](../examples/systemd/kipp-runner.service):
+  a standing runner on another machine, its token in an environment file.
 - [`examples/launchd/com.example.kipp.plist`](../examples/launchd/com.example.kipp.plist):
   a launchd agent on macOS, with the `PATH` its stages need.
 
@@ -54,9 +54,9 @@ follows.
 - Start kipp with `--base-url https://<the proxy's name>`, which is the
   `KIPP_URL` its stages and hooks link to, and the address webhooks and
   commit statuses name.
-- Agents dial `/api/v1/agent/`. To keep them off the proxy, serve them on
-  a listener of their own with `--agent-listen`
-  ([Agents and engines](agents.md#the-servers-flags)).
+- Runners dial `/api/v1/runner/`. To keep them off the proxy, serve them on
+  a listener of their own with `--runner-listen`
+  ([Runners and engines](runners.md#the-servers-flags)).
 
 ## Restarting without losing builds
 
@@ -302,7 +302,7 @@ the kipp before ran on. The upgrade is one transaction, so one that fails
 leaves the database as it was, and `serve` exits saying why.
 
 Only `serve` upgrades. Every other command that opens the data directory
-(`user`, `token`, `secret`, `engine`, `agent`, `metrics`, `cache`)
+(`user`, `token`, `secret`, `engine`, `runner`, `metrics`, `cache`)
 refuses a database at any schema but its own and says what to do: until
 the new `kipp serve` has started once, run those with the kipp the server
 runs.

@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ndthuan/kipp/internal/agenthub"
+	"github.com/ndthuan/kipp/internal/runnerhub"
 	"github.com/ndthuan/kipp/internal/store"
 )
 
-// A build whose stages wait to be placed on an agent holds no --builds slot,
+// A build whose stages wait to be placed on a runner holds no --builds slot,
 // so the server's other jobs start while they wait.
 
 const waitForSlotLine = "waiting for a free build slot"
@@ -24,11 +24,11 @@ func quickPlaces(t *testing.T) {
 	t.Cleanup(func() { placeEvery = old })
 }
 
-// idle is an agent that is known to the hub and not online: a stage that
+// idle is a runner that is known to the hub and not online: a stage that
 // asks for it waits.
-func idleAgent(t *testing.T) *agents {
+func idleRunner(t *testing.T) *runners {
 	t.Helper()
-	return newAgents(t, agenthub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
+	return newRunners(t, runnerhub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
 }
 
 func (h *harness) queue(t *testing.T) *Queue {
@@ -57,9 +57,9 @@ func (h *harness) slotsTaken() int {
 	return len(h.d.slots)
 }
 
-func TestBuildsThatOnlyWaitForAnAgentLeaveTheBuildsSlotsToOtherJobs(t *testing.T) {
+func TestBuildsThatOnlyWaitForAnRunnerLeaveTheBuildsSlotsToOtherJobs(t *testing.T) {
 	quickPlaces(t)
-	ag := idleAgent(t)
+	ag := idleRunner(t)
 	ag.runBox(t.TempDir())
 	hold, open := gated(t)
 	h := newHarness(t, map[string]string{
@@ -70,7 +70,7 @@ func TestBuildsThatOnlyWaitForAnAgentLeaveTheBuildsSlotsToOtherJobs(t *testing.T
 	for range 3 {
 		par = append(par, h.trigger(t, "par"))
 	}
-	eventually(t, "one stage runs on the agent and two builds wait for it", func() bool {
+	eventually(t, "one stage runs on the runner and two builds wait for it", func() bool {
 		waiting := 0
 		for _, b := range par {
 			if len(h.waitingOf(t, b.ID)) == 1 {
@@ -97,14 +97,14 @@ func TestBuildsThatOnlyWaitForAnAgentLeaveTheBuildsSlotsToOtherJobs(t *testing.T
 
 func TestAStageWhosePlaceIsFreeWaitsForABuildsSlotAndSaysSo(t *testing.T) {
 	quickPlaces(t)
-	ag := idleAgent(t)
+	ag := idleRunner(t)
 	hold, open := gated(t)
 	h := newHarness(t, map[string]string{
-		"remote": "name: remote\nstages:\n  s: {runs_on: linux, run: echo on-the-agent}\n",
+		"remote": "name: remote\nstages:\n  s: {runs_on: linux, run: echo on-the-runner}\n",
 		"hold":   "name: hold\nstages:\n  s: {run: '" + hold + "'}\n",
 	}, ag.opts, func(o *Options) { o.Executors, o.Builds = 4, 1 })
 	remote := h.trigger(t, "remote")
-	eventually(t, "the remote stage waits for the agent, holding no slot", func() bool {
+	eventually(t, "the remote stage waits for the runner, holding no slot", func() bool {
 		return len(h.waitingOf(t, remote.ID)) == 1 && h.slotsTaken() == 0
 	})
 	holder := h.trigger(t, "hold")
@@ -114,16 +114,16 @@ func TestAStageWhosePlaceIsFreeWaitsForABuildsSlotAndSaysSo(t *testing.T) {
 	eventually(t, "the stage waits for a slot", func() bool {
 		return h.waitingOf(t, remote.ID)["s"] == waitForSlotLine
 	})
-	if got := h.log(t, remote, "s"); !strings.Contains(got, "kipp: "+waitForSlotLine+"\n") || strings.Contains(got, "on-the-agent") {
+	if got := h.log(t, remote, "s"); !strings.Contains(got, "kipp: "+waitForSlotLine+"\n") || strings.Contains(got, "on-the-runner") {
 		t.Fatalf("log %q", got)
 	}
-	// The agent's executor is not held for a stage that cannot start.
-	if !ag.hub.Free(agenthub.Who{Name: "box"}) {
-		t.Fatal("the agent is held for a stage that waits for a slot")
+	// The runner's executor is not held for a stage that cannot start.
+	if !ag.hub.Free(runnerhub.Who{Name: "box"}) {
+		t.Fatal("the runner is held for a stage that waits for a slot")
 	}
 	open()
 	b := h.wait(t, remote.ID)
-	if got := h.log(t, b, "s"); b.Status != store.Success || !strings.Contains(got, "on-the-agent") {
+	if got := h.log(t, b, "s"); b.Status != store.Success || !strings.Contains(got, "on-the-runner") {
 		t.Fatalf("%s: %q", b.Status, got)
 	}
 	h.wait(t, holder.ID)
@@ -133,7 +133,7 @@ func TestAStageWhosePlaceIsFreeWaitsForABuildsSlotAndSaysSo(t *testing.T) {
 // frees, not a build that was queued behind it.
 func TestAStageWaitingForASlotIsNotStarvedByQueuedBuilds(t *testing.T) {
 	quickPlaces(t)
-	ag := idleAgent(t)
+	ag := idleRunner(t)
 	hold, openHold := gated(t)
 	stay, openStay := gated(t)
 	h := newHarness(t, map[string]string{
@@ -160,7 +160,7 @@ func TestAStageWaitingForASlotIsNotStarvedByQueuedBuilds(t *testing.T) {
 		return h.waitingOf(t, remote.ID)["s"] == waitForSlotLine
 	})
 	openHold()
-	eventually(t, "the stage starts on the agent", func() bool {
+	eventually(t, "the stage starts on the runner", func() bool {
 		return h.stages(t, remote.ID)["s"].RanOn == "box" && len(h.waitingOf(t, remote.ID)) == 0
 	})
 	// While the stage runs on the one slot, every build queued behind it still waits.
@@ -176,9 +176,9 @@ func TestAStageWaitingForASlotIsNotStarvedByQueuedBuilds(t *testing.T) {
 
 // What a build holds besides the slot, its place among the running builds of
 // its job and its locks, it keeps while it holds no slot.
-func TestABuildWaitingForAnAgentKeepsItsPlaceAndItsLocks(t *testing.T) {
+func TestABuildWaitingForAnRunnerKeepsItsPlaceAndItsLocks(t *testing.T) {
 	quickPlaces(t)
-	ag := idleAgent(t)
+	ag := idleRunner(t)
 	h := newHarness(t, map[string]string{
 		"one":    "name: one\nstages:\n  s: {runs_on: linux, run: echo one}\n",
 		"locked": "name: locked\nlocks: [shared]\nstages:\n  s: {runs_on: linux, run: echo locked}\n",
@@ -187,7 +187,7 @@ func TestABuildWaitingForAnAgentKeepsItsPlaceAndItsLocks(t *testing.T) {
 	first := h.trigger(t, "one")
 	second := h.trigger(t, "one")
 	locked := h.trigger(t, "locked")
-	eventually(t, "the first and the locked build wait for the agent, holding no slot", func() bool {
+	eventually(t, "the first and the locked build wait for the runner, holding no slot", func() bool {
 		return len(h.waitingOf(t, first.ID)) == 1 && len(h.waitingOf(t, locked.ID)) == 1 && h.slotsTaken() == 0
 	})
 	other := h.trigger(t, "other")
@@ -213,7 +213,7 @@ func TestABuildWaitingForAnAgentKeepsItsPlaceAndItsLocks(t *testing.T) {
 
 func TestCancellingABuildThatHoldsNoSlotGivesBackNothing(t *testing.T) {
 	quickPlaces(t)
-	ag := idleAgent(t)
+	ag := idleRunner(t)
 	h := newHarness(t, map[string]string{
 		"remote": "name: remote\nstages:\n  s: {runs_on: linux, run: echo never}\n",
 		"local":  "name: local\nstages:\n  s: {run: echo local}\n",

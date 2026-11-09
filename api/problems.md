@@ -11,7 +11,7 @@ Every 4xx and 5xx under `/api/v1` is a problem document (RFC 9457),
 `code` is the stable name below, for programs to decide by; `title` is the
 code's fixed summary; `detail` is the reason for a person and may change.
 A client that knows no code decides by `status`.
-The agent protocol's own refusals (`Refusal`)
+The runner protocol's own refusals (`Refusal`)
 stay protocol messages; a failure of plain HTTP there is a problem.
 
 ## bad_input

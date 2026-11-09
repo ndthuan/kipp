@@ -1,0 +1,40 @@
+put:
+  operationId: runnerPutArtifacts
+  tags: [internal]
+  summary: A runner sends the files a stage keeps
+  description: |
+    Once the stage's command has ended and before it is done. The body is a
+    tar of the files; one the stage's files could not have made, or one over
+    the stage's `max_size`, is refused.
+  x-kipp-package: runnerhub
+  security:
+    - runnerToken: []
+  parameters:
+    - $ref: ../parameters/AssignmentId.yaml
+    - name: size
+      in: query
+      description: What the files come to, in bytes.
+      schema:
+        type: integer
+        format: int64
+        minimum: 0
+  requestBody:
+    required: true
+    content:
+      application/x-tar:
+        schema:
+          type: string
+          format: binary
+  responses:
+    "204":
+      description: The files were kept.
+    "400":
+      $ref: ../responses/RunnerRefusal.yaml
+    "401":
+      $ref: ../responses/RunnerRefusal.yaml
+    "409":
+      $ref: ../responses/RunnerRefusal.yaml
+    "410":
+      $ref: ../responses/RunnerRefusal.yaml
+    "413":
+      $ref: ../responses/RunnerRefusal.yaml

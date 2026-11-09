@@ -13,11 +13,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ndthuan/kipp/internal/agenthub"
-	"github.com/ndthuan/kipp/internal/agentproto"
 	"github.com/ndthuan/kipp/internal/config"
 	"github.com/ndthuan/kipp/internal/placement"
 	"github.com/ndthuan/kipp/internal/runner"
+	"github.com/ndthuan/kipp/internal/runnerhub"
+	"github.com/ndthuan/kipp/internal/runnerproto"
 	"github.com/ndthuan/kipp/internal/store"
 )
 
@@ -26,9 +26,9 @@ type EngineSource interface {
 	// Candidates are the engines as places for a stage of build in image.
 	Candidates(build int64, image string) []placement.Candidate
 	// Acquire is a container of the build and image on the engine, with
-	// its agent connected to the hub: the one the build has, or a new one,
-	// saying what it does (the image's pull) to out. It returns the agent's
-	// name; an error that is agenthub.ErrNoAgent means the engine filled up
+	// its runner connected to the hub: the one the build has, or a new one,
+	// saying what it does (the image's pull) to out. It returns the runner's
+	// name; an error that is runnerhub.ErrNoRunner means the engine filled up
 	// meanwhile, and the stage waits again.
 	Acquire(ctx context.Context, b *store.Build, engine, image string, out io.Writer) (string, error)
 	// EndBuild removes the build's containers.
@@ -45,7 +45,7 @@ var errNoRunsOn = errors.New("the server runs no stages and the stage names no r
 // remote reports whether the stage runs somewhere other than the server.
 func (d *Dispatcher) remote(s *config.Stage) bool { return s.Remote() || d.opts.RunsNoStages }
 
-// labelsOf is where a stage on an agent asks to run.
+// labelsOf is where a stage on a runner asks to run.
 func (d *Dispatcher) labelsOf(s *config.Stage) []string {
 	if s.Remote() {
 		return s.RunsOn
@@ -53,7 +53,7 @@ func (d *Dispatcher) labelsOf(s *config.Stage) []string {
 	return d.opts.DefaultRunsOn
 }
 
-// startRemote places the stage on an agent or an engine, waiting while
+// startRemote places the stage on a runner or an engine, waiting while
 // the places that could take it are busy or cannot be reached, and starts
 // it there. A stage nothing could ever take fails at once. The build holds
 // a slot from the start of the stage on its place until the stage ends, and
@@ -92,7 +92,7 @@ func busyLine(c placement.Candidate, err error) string {
 	switch {
 	case errors.Is(err, errNoSlot):
 		return waitForSlot
-	case errors.Is(err, agenthub.ErrNoAgent):
+	case errors.Is(err, runnerhub.ErrNoRunner):
 		return "waiting for " + c.Name
 	}
 	return ""
@@ -164,7 +164,7 @@ type slotProc struct {
 	leave func()
 }
 
-// Tries is how many times the agent ran the command, when the process says.
+// Tries is how many times the runner ran the command, when the process says.
 func (p *slotProc) Tries() int {
 	if t, ok := p.Proc.(interface{ Tries() int }); ok {
 		return t.Tries()
@@ -189,25 +189,25 @@ func (d *Dispatcher) candidates(build int64, image string) []placement.Candidate
 	return cs
 }
 
-// startOn starts the stage on the place picked: an agent, or the agent of
+// startOn starts the stage on the place picked: a runner, or the runner of
 // a container on an engine.
 func (d *Dispatcher) startOn(ctx context.Context, b *store.Build, e *buildEnv, s *config.Stage, c placement.Candidate, out io.Writer) (runner.Proc, error) {
 	if d.opts.Hub == nil {
-		return nil, errors.New("this server takes no agents")
+		return nil, errors.New("this server takes no runners")
 	}
-	agent, workspace := agenthub.Who{Name: c.Name}, filepath.Join(b.Job, strconv.Itoa(b.Number))
+	who, workspace := runnerhub.Who{Name: c.Name}, filepath.Join(b.Job, strconv.Itoa(b.Number))
 	if c.Kind == placement.KindEngine {
 		name, err := d.opts.Engines.Acquire(ctx, b, c.Name, s.Image, out)
 		if err != nil {
-			if errors.Is(err, agenthub.ErrNoAgent) {
+			if errors.Is(err, runnerhub.ErrNoRunner) {
 				return nil, err
 			}
 			return nil, fmt.Errorf("engine %s: %w", c.Name, err)
 		}
-		agent = agenthub.Who{Build: b.ID, Name: name}
+		who = runnerhub.Who{Build: b.ID, Name: name}
 		workspace = "" // the container's workdir is the build's alone
 	}
-	meta := agenthub.StageMeta{
+	meta := runnerhub.StageMeta{
 		BuildID: b.ID, Job: b.Job, Number: b.Number, Stage: s.Name,
 		Workspace: workspace, Workdir: s.Workdir, Junit: s.Junit, JunitDir: junitDir(e, s),
 		Baseline: d.baseline(ctx, e, s, out),
@@ -220,31 +220,31 @@ func (d *Dispatcher) startOn(ctx context.Context, b *store.Build, e *buildEnv, s
 	if meta.Inputs, meta.InputDirs, err = d.inputsOf(ctx, b, s); err != nil {
 		return nil, fmt.Errorf("the artifacts the stage is given: %w", err)
 	}
-	cv, err := d.cacheVars(b, e, s, d.opts.AgentURL)
+	cv, err := d.cacheVars(b, e, s, d.opts.RunnerURL)
 	if err != nil {
 		return nil, err
 	}
 	for _, c := range declaredCaches(b, s, slices.Concat(e.remoteEnv, stageEnv(s, b.Params)), out) {
-		meta.Cache = append(meta.Cache, agentproto.Cache{Key: c.Key, RestoreKeys: c.RestoreKeys, Paths: c.Paths, Scope: c.Scope})
+		meta.Cache = append(meta.Cache, runnerproto.Cache{Key: c.Key, RestoreKeys: c.RestoreKeys, Paths: c.Paths, Scope: c.Scope})
 	}
 	meta.UnstableExit, meta.Retries = s.UnstableExit, int(s.Retries)
 	meta.SecretFiles = remoteSecretFiles(e)
 	spec := runner.Spec{Command: s.Run, Env: slices.Concat(e.remoteEnv, e.outs.upstream(e.stages, s), stageEnv(s, b.Params), []string{"KIPP_STAGE=" + s.Name}, cv), Output: out}
-	proc, err := d.opts.Hub.Start(ctx, agent, spec, meta)
+	proc, err := d.opts.Hub.Start(ctx, who, spec, meta)
 	if err != nil {
 		return nil, err
 	}
-	if err := d.st.SetStageRanOn(context.WithoutCancel(ctx), b.ID, s.Name, agent.Name); err != nil {
+	if err := d.st.SetStageRanOn(context.WithoutCancel(ctx), b.ID, s.Name, who.Name); err != nil {
 		d.log.Warn("recording where a stage runs", "build", b.ID, "stage", s.Name, "err", err)
 	}
 	return proc, nil
 }
 
-// junitDir is where the junit and metrics files a stage on an agent left
+// junitDir is where the junit and metrics files a stage on a runner left
 // are put on the server, for readJunit and stageMetrics to find with the
 // stage's own globs.
 func junitDir(e *buildEnv, s *config.Stage) string {
-	return filepath.Join(e.workspace, ".kipp-agent", s.Name)
+	return filepath.Join(e.workspace, ".kipp-runner", s.Name)
 }
 
 // sleep waits d, and reports false when ctx ended first.
@@ -286,7 +286,7 @@ func (d *Dispatcher) waitingOfLocked(build int64) map[string]string {
 	return nil
 }
 
-// endRemote tells the agents and the engines that the build is over.
+// endRemote tells the runners and the engines that the build is over.
 func (d *Dispatcher) endRemote(ctx context.Context, b *store.Build) {
 	if d.opts.Hub != nil {
 		d.opts.Hub.EndBuild(b.ID)
@@ -296,10 +296,10 @@ func (d *Dispatcher) endRemote(ctx context.Context, b *store.Build) {
 	}
 }
 
-// AgentEnv keeps of environ the variables names names, by exact name: a
+// RunnerEnv keeps of environ the variables names names, by exact name: a
 // stage on another machine has its own PATH and HOME, and gets the
 // server's only of what is asked for by name.
-func AgentEnv(environ, names []string) []string {
+func RunnerEnv(environ, names []string) []string {
 	out := []string{}
 	for _, kv := range environ {
 		name, _, ok := strings.Cut(kv, "=")
@@ -310,8 +310,8 @@ func AgentEnv(environ, names []string) []string {
 	return out
 }
 
-// ParseAgentEnv reads a comma-separated --agent-env: variables' names.
-func ParseAgentEnv(list string) ([]string, error) {
+// ParseRunnerEnv reads a comma-separated --runner-env: variables' names.
+func ParseRunnerEnv(list string) ([]string, error) {
 	out := []string{}
 	for item := range strings.SplitSeq(list, ",") {
 		item = strings.TrimSpace(item)
@@ -319,7 +319,7 @@ func ParseAgentEnv(list string) ([]string, error) {
 			continue
 		}
 		if !config.ValidEnvName(item) {
-			return nil, fmt.Errorf("--agent-env %q: a variable's name; a stage on an agent gets the server's variables by name only", item)
+			return nil, fmt.Errorf("--runner-env %q: a variable's name; a stage on a runner gets the server's variables by name only", item)
 		}
 		out = append(out, item)
 	}

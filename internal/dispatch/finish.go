@@ -82,7 +82,7 @@ func (d *Dispatcher) readJunit(ctx context.Context, b *store.Build, e *buildEnv)
 }
 
 // junitSource is the directory a stage's junit glob is read from; for a
-// stage on an agent only what the agent sent is there, so a stage that
+// stage on a runner only what the runner sent is there, so a stage that
 // matched nothing, or never ran, has none.
 func (d *Dispatcher) junitSource(e *buildEnv, s *config.Stage) (string, bool) {
 	if d.remote(s) {

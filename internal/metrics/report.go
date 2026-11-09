@@ -24,7 +24,7 @@ import (
 
 // Metric is one metric of a report: a named number per item. It is
 // store.Metric field for field, so the server converts one to the other,
-// and kept apart so that kipp-agent, which checks guards inside a
+// and kept apart so that kipp-runner, which checks guards inside a
 // container, carries no database.
 type Metric struct {
 	Name, Unit string

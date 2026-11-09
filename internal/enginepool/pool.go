@@ -1,7 +1,7 @@
 // Package enginepool is the server's Docker engines: which can be reached,
 // how many containers each runs, and the containers of the builds. A build
 // gets one container per engine and image, started for its first stage
-// there with the agent put into it, and removed when the build ends.
+// there with the runner put into it, and removed when the build ends.
 package enginepool
 
 import (
@@ -17,11 +17,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ndthuan/kipp/internal/agent"
-	"github.com/ndthuan/kipp/internal/agenthub"
 	"github.com/ndthuan/kipp/internal/config"
 	"github.com/ndthuan/kipp/internal/engine/docker"
 	"github.com/ndthuan/kipp/internal/placement"
+	"github.com/ndthuan/kipp/internal/runnerd"
+	"github.com/ndthuan/kipp/internal/runnerhub"
 	"github.com/ndthuan/kipp/internal/store"
 )
 
@@ -33,10 +33,10 @@ const (
 	LabelJob    = "kipp.job"
 )
 
-// Where the agent and the build's workspace are in a container.
+// Where the runner and the build's workspace are in a container.
 const (
-	AgentPath = "/kipp/agent"
-	Workspace = "/kipp/workspace"
+	RunnerPath = "/kipp/runner"
+	Workspace  = "/kipp/workspace"
 )
 
 // Unreachable is how many probes in a row may fail before the stages of
@@ -45,11 +45,11 @@ const Unreachable = 3
 
 // Options configure a Pool. Zero values take the defaults noted.
 type Options struct {
-	Hub *agenthub.Hub
-	// AgentURL is what a container's agent dials; ServerID is this server
+	Hub *runnerhub.Hub
+	// RunnerURL is what a container's runner dials; ServerID is this server
 	// in its containers' labels, its base URL.
-	AgentURL, ServerID string
-	// Binary is the agent for an engine's system and architecture.
+	RunnerURL, ServerID string
+	// Binary is the runner for an engine's system and architecture.
 	Binary func(goos, goarch string) ([]byte, error)
 	// Dial reaches an engine; default docker.Dial with the engine's own
 	// TLS files and ssh key, else SSHKey.
@@ -58,7 +58,7 @@ type Options struct {
 	Log    *slog.Logger
 	Now    func() time.Time
 	// Probe is how often an engine is asked whether it is there; default
-	// a minute. ConnectWait is how long a new container's agent has to
+	// a minute. ConnectWait is how long a new container's runner has to
 	// connect; default 2 minutes.
 	Probe, ConnectWait time.Duration
 }
@@ -101,8 +101,8 @@ type container struct {
 	build    int64
 }
 
-// who is the container's agent, as the hub knows it.
-func (c *container) who() agenthub.Who { return agenthub.Who{Build: c.build, Name: c.name} }
+// who is the container's runner, as the hub knows it.
+func (c *container) who() runnerhub.Who { return runnerhub.Who{Build: c.build, Name: c.name} }
 
 // New makes a Pool; call Run to probe its engines.
 func New(o Options) *Pool {
@@ -238,7 +238,7 @@ func (p *Pool) Acquire(ctx context.Context, b *store.Build, engineName, image st
 }
 
 // slot is what reserve found: the build's container of the image, one
-// being made to wait for, or a place for a new one whose agent will be
+// being made to wait for, or a place for a new one whose runner will be
 // called name.
 type slot struct {
 	en   *engine
@@ -263,14 +263,14 @@ func (p *Pool) make(ctx context.Context, sl slot, b *store.Build, image string, 
 
 // reserve is the build's container of image on the engine, or the one
 // being made, or a place for a new one counted against the engine's cap,
-// and the name its agent will have: the engine's name and the container's
+// and the name its runner will have: the engine's name and the container's
 // number in the build.
 func (p *Pool) reserve(build int64, name, image string) (slot, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	en := p.engines[name]
 	if en == nil || !en.e.Enabled {
-		return slot{}, fmt.Errorf("%w: engine %s is not enabled", agenthub.ErrNoAgent, name)
+		return slot{}, fmt.Errorf("%w: engine %s is not enabled", runnerhub.ErrNoRunner, name)
 	}
 	k := key{build, image}
 	p.dropDead(en, k)
@@ -281,7 +281,7 @@ func (p *Pool) reserve(build int64, name, image string) (slot, error) {
 		return slot{en: en, wait: w}, nil
 	}
 	if en.running() >= en.e.Max || !en.reachable {
-		return slot{}, fmt.Errorf("%w: engine %s is full or cannot be reached", agenthub.ErrNoAgent, name)
+		return slot{}, fmt.Errorf("%w: engine %s is full or cannot be reached", runnerhub.ErrNoRunner, name)
 	}
 	en.starting++
 	en.making[k] = make(chan struct{})
@@ -301,7 +301,7 @@ func (p *Pool) unreserve(en *engine, k key) {
 	p.mu.Unlock()
 }
 
-// dropDead forgets the container of k when its agent is no longer
+// dropDead forgets the container of k when its runner is no longer
 // connected (killed, or the container stopped), so that the build's next
 // stage there gets a new one; what the dead one ran has failed already.
 // It is removed meanwhile. p.mu is held.
@@ -311,23 +311,23 @@ func (p *Pool) dropDead(en *engine, k key) {
 		return
 	}
 	delete(en.containers, k)
-	p.o.Log.Warn("a container's agent is gone; the build's next stage gets another", "engine", en.e.Name, "agent", c.name)
+	p.o.Log.Warn("a container's runner is gone; the build's next stage gets another", "engine", en.e.Name, "runner", c.name)
 	go p.discard(en, c)
 }
 
-// discard ends the token of c's agent and removes c.
+// discard ends the token of c's runner and removes c.
 func (p *Pool) discard(en *engine, c *container) {
-	p.o.Hub.Revoke(c.who(), agenthub.ErrOffline)
+	p.o.Hub.Revoke(c.who(), runnerhub.ErrOffline)
 	client, err := p.client(context.Background(), en)
 	if err != nil {
-		p.o.Log.Warn("a container whose agent is gone is left until its engine answers", "engine", en.e.Name, "container", c.id, "err", err)
+		p.o.Log.Warn("a container whose runner is gone is left until its engine answers", "engine", en.e.Name, "container", c.id, "err", err)
 		return
 	}
 	p.remove(en, client, c)
 }
 
-// start makes the container: the image, the agent put into it, a token
-// for this build alone, and waits until its agent has connected.
+// start makes the container: the image, the runner put into it, a token
+// for this build alone, and waits until its runner has connected.
 func (p *Pool) start(ctx context.Context, en *engine, b *store.Build, name, image string, out io.Writer) (*container, error) {
 	client, err := p.client(ctx, en)
 	if err != nil {
@@ -348,30 +348,30 @@ func (p *Pool) start(ctx context.Context, en *engine, b *store.Build, name, imag
 		return nil, err
 	}
 	id, err := client.Create(ctx, docker.CreateSpec{
-		Image: image, Cmd: []string{AgentPath, "--url", p.o.AgentURL, "--workdir", Workspace},
-		Env:        []string{agent.TokenEnv + "=" + token},
+		Image: image, Cmd: []string{RunnerPath, "--url", p.o.RunnerURL, "--workdir", Workspace},
+		Env:        []string{runnerd.TokenEnv + "=" + token},
 		Labels:     map[string]string{LabelServer: p.o.ServerID, LabelBuild: strconv.FormatInt(b.ID, 10), LabelJob: b.Job},
 		WorkingDir: Workspace,
 	})
 	if err != nil {
-		p.o.Hub.Revoke(agenthub.Who{Build: b.ID, Name: name}, err)
+		p.o.Hub.Revoke(runnerhub.Who{Build: b.ID, Name: name}, err)
 		return nil, fmt.Errorf("creating a container of %s: %w", image, err)
 	}
 	c := &container{id: id, name: name, build: b.ID}
 	if err := p.boot(ctx, client, c, bin, out); err != nil {
-		p.o.Hub.Revoke(agenthub.Who{Build: b.ID, Name: name}, err)
+		p.o.Hub.Revoke(runnerhub.Who{Build: b.ID, Name: name}, err)
 		p.remove(en, client, c)
 		return nil, err
 	}
 	return c, nil
 }
 
-// boot puts the agent into the container, starts it, and waits until the
-// agent connects, or the container stops, or ConnectWait passes. What the
-// agent said goes to out when it never connected.
+// boot puts the runner into the container, starts it, and waits until the
+// runner connects, or the container stops, or ConnectWait passes. What the
+// runner said goes to out when it never connected.
 func (p *Pool) boot(ctx context.Context, client *docker.Client, c *container, bin []byte, out io.Writer) error {
-	if err := client.PutFile(ctx, c.id, AgentPath, 0o755, bin); err != nil {
-		return fmt.Errorf("putting the agent into the container: %w", err)
+	if err := client.PutFile(ctx, c.id, RunnerPath, 0o755, bin); err != nil {
+		return fmt.Errorf("putting the runner into the container: %w", err)
 	}
 	if err := client.Start(ctx, c.id); err != nil {
 		return fmt.Errorf("starting the container: %w", err)
@@ -382,7 +382,7 @@ func (p *Pool) boot(ctx context.Context, client *docker.Client, c *container, bi
 	go func() {
 		code, err := client.Wait(wctx, c.id)
 		if err == nil {
-			err = fmt.Errorf("the container exited with %d before its agent connected", code)
+			err = fmt.Errorf("the container exited with %d before its runner connected", code)
 		}
 		stopped <- err
 	}()
@@ -397,11 +397,11 @@ func (p *Pool) boot(ctx context.Context, client *docker.Client, c *container, bi
 			continue
 		case why = <-stopped:
 		case <-deadline.C:
-			why = fmt.Errorf("its agent did not connect within %s", p.o.ConnectWait)
+			why = fmt.Errorf("its runner did not connect within %s", p.o.ConnectWait)
 		case <-ctx.Done():
 			return ctx.Err()
 		}
-		_, _ = fmt.Fprintf(out, "kipp: the container's agent said:\n")
+		_, _ = fmt.Fprintf(out, "kipp: the container's runner said:\n")
 		_ = client.Logs(context.WithoutCancel(ctx), c.id, out)
 		return why
 	}
@@ -479,7 +479,7 @@ type EngineStatus struct {
 	Since           time.Time
 	LastError       string
 	Version         string
-	Running         []string // the containers' agents
+	Running         []string // the containers' runners
 }
 
 // Status is every engine, by name.

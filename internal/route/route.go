@@ -1,5 +1,5 @@
 // Package route is the row of a route table that the machine-facing
-// packages (webhook, agenthub, cachesrv) export, as api.Route does for the
+// packages (webhook, runnerhub, cachesrv) export, as api.Route does for the
 // JSON API, so that the API description is checked against what is served.
 package route
 

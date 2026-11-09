@@ -155,6 +155,8 @@ CREATE INDEX builds_finished_at ON builds(finished_at);
 CREATE TABLE pending_deliveries (
   seq INTEGER PRIMARY KEY AUTOINCREMENT, route TEXT NOT NULL, name TEXT NOT NULL,
   event TEXT NOT NULL, delivery TEXT NOT NULL, body BLOB NOT NULL, received_at TEXT NOT NULL);
+`, `
+ALTER TABLE agents RENAME TO runners;
 `}
 
 // Upgrade is what Open did to the schema of the database it opened.

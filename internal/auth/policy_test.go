@@ -76,7 +76,7 @@ func TestTheBlocklistIsSortedLowerCaseUniqueAndFifteenCharactersOrMore(t *testin
 func TestAUserNameIsAJobNameOfOneTo64Characters(t *testing.T) {
 	for name, want := range map[string]bool{
 		"admin":                 true,
-		"ci-agent":              true,
+		"ci-runner":             true,
 		"a.b_c-9":               true,
 		strings.Repeat("a", 64): true,
 		strings.Repeat("a", 65): false,

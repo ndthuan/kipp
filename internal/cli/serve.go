@@ -21,9 +21,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ndthuan/kipp/internal/agentbin"
-	"github.com/ndthuan/kipp/internal/agenthub"
-	"github.com/ndthuan/kipp/internal/agentproto"
 	"github.com/ndthuan/kipp/internal/api"
 	"github.com/ndthuan/kipp/internal/auth"
 	"github.com/ndthuan/kipp/internal/cache"
@@ -40,6 +37,9 @@ import (
 	"github.com/ndthuan/kipp/internal/problem"
 	"github.com/ndthuan/kipp/internal/retain"
 	"github.com/ndthuan/kipp/internal/runner"
+	"github.com/ndthuan/kipp/internal/runnerbin"
+	"github.com/ndthuan/kipp/internal/runnerhub"
+	"github.com/ndthuan/kipp/internal/runnerproto"
 	"github.com/ndthuan/kipp/internal/secretbox"
 	"github.com/ndthuan/kipp/internal/store"
 	"github.com/ndthuan/kipp/internal/update"
@@ -67,18 +67,18 @@ of those stages before it runs anything.
 
 A stage is given of the server's environment only what --pass-env names,
 then the job's env, its params, its secrets and the KIPP_ variables. A
-stage on an agent is given of it only what --agent-env names, by name.
+stage on a runner is given of it only what --runner-env names, by name.
 
-A stage with runs_on runs on a standing agent (kipp agent add), or with an
+A stage with runs_on runs on a standing runner (kipp runner add), or with an
 image in a container on a Docker engine (kipp engine add), that carries its
-labels; agents dial the server under /agent/, on --listen or on
---agent-listen. --executors 0 is a server that runs no stage itself: one
+labels; runners dial the server under /runner/, on --listen or on
+--runner-listen. --executors 0 is a server that runs no stage itself: one
 that names no runs_on goes where --default-runs-on says.
 
 A stage with cache_scopes restores and saves keyed caches through kipp cache,
-kept under the data directory; --cache-max bounds them. A stage on an agent
-reaches them at --agent-url, which it must be given, on --listen or on
---agent-listen.
+kept under the data directory; --cache-max bounds them. A stage on a runner
+reaches them at --runner-url, which it must be given, on --listen or on
+--runner-listen.
 
 A cron is read in its job's timezone, else in --timezone, else in the
 host's zone (TZ, or /etc/localtime). The pages show times in --timezone,
@@ -135,13 +135,13 @@ func cmdServe(args []string, _ io.Reader, stdout, stderr io.Writer) int {
 type serveFlags struct {
 	data, jobs, listen, baseURL, shell string
 	executors, builds, flakyFlips      int
-	// The agents': the labels of a stage that names none on a server
+	// The runners': the labels of a stage that names none on a server
 	// that runs no stage, the variables they are given of the server's,
-	// the URL a container's agent dials, the listener of /agent/ apart
+	// the URL a container's runner dials, the listener of /runner/ apart
 	// from --listen, and the key of an ssh:// engine.
-	defaultRunsOn                 []string
-	agentEnv                      []string
-	agentURL, agentListen, sshKey string
+	defaultRunsOn                   []string
+	runnerEnv                       []string
+	runnerURL, runnerListen, sshKey string
 	// githubAPI is where the multibranch jobs' repos are read.
 	githubAPI  string
 	sessionTTL time.Duration
@@ -174,12 +174,12 @@ func parseServeFlags(args []string, stderr io.Writer) (*serveFlags, error) {
 	fs.IntVar(&f.flakyFlips, "flaky-flips", overview.DefaultFlips, "changes of colour among a job's last 20 builds that make it flaky on the front page, at least 5 builds being needed; 0 hides the section")
 	fs.StringVar(&f.baseURL, "base-url", "", "`URL` stages see as KIPP_URL (default http://<listen>); commit statuses link to builds under it only when it is given")
 	fs.StringVar(&f.shell, "shell", "sh", "shell that runs stages, as <shell> -c <command>")
-	fs.IntVar(&f.executors, "executors", 4, "stages the server runs itself at once; 0 runs none, and every stage goes to an agent")
-	fs.IntVar(&f.builds, "builds", 0, "builds with something running at once: preparing, a stage on the server, or a stage started on an agent or engine; one waiting to be placed counts for none (default --executors, or 4 when that is 0)")
+	fs.IntVar(&f.executors, "executors", 4, "stages the server runs itself at once; 0 runs none, and every stage goes to a runner")
+	fs.IntVar(&f.builds, "builds", 0, "builds with something running at once: preparing, a stage on the server, or a stage started on a runner or engine; one waiting to be placed counts for none (default --executors, or 4 when that is 0)")
 	defaultRunsOn := fs.String("default-runs-on", "", "`labels`, comma-separated, where a stage that names no runs_on goes on a server with --executors 0")
-	agentEnv := fs.String("agent-env", "", "`names`, comma-separated, of the server's environment variables a stage on an agent is also given")
-	fs.StringVar(&f.agentURL, "agent-url", "", "`URL` a container's agent dials the server at (default --base-url)")
-	fs.StringVar(&f.agentListen, "agent-listen", "", "`address` of a second listener that serves /api/v1/agent/ and /api/v1/cache/ and nothing else; /api/v1/agent/ is then not on --listen")
+	runnerEnv := fs.String("runner-env", "", "`names`, comma-separated, of the server's environment variables a stage on a runner is also given")
+	fs.StringVar(&f.runnerURL, "runner-url", "", "`URL` a container's runner dials the server at (default --base-url)")
+	fs.StringVar(&f.runnerListen, "runner-listen", "", "`address` of a second listener that serves /api/v1/runner/ and /api/v1/cache/ and nothing else; /api/v1/runner/ is then not on --listen")
 	fs.StringVar(&f.sshKey, "ssh-key", "", "private key `file` for ssh:// engines that name none (default the user's own under ~/.ssh)")
 	fs.StringVar(&f.githubAPI, "github-api", "https://api.github.com", "`URL` of GitHub's API, where a multibranch job's repo is scanned and its commit statuses are posted (GitHub Enterprise has its own)")
 	fs.DurationVar(&f.sessionTTL, "session-ttl", 30*24*time.Hour, "how long a browser login lasts")
@@ -221,7 +221,7 @@ func parseServeFlags(args []string, stderr io.Writer) (*serveFlags, error) {
 	if f.passEnv, err = dispatch.ParsePassEnv(*passEnv); err != nil {
 		return nil, refused(err.Error())
 	}
-	if err := f.parseAgentFlags(*defaultRunsOn, *agentEnv); err != nil {
+	if err := f.parseRunnerFlags(*defaultRunsOn, *runnerEnv); err != nil {
 		return nil, err
 	}
 	if err := f.parseOAuthFlags(); err != nil {
@@ -277,8 +277,8 @@ func (f *serveFlags) parseOAuthFlags() error {
 	return nil
 }
 
-// parseAgentFlags reads the flags of where the server's stages run.
-func (f *serveFlags) parseAgentFlags(defaultRunsOn, agentEnv string) error {
+// parseRunnerFlags reads the flags of where the server's stages run.
+func (f *serveFlags) parseRunnerFlags(defaultRunsOn, runnerEnv string) error {
 	if defaultRunsOn != "" {
 		labels, err := config.ParseLabels(defaultRunsOn)
 		if err != nil {
@@ -287,12 +287,12 @@ func (f *serveFlags) parseAgentFlags(defaultRunsOn, agentEnv string) error {
 		f.defaultRunsOn = labels
 	}
 	var err error
-	if f.agentEnv, err = dispatch.ParseAgentEnv(agentEnv); err != nil {
+	if f.runnerEnv, err = dispatch.ParseRunnerEnv(runnerEnv); err != nil {
 		return refused(err.Error())
 	}
-	if f.agentURL != "" {
-		if u, err := url.Parse(f.agentURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-			return refused("--agent-url is an http:// or https:// URL")
+	if f.runnerURL != "" {
+		if u, err := url.Parse(f.runnerURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			return refused("--runner-url is an http:// or https:// URL")
 		}
 	}
 	return nil
@@ -396,17 +396,17 @@ type server struct {
 	hooks *webhook.Hooks
 	// apps signs in as the GitHub Apps the owner jobs name.
 	apps *github.Apps
-	// hub is the agents, and pool the engines, a stage may be placed on;
-	// agentLn is the --agent-listen listener, nil without one.
-	hub     *agenthub.Hub
-	pool    *enginepool.Pool
-	agentLn net.Listener
+	// hub is the runners, and pool the engines, a stage may be placed on;
+	// runnerLn is the --runner-listen listener, nil without one.
+	hub      *runnerhub.Hub
+	pool     *enginepool.Pool
+	runnerLn net.Listener
 	// cache is the keyed caches stages restore and save; cacheURL is where
-	// a stage on this machine reaches them, and agentURLSet whether
-	// --agent-url was given, which a stage on an agent needs to reach them.
-	cache       *cachesrv.Service
-	cacheURL    string
-	agentURLSet bool
+	// a stage on this machine reaches them, and runnerURLSet whether
+	// --runner-url was given, which a stage on a runner needs to reach them.
+	cache        *cachesrv.Service
+	cacheURL     string
+	runnerURLSet bool
 	// publicURL is --base-url as it was given, empty when it was not.
 	publicURL string
 	// listenAddr is the address taken, the port the system picked included.
@@ -595,21 +595,21 @@ func (s *server) listen(ctx context.Context, snap *config.Snapshot) (net.Listene
 		s.f.baseURL = baseURLFor(ln.Addr())
 	}
 	s.listenAddr = ln.Addr().String()
-	if s.f.agentListen != "" {
-		if s.agentLn, err = listen("tcp", s.f.agentListen); err != nil {
+	if s.f.runnerListen != "" {
+		if s.runnerLn, err = listen("tcp", s.f.runnerListen); err != nil {
 			_ = ln.Close()
-			return nil, fmt.Errorf("--agent-listen: %w", err)
+			return nil, fmt.Errorf("--runner-listen: %w", err)
 		}
 	}
-	s.agentURLSet = s.f.agentURL != ""
+	s.runnerURLSet = s.f.runnerURL != ""
 	s.places()
 	s.cacheURL = baseURLFor(ln.Addr())
 	s.cache = cachesrv.New(cachesrv.Options{
 		Dir: filepath.Join(s.f.data, "cache"), Store: s.st, Max: int64(s.f.cacheMax), Log: s.log,
 	})
-	var agentURL string // only what the operator gave: the default is no address agents are known to reach
-	if s.agentURLSet {
-		agentURL = s.f.agentURL
+	var runnerURL string // only what the operator gave: the default is no address runners are known to reach
+	if s.runnerURLSet {
+		runnerURL = s.f.runnerURL
 	}
 	s.apps = github.NewApps(s.f.githubAPI)
 	if !s.f.noUpdateCheck {
@@ -619,9 +619,9 @@ func (s *server) listen(ctx context.Context, snap *config.Snapshot) (net.Listene
 		DataDir: s.f.data, Executors: s.f.executors, RunsNoStages: s.f.executors == 0, Builds: s.f.builds,
 		BaseURL: s.f.baseURL, TimeZone: s.f.zone,
 		Secrets: s.secrets, Retain: retain.Job, Logger: s.log, PassEnv: s.f.passEnv,
-		Hub: s.hub, Engines: s.pool, DefaultRunsOn: s.f.defaultRunsOn, AgentEnv: s.f.agentEnv,
+		Hub: s.hub, Engines: s.pool, DefaultRunsOn: s.f.defaultRunsOn, RunnerEnv: s.f.runnerEnv,
 		ArtifactsMax: int64(s.f.artifactsMax),
-		Cache:        s.cache, CacheURL: s.cacheURL, AgentURL: agentURL,
+		Cache:        s.cache, CacheURL: s.cacheURL, RunnerURL: runnerURL,
 		Status: index.PostStatusFor(s.f.githubAPI, s.secret, s.appClient), PublicURL: s.publicURL,
 	})
 	s.upgrades = s.newUpgrades()
@@ -633,23 +633,23 @@ func (s *server) listen(ctx context.Context, snap *config.Snapshot) (net.Listene
 	s.loadPlaces(ctx)
 	if err := s.d.Recover(ctx); err != nil {
 		_ = ln.Close()
-		if s.agentLn != nil {
-			_ = s.agentLn.Close()
+		if s.runnerLn != nil {
+			_ = s.runnerLn.Close()
 		}
 		return nil, err
 	}
 	return ln, nil
 }
 
-// places makes the hub of the agents and the pool of the engines.
+// places makes the hub of the runners and the pool of the engines.
 func (s *server) places() {
-	if s.f.agentURL == "" {
-		s.f.agentURL = s.f.baseURL
+	if s.f.runnerURL == "" {
+		s.f.runnerURL = s.f.baseURL
 	}
-	s.hub = agenthub.New(agenthub.Options{
+	s.hub = runnerhub.New(runnerhub.Options{
 		Version: version.Version, Log: s.log,
-		Standing: func(ctx context.Context, hash string) (*agenthub.Identity, error) {
-			a, err := s.st.AgentByTokenHash(ctx, hash)
+		Standing: func(ctx context.Context, hash string) (*runnerhub.Identity, error) {
+			a, err := s.st.RunnerByTokenHash(ctx, hash)
 			if err != nil {
 				return nil, err
 			}
@@ -657,21 +657,21 @@ func (s *server) places() {
 			return &id, nil
 		},
 		Seen: func(ctx context.Context, name, os, arch, version string, at time.Time) {
-			if err := s.st.SetAgentSeen(ctx, name, at, os, arch, version); err != nil && !errors.Is(err, store.ErrNotFound) {
-				s.log.Warn("recording an agent's connect", "agent", name, "err", err)
+			if err := s.st.SetRunnerSeen(ctx, name, at, os, arch, version); err != nil && !errors.Is(err, store.ErrNotFound) {
+				s.log.Warn("recording a runner's connect", "runner", name, "err", err)
 			}
 		},
 	})
 	s.pool = enginepool.New(enginepool.Options{
-		Hub: s.hub, AgentURL: s.f.agentURL, ServerID: s.f.baseURL, Binary: agentbin.For, SSHKey: s.f.sshKey, Log: s.log,
+		Hub: s.hub, RunnerURL: s.f.runnerURL, ServerID: s.f.baseURL, Binary: runnerbin.For, SSHKey: s.f.sshKey, Log: s.log,
 	})
 }
 
-func identityOf(a *store.Agent) agenthub.Identity {
-	return agenthub.Identity{Name: a.Name, Labels: a.Labels, Executors: a.Executors, Enabled: a.Enabled}
+func identityOf(a *store.Runner) runnerhub.Identity {
+	return runnerhub.Identity{Name: a.Name, Labels: a.Labels, Executors: a.Executors, Enabled: a.Enabled}
 }
 
-// loadPlaces gives the pool the engines and the hub the standing agents
+// loadPlaces gives the pool the engines and the hub the standing runners
 // the database holds. What cannot be read is logged, and what the server
 // had stays.
 func (s *server) loadPlaces(ctx context.Context) {
@@ -680,18 +680,18 @@ func (s *server) loadPlaces(ctx context.Context) {
 		s.log.Error("reading the engines; the ones before stay", "err", err)
 		return
 	}
-	as, err := s.st.Agents(ctx)
+	as, err := s.st.Runners(ctx)
 	if err != nil {
-		s.log.Error("reading the agents; the ones before stay", "err", err)
+		s.log.Error("reading the runners; the ones before stay", "err", err)
 		return
 	}
-	ids := make([]agenthub.Identity, len(as))
+	ids := make([]runnerhub.Identity, len(as))
 	for i, a := range as {
 		ids[i] = identityOf(a)
 	}
 	s.pool.SetEngines(es)
 	s.hub.SetStanding(ids)
-	s.log.Info("engines reloaded", "count", len(es), "agents", len(as))
+	s.log.Info("engines reloaded", "count", len(es), "runners", len(as))
 }
 
 // baseURLFor is where a stage on this machine reaches a server listening
@@ -833,12 +833,12 @@ func (s *server) handler() http.Handler {
 		}
 		mux.Handle(mcp.Path, mcp.New(cfg).Handler())
 	}
-	// With a listener of their own, the agents' calls are not on this one.
-	agents := s.hub.Handler()
-	if s.agentLn != nil {
-		agents = problem.NotFoundHandler()
+	// With a listener of their own, the runners' calls are not on this one.
+	runners := s.hub.Handler()
+	if s.runnerLn != nil {
+		runners = problem.NotFoundHandler()
 	}
-	mux.Handle(agentproto.Root, agents)
+	mux.Handle(runnerproto.Root, runners)
 	mux.Handle(cache.Prefix, s.cache.Handler())
 	data, err := filepath.Abs(s.f.data)
 	if err != nil {
@@ -874,7 +874,7 @@ func (s *server) deps(au *auth.Service) api.Deps {
 		Version: version.Version, Logger: s.log, ClientIP: s.f.clientIP,
 		Seal:       func(name string, value []byte) ([]byte, error) { return secretbox.Seal(s.key, name, value) },
 		ServerInfo: s.info, Listen: s.listenAddr,
-		Engines: s.pool.Status, Agents: s.hub.Agents, PlacesChanged: s.loadPlaces,
+		Engines: s.pool.Status, Runners: s.hub.Runners, PlacesChanged: s.loadPlaces,
 		Cache: s.cache, Scanner: s.scanner, Upgrade: s.upgrades, FlakyFlips: s.f.flakyFlips,
 	}
 }
@@ -898,18 +898,18 @@ func (s *server) info() api.ServerInfo {
 		UpdateCheck: s.updates != nil,
 		Version:     version.Version, GoVersion: runtime.Version(), Schema: s.st.Upgrade().To, StartedAt: s.startedAt,
 		Listen: s.listenAddr, BaseURL: s.f.baseURL, Executors: s.f.executors, Builds: s.d.Builds(), Shell: s.f.shell, SessionTTL: s.f.sessionTTL,
-		DefaultRunsOn: s.f.defaultRunsOn, AgentEnv: s.f.agentEnv, AgentURL: s.f.agentURL, AgentListen: s.agentListenAddr(),
+		DefaultRunsOn: s.f.defaultRunsOn, RunnerEnv: s.f.runnerEnv, RunnerURL: s.f.runnerURL, RunnerListen: s.runnerListenAddr(),
 		TimeZone: s.d.Zone(nil).String(), DataDir: s.f.data, JobsDir: s.f.jobs,
 		FreeDisk: free, FreeDiskKnown: known, DBSize: dbSize, LastReloadAt: reloadAt, LastReloadError: reloadErr,
 	}
 }
 
-// agentListenAddr is the address --agent-listen took, empty without one.
-func (s *server) agentListenAddr() string {
-	if s.agentLn == nil {
+// runnerListenAddr is the address --runner-listen took, empty without one.
+func (s *server) runnerListenAddr() string {
+	if s.runnerLn == nil {
 		return ""
 	}
-	return s.agentLn.Addr().String()
+	return s.runnerLn.Addr().String()
 }
 
 // hookPlan is the webhook kept on the repos of an owner job: one URL and
@@ -971,7 +971,7 @@ func (s *server) run(ctx context.Context, ln net.Listener, stdout io.Writer) int
 	failed := make(chan error, 2)
 	go func() { failed <- srv.Serve(ln) }()
 	wg.Go(func() { s.hooks.Replay(work) })
-	agentSrv := s.serveAgents(failed)
+	runnerSrv := s.serveRunners(failed)
 	say(stdout, "kipp %s listening on http://%s, %s from %s, data in %s",
 		version.Version, ln.Addr(), jobCount(len(s.d.Snapshot().Names)), s.f.jobs, s.f.data)
 
@@ -987,29 +987,29 @@ func (s *server) run(ctx context.Context, ln net.Listener, stdout io.Writer) int
 			s.log.Info("shutting down")
 		}
 	}
-	s.stop(stopWork, &wg, srv, agentSrv)
+	s.stop(stopWork, &wg, srv, runnerSrv)
 	return code
 }
 
-// serveAgents serves /api/v1/agent/ on --agent-listen, when there is one; its
+// serveRunners serves /api/v1/runner/ on --runner-listen, when there is one; its
 // failure is the server's, as the main listener's is.
-func (s *server) serveAgents(failed chan<- error) *http.Server {
-	if s.agentLn == nil {
+func (s *server) serveRunners(failed chan<- error) *http.Server {
+	if s.runnerLn == nil {
 		return nil
 	}
 	srv := &http.Server{
-		Handler: s.agentMux(), ReadHeaderTimeout: headerTimeout, IdleTimeout: idleTimeout,
+		Handler: s.runnerMux(), ReadHeaderTimeout: headerTimeout, IdleTimeout: idleTimeout,
 		ErrorLog: slog.NewLogLogger(s.log.Handler(), slog.LevelWarn),
 	}
-	go func() { failed <- srv.Serve(s.agentLn) }()
+	go func() { failed <- srv.Serve(s.runnerLn) }()
 	return srv
 }
 
-// agentMux is what --agent-listen serves: the agents' calls and the
+// runnerMux is what --runner-listen serves: the runners' calls and the
 // stages' cache, both reached with a token and nothing else.
-func (s *server) agentMux() http.Handler {
+func (s *server) runnerMux() http.Handler {
 	mux := http.NewServeMux()
-	mux.Handle(agentproto.Root, s.hub.Handler())
+	mux.Handle(runnerproto.Root, s.hub.Handler())
 	mux.Handle(cache.Prefix, s.cache.Handler())
 	mux.Handle("/", problem.NotFoundHandler()) // nothing else is served here
 	return mux

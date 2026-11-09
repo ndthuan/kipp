@@ -20,7 +20,7 @@ properties:
     $ref: NullableTimestamp.yaml
   ran_on:
     type: string
-    description: Where it ran, `local`, an agent's name, or `engine/n` for a container; empty before it starts.
+    description: Where it ran, `local`, a runner's name, or `engine/n` for a container; empty before it starts.
   tries:
     type: integer
     minimum: 1

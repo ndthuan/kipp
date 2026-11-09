@@ -1,6 +1,6 @@
 type: object
 additionalProperties: false
-description: Who the server says the agent is. Labels and executors are the server's to set.
+description: Who the server says the runner is. Labels and executors are the server's to set.
 required: [Name, Labels, Executors, ServerVersion, Heartbeat, Kill]
 properties:
   Name:
@@ -22,4 +22,4 @@ properties:
     type: [array, "null"]
     items:
       type: string
-    description: Assignments the agent said it runs that the server does not know as running there.
+    description: Assignments the runner said it runs that the server does not know as running there.

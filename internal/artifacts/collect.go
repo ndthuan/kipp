@@ -1,6 +1,6 @@
 // Package artifacts finds the files a stage keeps, copies them where
 // their build keeps them, and hands them out again: one by one, as a zip
-// of a stage's, or as a tar to a stage on an agent. Every read and write
+// of a stage's, or as a tar to a stage on a runner. Every read and write
 // goes through an os.Root, so that a link cannot lead one out of the
 // directory it is about.
 package artifacts

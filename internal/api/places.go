@@ -8,16 +8,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ndthuan/kipp/internal/agenthub"
 	"github.com/ndthuan/kipp/internal/auth"
 	"github.com/ndthuan/kipp/internal/config"
 	"github.com/ndthuan/kipp/internal/enginepool"
+	"github.com/ndthuan/kipp/internal/runnerhub"
 	"github.com/ndthuan/kipp/internal/store"
 )
 
-// AgentInfo is what an admin sees of a standing agent: its record and,
+// RunnerInfo is what an admin sees of a standing runner: its record and,
 // once it has connected, what the server sees of it now. Never its token.
-type AgentInfo struct {
+type RunnerInfo struct {
 	Name      string
 	Labels    []string
 	Executors int
@@ -28,7 +28,7 @@ type AgentInfo struct {
 	OS, Arch  string
 	Stages    []string // what it runs or has been given: job#number/stage
 	// Running is Stages by build, and Busy how many there are.
-	Running    []agenthub.StageRef
+	Running    []runnerhub.StageRef
 	Busy       int
 	LastSeenAt *time.Time
 }
@@ -62,27 +62,27 @@ func (s *Service) Engines(ctx context.Context, u *store.User) ([]enginepool.Engi
 	return out, nil
 }
 
-// Agents are the standing agents by name, for an admin; a token may read
+// Runners are the standing runners by name, for an admin; a token may read
 // them.
-func (s *Service) Agents(ctx context.Context, u *store.User) ([]AgentInfo, error) {
+func (s *Service) Runners(ctx context.Context, u *store.User) ([]RunnerInfo, error) {
 	if !u.Admin {
 		return nil, ErrForbidden
 	}
-	rows, err := s.deps.Store.Agents(ctx)
+	rows, err := s.deps.Store.Runners(ctx)
 	if err != nil {
 		return nil, err
 	}
-	live := map[string]agenthub.Status{}
-	if s.deps.Agents != nil {
-		for _, a := range s.deps.Agents() {
-			if a.Build == 0 { // a container's agent is its engine's
+	live := map[string]runnerhub.Status{}
+	if s.deps.Runners != nil {
+		for _, a := range s.deps.Runners() {
+			if a.Build == 0 { // a container's runner is its engine's
 				live[a.Name] = a
 			}
 		}
 	}
-	out := make([]AgentInfo, 0, len(rows))
+	out := make([]RunnerInfo, 0, len(rows))
 	for _, a := range rows {
-		info := AgentInfo{Name: a.Name, Labels: a.Labels, Executors: a.Executors, Enabled: a.Enabled,
+		info := RunnerInfo{Name: a.Name, Labels: a.Labels, Executors: a.Executors, Enabled: a.Enabled,
 			Version: a.Version, OS: a.OS, Arch: a.Arch, LastSeenAt: a.LastSeenAt, Stages: []string{}}
 		if l, ok := live[a.Name]; ok {
 			info.Online, info.Since, info.Stages = l.Online, l.Since, append(info.Stages, l.Stages...)
@@ -96,7 +96,7 @@ func (s *Service) Agents(ctx context.Context, u *store.User) ([]AgentInfo, error
 	return out, nil
 }
 
-// placesChanged has the server read the engines and agents again, so that
+// placesChanged has the server read the engines and runners again, so that
 // a change made here takes effect now and not at the next reload.
 func (s *Service) placesChanged(ctx context.Context) {
 	if s.deps.PlacesChanged != nil {
@@ -159,84 +159,84 @@ func (s *Service) DeleteEngine(ctx context.Context, u *store.User, sess *store.S
 	return nil
 }
 
-// AddAgent registers a standing agent and returns its token, the one time
+// AddRunner registers a standing runner and returns its token, the one time
 // it is seen.
-func (s *Service) AddAgent(ctx context.Context, u *store.User, sess *store.Session, name string, labels []string, executors int) (string, error) {
+func (s *Service) AddRunner(ctx context.Context, u *store.User, sess *store.Session, name string, labels []string, executors int) (string, error) {
 	if err := administers(u, sess); err != nil {
 		return "", err
 	}
-	if err := agenthub.CheckAgent(name, labels, executors); err != nil {
+	if err := runnerhub.CheckRunner(name, labels, executors); err != nil {
 		return "", fmt.Errorf("%w: %w", ErrBadInput, err)
 	}
-	if _, err := s.deps.Store.Agent(ctx, name); err == nil {
-		return "", fmt.Errorf("%w: an agent called %s is there already", ErrConflict, name)
+	if _, err := s.deps.Store.Runner(ctx, name); err == nil {
+		return "", fmt.Errorf("%w: a runner called %s is there already", ErrConflict, name)
 	} else if !errors.Is(err, store.ErrNotFound) {
 		return "", err
 	}
-	plain, hash, err := auth.NewAgentToken()
+	plain, hash, err := auth.NewRunnerToken()
 	if err != nil {
 		return "", err
 	}
-	a := store.Agent{Name: name, Labels: labels, Executors: executors, Enabled: true, TokenHash: hash}
-	if err := s.deps.Store.PutAgent(ctx, a); err != nil {
+	a := store.Runner{Name: name, Labels: labels, Executors: executors, Enabled: true, TokenHash: hash}
+	if err := s.deps.Store.PutRunner(ctx, a); err != nil {
 		return "", err
 	}
-	s.record(ctx, u.Name, "agent.add", name, AgentDetail(&a))
+	s.record(ctx, u.Name, "runner.add", name, RunnerDetail(&a))
 	s.placesChanged(ctx)
 	return plain, nil
 }
 
-// SetAgentEnabled enables a standing agent or drains it: a disabled one
+// SetRunnerEnabled enables a standing runner or drains it: a disabled one
 // takes nothing new, and what it runs finishes.
-func (s *Service) SetAgentEnabled(ctx context.Context, u *store.User, sess *store.Session, name string, on bool) error {
+func (s *Service) SetRunnerEnabled(ctx context.Context, u *store.User, sess *store.Session, name string, on bool) error {
 	if err := administers(u, sess); err != nil {
 		return err
 	}
-	a, err := s.deps.Store.Agent(ctx, name)
+	a, err := s.deps.Store.Runner(ctx, name)
 	if err != nil {
 		return missing(err)
 	}
 	a.Enabled = on
-	if err := s.deps.Store.PutAgent(ctx, *a); err != nil {
+	if err := s.deps.Store.PutRunner(ctx, *a); err != nil {
 		return err
 	}
-	s.record(ctx, u.Name, "agent.set", name, AgentDetail(a))
+	s.record(ctx, u.Name, "runner.set", name, RunnerDetail(a))
 	s.placesChanged(ctx)
 	return nil
 }
 
-// NewAgentToken gives a standing agent a new token, the one time it is
-// seen; the old one dies, and the agent that held it is refused.
-func (s *Service) NewAgentToken(ctx context.Context, u *store.User, sess *store.Session, name string) (string, error) {
+// NewRunnerToken gives a standing runner a new token, the one time it is
+// seen; the old one dies, and the runner that held it is refused.
+func (s *Service) NewRunnerToken(ctx context.Context, u *store.User, sess *store.Session, name string) (string, error) {
 	if err := administers(u, sess); err != nil {
 		return "", err
 	}
-	a, err := s.deps.Store.Agent(ctx, name)
+	a, err := s.deps.Store.Runner(ctx, name)
 	if err != nil {
 		return "", missing(err)
 	}
-	plain, hash, err := auth.NewAgentToken()
+	plain, hash, err := auth.NewRunnerToken()
 	if err != nil {
 		return "", err
 	}
 	a.TokenHash = hash
-	if err := s.deps.Store.PutAgent(ctx, *a); err != nil {
+	if err := s.deps.Store.PutRunner(ctx, *a); err != nil {
 		return "", err
 	}
-	s.record(ctx, u.Name, "agent.token", name, "the old token no longer works")
+	s.record(ctx, u.Name, "runner.token", name, "the old token no longer works")
 	return plain, nil
 }
 
-// DeleteAgent removes a standing agent: what it runs fails, and its token
+// DeleteRunner removes a standing runner: what it runs fails, and its token
 // is refused.
-func (s *Service) DeleteAgent(ctx context.Context, u *store.User, sess *store.Session, name string) error {
+func (s *Service) DeleteRunner(ctx context.Context, u *store.User, sess *store.Session, name string) error {
 	if err := administers(u, sess); err != nil {
 		return err
 	}
-	if err := s.deps.Store.DeleteAgent(ctx, name); err != nil {
+	if err := s.deps.Store.DeleteRunner(ctx, name); err != nil {
 		return missing(err)
 	}
-	s.record(ctx, u.Name, "agent.rm", name, "")
+	s.record(ctx, u.Name, "runner.rm", name, "")
 	s.placesChanged(ctx)
 	return nil
 }
@@ -247,8 +247,8 @@ func EngineDetail(e *store.Engine) string {
 	return fmt.Sprintf("%s, labels %s, max %d, %s", enginepool.Redact(e.URL), strings.Join(e.Labels, ","), e.Max, enabled(e.Enabled))
 }
 
-// AgentDetail is what the audit says of an agent: never its token.
-func AgentDetail(a *store.Agent) string {
+// RunnerDetail is what the audit says of a runner: never its token.
+func RunnerDetail(a *store.Runner) string {
 	return fmt.Sprintf("labels %s, executors %d, %s", strings.Join(a.Labels, ","), a.Executors, enabled(a.Enabled))
 }
 
@@ -281,8 +281,8 @@ func (a *API) engines(w http.ResponseWriter, r *http.Request, u *store.User) {
 	writeList(w, out, "")
 }
 
-func (a *API) agents(w http.ResponseWriter, r *http.Request, u *store.User) {
-	as, err := a.svc.Agents(r.Context(), u)
+func (a *API) runners(w http.ResponseWriter, r *http.Request, u *store.User) {
+	as, err := a.svc.Runners(r.Context(), u)
 	if err != nil {
 		a.fail(w, r, err)
 		return
@@ -292,9 +292,9 @@ func (a *API) agents(w http.ResponseWriter, r *http.Request, u *store.User) {
 		a.fail(w, r, err)
 		return
 	}
-	out := make([]agentV1, 0, len(as))
+	out := make([]runnerV1, 0, len(as))
 	for _, ag := range as {
-		out = append(out, toAgentV1(ag, builds))
+		out = append(out, toRunnerV1(ag, builds))
 	}
 	writeList(w, out, "")
 }

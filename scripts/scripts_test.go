@@ -59,20 +59,20 @@ func TestMakeDistRunsNothingAVersionHolds(t *testing.T) {
 	}
 }
 
-// Every kipp of a release carries the Linux agents of the same version,
+// Every kipp of a release carries the Linux runners of the same version,
 // so dist.sh builds them before it builds a kipp, with the same flags.
-func TestDistBuildsTheAgentsBeforeEveryKippAndWithItsVersion(t *testing.T) {
+func TestDistBuildsTheRunnersBeforeEveryKippAndWithItsVersion(t *testing.T) {
 	data, err := os.ReadFile("dist.sh")
 	if err != nil {
 		t.Fatal(err)
 	}
 	script := string(data)
-	agents, kipp := strings.Index(script, "./cmd/kipp-agent"), strings.Index(script, "./cmd/kipp\n")
-	if agents < 0 || kipp < 0 || agents > kipp {
-		t.Fatal("dist.sh does not build the agents before kipp")
+	runners, kipp := strings.Index(script, "./cmd/kipp-runner"), strings.Index(script, "./cmd/kipp\n")
+	if runners < 0 || kipp < 0 || runners > kipp {
+		t.Fatal("dist.sh does not build the runners before kipp")
 	}
 	if strings.Count(script, `-ldflags "$ldflags"`) != 2 {
-		t.Fatal("the agents and kipp are not built with the same flags")
+		t.Fatal("the runners and kipp are not built with the same flags")
 	}
 }
 

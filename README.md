@@ -2,7 +2,7 @@
 
 kipp is a job-first CI and scheduler in a single binary. Jobs are YAML
 files in a directory; builds run as shell commands on the server's
-machine, on agents that dial in, or in containers on Docker engines;
+machine, on runners that dial in, or in containers on Docker engines;
 everything else (builds, users, secrets) is kept in one SQLite file.
 
 It runs cron jobs with a history, a log and a page per build, stages
@@ -32,7 +32,7 @@ has a JSON API and a command line that can do all a browser can.
   request of a repo, or every repo of a GitHub user or organization, built
   from a `.kipp.yml` in the repo, with commit statuses, signed in with a
   token or as a GitHub App.
-- **Agents and engines.** Standing agents on other machines and containers
+- **Runners and engines.** Standing runners on other machines and containers
   on Docker engines (over a socket, TLS or ssh), chosen by label.
 - **Build results.** A live log with timestamps and colours, JUnit test
   results, artifacts, a keyed cache shared between builds, and metrics
@@ -174,7 +174,7 @@ rollback and what a failed upgrade looks like; a release can be
   artifacts and the cache.
 - [Metrics](docs/metrics.md): numbers builds report, what a store
   remembers, and guards.
-- [Agents and engines](docs/agents.md): stages on other machines and in
+- [Runners and engines](docs/runners.md): stages on other machines and in
   containers.
 - [Accounts and security](docs/accounts.md): users, grants, tokens,
   secrets, and how logins and secrets are protected.

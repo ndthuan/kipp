@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"slices"
 
-	"github.com/ndthuan/kipp/internal/agentproto"
 	"github.com/ndthuan/kipp/internal/config"
 	"github.com/ndthuan/kipp/internal/runner"
+	"github.com/ndthuan/kipp/internal/runnerproto"
 	"github.com/ndthuan/kipp/internal/store"
 )
 
@@ -153,11 +153,11 @@ func (d *Dispatcher) commandFiles(e *buildEnv) ([]string, func(), error) {
 	return append(files, "KIPP_TMP="+tmp), func() { removeTmp(); removeFiles() }, nil
 }
 
-// remoteSecretFiles are the file secrets a stage on an agent is sent.
-func remoteSecretFiles(e *buildEnv) []agentproto.SecretFile {
-	var out []agentproto.SecretFile
+// remoteSecretFiles are the file secrets a stage on a runner is sent.
+func remoteSecretFiles(e *buildEnv) []runnerproto.SecretFile {
+	var out []runnerproto.SecretFile
 	for _, name := range slices.Sorted(maps.Keys(e.files)) {
-		out = append(out, agentproto.SecretFile{Name: name, Data: e.files[name]})
+		out = append(out, runnerproto.SecretFile{Name: name, Data: e.files[name]})
 	}
 	return out
 }

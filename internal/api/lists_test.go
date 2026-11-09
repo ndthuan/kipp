@@ -272,7 +272,7 @@ func TestEveryOtherV1ListIsAnObjectWithItemsAndNoNextPage(t *testing.T) {
 	e := newEnv(t)
 	metricJobs(t, e)
 	ctx := context.Background()
-	must(t, e.st.PutAgent(ctx, store.Agent{Name: "box", Labels: []string{"linux"}, Executors: 2, Enabled: true, TokenHash: "h1"}))
+	must(t, e.st.PutRunner(ctx, store.Runner{Name: "box", Labels: []string{"linux"}, Executors: 2, Enabled: true, TokenHash: "h1"}))
 	b := measuredBuild(t, e, "site-smoke", "seconds", map[string]float64{"a": 1, "b": 2})
 	remember(t, e, "site", b, "seconds", map[string]float64{"a": 3})
 	id := e.kept(t, "smoke", store.Success, "s", map[string]string{"a.txt": "x"})
@@ -283,7 +283,7 @@ func TestEveryOtherV1ListIsAnObjectWithItemsAndNoNextPage(t *testing.T) {
 	}{
 		{e.admin, "/api/v1/jobs", 3},
 		{e.admin, "/api/v1/admin/users", 3},
-		{e.admin, "/api/v1/admin/agents", 1},
+		{e.admin, "/api/v1/admin/runners", 1},
 		{e.admin, "/api/v1/admin/engines", 0},
 		{e.admin, "/api/v1/metrics", 1},
 		{e.admin, "/api/v1/metrics/site/remembered?metric=seconds", 1},

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ndthuan/kipp/internal/agenthub"
 	"github.com/ndthuan/kipp/internal/config"
+	"github.com/ndthuan/kipp/internal/runnerhub"
 	"github.com/ndthuan/kipp/internal/store"
 )
 
@@ -285,48 +285,48 @@ func TestAHookGetsTheVariablesOfEveryStageThatEnded(t *testing.T) {
 	}
 }
 
-// onAgent is the job's stages on a standing agent called box.
-func onAgent(t *testing.T) func(*Options) {
+// onRunner is the job's stages on a standing runner called box.
+func onRunner(t *testing.T) func(*Options) {
 	t.Helper()
-	ag := newAgents(t, agenthub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
+	ag := newRunners(t, runnerhub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
 	ag.runBox(t.TempDir())
 	return ag.opts
 }
 
-func TestAValueAnAgentStageWritesReachesAStageOnTheServerAndOneOnTheAgent(t *testing.T) {
+func TestAValueAnRunnerStageWritesReachesAStageOnTheServerAndOneOnTheRunner(t *testing.T) {
 	h, b := runEnvJob(t, envJob(`
-  a: {runs_on: linux, run: 'echo "V=from-agent" >> "$KIPP_ENV"'}
+  a: {runs_on: linux, run: 'echo "V=from-runner" >> "$KIPP_ENV"'}
   b: {needs: [a], run: 'echo "server [$V]"'}
-  c: {needs: [a], runs_on: linux, run: 'echo "agent [$V]"'}
+  c: {needs: [a], runs_on: linux, run: 'echo "runner [$V]"'}
   d: {needs: [b], run: 'echo "far [$V]"'}
-`), onAgent(t))
-	for stage, want := range map[string]string{"b": "server [from-agent]\n", "c": "agent [from-agent]\n", "d": "far [from-agent]\n"} {
+`), onRunner(t))
+	for stage, want := range map[string]string{"b": "server [from-runner]\n", "c": "runner [from-runner]\n", "d": "far [from-runner]\n"} {
 		if got := h.log(t, b, stage); got != want {
 			t.Errorf("%s: %q, want %q (%v)", stage, got, want, b.Status)
 		}
 	}
 }
 
-func TestAValueAServerStageWritesReachesAStageOnAnAgent(t *testing.T) {
+func TestAValueAServerStageWritesReachesAStageOnAnRunner(t *testing.T) {
 	h, b := runEnvJob(t, envJob(`
   a: {run: 'echo "V=from-server" >> "$KIPP_ENV"'}
-  b: {needs: [a], runs_on: linux, run: 'echo "agent [$V]"'}
-`), onAgent(t))
-	if got := h.log(t, b, "b"); got != "agent [from-server]\n" {
+  b: {needs: [a], runs_on: linux, run: 'echo "runner [$V]"'}
+`), onRunner(t))
+	if got := h.log(t, b, "b"); got != "runner [from-server]\n" {
 		t.Fatalf("%v %q", b.Status, got)
 	}
 }
 
-func TestAnAgentStageGetsAnEmptyKippEnvFile(t *testing.T) {
+func TestAnRunnerStageGetsAnEmptyKippEnvFile(t *testing.T) {
 	h, b := runEnvJob(t, envJob(`
   s: {runs_on: linux, run: 'test -f "$KIPP_ENV" && echo size=$(wc -c < "$KIPP_ENV" | tr -d " ")'}
-`), onAgent(t))
+`), onRunner(t))
 	if got := h.log(t, b, "s"); got != "size=0\n" {
 		t.Fatalf("%v %q", b.Status, got)
 	}
 }
 
-func TestARetriedAgentStageKeepsOnlyWhatTheTryThatEndedWrote(t *testing.T) {
+func TestARetriedRunnerStageKeepsOnlyWhatTheTryThatEndedWrote(t *testing.T) {
 	h, b := runEnvJob(t, envJob(`
   a:
     runs_on: linux
@@ -336,28 +336,28 @@ func TestARetriedAgentStageKeepsOnlyWhatTheTryThatEndedWrote(t *testing.T) {
       if [ $n -lt 3 ]; then echo "OLD=$n" >> "$KIPP_ENV"; exit 7; fi
       echo "NEW=$n" >> "$KIPP_ENV"
   b: {needs: [a], run: 'echo "[$OLD] [$NEW]"'}
-`), onAgent(t))
+`), onRunner(t))
 	if got := h.log(t, b, "b"); got != "[] [3]\n" {
 		t.Fatalf("%v %q", b.Status, got)
 	}
 }
 
-func TestAFailedAgentStagesWritesAreIgnored(t *testing.T) {
+func TestAFailedRunnerStagesWritesAreIgnored(t *testing.T) {
 	h, b := runEnvJob(t, envJob(`
   a: {runs_on: linux, run: 'echo "V=lost" >> "$KIPP_ENV"; exit 3'}
   b: {needs: [a], when: {needs_status: always}, run: 'echo "[$V]"'}
-`), onAgent(t))
+`), onRunner(t))
 	if got := h.log(t, b, "b"); got != "[]\n" {
 		t.Fatalf("%v %q", b.Status, got)
 	}
 }
 
-func TestAnAgentStagesRefusedNamesAndOversizeFileAreLoggedOnItsOwnLog(t *testing.T) {
+func TestAnRunnerStagesRefusedNamesAndOversizeFileAreLoggedOnItsOwnLog(t *testing.T) {
 	h, b := runEnvJob(t, envJob(`
   a: {runs_on: linux, run: 'printf "KIPP_X=1\nGOOD=ok\n" >> "$KIPP_ENV"'}
   big: {runs_on: linux, run: 'printf "BIG=%065536d\n" 0 >> "$KIPP_ENV"'}
   r: {needs: [a, big], run: 'echo "[$KIPP_X] [$GOOD] [$BIG]"'}
-`), onAgent(t))
+`), onRunner(t))
 	if got := h.log(t, b, "r"); got != "[] [ok] []\n" {
 		t.Fatalf("%v %q", b.Status, got)
 	}

@@ -1,0 +1,8 @@
+description: |
+  The runner protocol's own refusal: why, and for a 409 the version the
+  server is. A 401 is a runner token that is missing or that nobody holds;
+  a 410 a stage that is not running on this runner.
+content:
+  application/json:
+    schema:
+      $ref: ../schemas/Refusal.yaml

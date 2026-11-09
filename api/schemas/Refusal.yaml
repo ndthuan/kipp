@@ -1,10 +1,10 @@
 type: object
 additionalProperties: false
-description: The body of an agent-protocol answer that is not 2xx.
+description: The body of a runner-protocol answer that is not 2xx.
 required: [Error]
 properties:
   Error:
     type: string
   ServerVersion:
     type: string
-    description: For a 409, the version the server is, so that the agent can say which to run.
+    description: For a 409, the version the server is, so that the runner can say which to run.

@@ -1,0 +1,84 @@
+package store
+
+import (
+	"context"
+	"database/sql"
+	"time"
+)
+
+// Runner is a standing runner: registered by an admin with its labels and a
+// token, run by whoever runs its machine. Only the token's hash is kept.
+type Runner struct {
+	Name       string
+	Labels     []string
+	Executors  int
+	Enabled    bool
+	TokenHash  string
+	CreatedAt  time.Time
+	LastSeenAt *time.Time
+	// What the runner said of itself when it last connected.
+	OS, Arch, Version string
+}
+
+const runnerCols = `name, labels, executors, enabled, token_hash, created_at, last_seen_at, os, arch, version`
+
+// PutRunner adds the runner, or replaces the one of that name and keeps
+// when it was added and what was seen of it.
+func (s *Store) PutRunner(ctx context.Context, a Runner) error {
+	labels, err := labelsJSON(a.Labels)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `INSERT INTO runners (name, labels, executors, enabled, token_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT(name) DO UPDATE SET labels = excluded.labels, executors = excluded.executors, enabled = excluded.enabled,
+		token_hash = excluded.token_hash`,
+		a.Name, labels, a.Executors, a.Enabled, a.TokenHash, ts(time.Now()))
+	return err
+}
+
+// Runner by name.
+func (s *Store) Runner(ctx context.Context, name string) (*Runner, error) {
+	a, err := scanRunner(s.db.QueryRowContext(ctx, `SELECT `+runnerCols+` FROM runners WHERE name = ?`, name))
+	return a, notFound(err)
+}
+
+// RunnerByTokenHash is the runner whose token hashes to hash.
+func (s *Store) RunnerByTokenHash(ctx context.Context, hash string) (*Runner, error) {
+	a, err := scanRunner(s.db.QueryRowContext(ctx, `SELECT `+runnerCols+` FROM runners WHERE token_hash = ?`, hash))
+	return a, notFound(err)
+}
+
+// Runners by name.
+func (s *Store) Runners(ctx context.Context) ([]*Runner, error) {
+	return collect(ctx, s.db, scanRunner, `SELECT `+runnerCols+` FROM runners ORDER BY name`)
+}
+
+// DeleteRunner removes one.
+func (s *Store) DeleteRunner(ctx context.Context, name string) error {
+	return requireChange(s.db.ExecContext(ctx, `DELETE FROM runners WHERE name = ?`, name))
+}
+
+// SetRunnerSeen records that the runner connected at at, and what it said
+// of itself.
+func (s *Store) SetRunnerSeen(ctx context.Context, name string, at time.Time, os, arch, version string) error {
+	return requireChange(s.db.ExecContext(ctx, `UPDATE runners SET last_seen_at = ?, os = ?, arch = ?, version = ? WHERE name = ?`,
+		ts(at), os, arch, version, name))
+}
+
+func scanRunner(row scanner) (*Runner, error) {
+	var a Runner
+	var labels, created string
+	var seen sql.NullString
+	if err := row.Scan(&a.Name, &labels, &a.Executors, &a.Enabled, &a.TokenHash, &created, &seen, &a.OS, &a.Arch, &a.Version); err != nil {
+		return nil, err
+	}
+	var err error
+	if a.Labels, err = parseLabels(labels); err != nil {
+		return nil, err
+	}
+	if a.CreatedAt, err = parseSetTS(created); err != nil {
+		return nil, err
+	}
+	a.LastSeenAt, err = parseTS(seen)
+	return &a, err
+}

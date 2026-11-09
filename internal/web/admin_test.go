@@ -266,18 +266,18 @@ func TestAUsersTokensAreMadeAndRevokedFromTheirPage(t *testing.T) {
 	e := site(t)
 	admin := e.login(t, "admin")
 	e.sudo(t, admin)
-	res, page := e.form(t, admin, "/admin/users/bob/tokens", url.Values{"label": {"agent"}, "days": {"0"}})
+	res, page := e.form(t, admin, "/admin/users/bob/tokens", url.Values{"label": {"runner"}, "days": {"0"}})
 	eq(t, "make", res.StatusCode, http.StatusOK)
 	contains(t, page, "New token for bob", "It never expires.")
 	plain := onceValue(t, page)
 	_, page = get(t, admin, e.srv.URL+"/admin/users/bob")
-	contains(t, page, ">agent</td>")
+	contains(t, page, ">runner</td>")
 	lacks(t, page, plain)
 
 	id := strconv.FormatInt(e.tokens(t, "bob")[0].ID, 10)
 	code, page := get(t, admin, e.srv.URL+"/admin/users/bob/tokens/"+id+"/revoke")
 	eq(t, "confirm", code, http.StatusOK)
-	contains(t, page, "Revoke bob&#39;s token &#34;agent&#34;?")
+	contains(t, page, "Revoke bob&#39;s token &#34;runner&#34;?")
 	// A token is revoked under its own user's page only.
 	code, _ = get(t, admin, e.srv.URL+"/admin/users/alice/tokens/"+id+"/revoke")
 	eq(t, "under another user", code, http.StatusNotFound)
@@ -287,7 +287,7 @@ func TestAUsersTokensAreMadeAndRevokedFromTheirPage(t *testing.T) {
 	eq(t, "revoke", res.StatusCode, http.StatusSeeOther)
 	eq(t, "bob's tokens", len(e.tokens(t, "bob")), 0)
 
-	res, _ = e.form(t, admin, "/admin/users/bob/tokens", url.Values{"label": {"agent"}, "days": {"7"}})
+	res, _ = e.form(t, admin, "/admin/users/bob/tokens", url.Values{"label": {"runner"}, "days": {"7"}})
 	eq(t, "a lifetime not offered", res.StatusCode, http.StatusBadRequest)
 }
 

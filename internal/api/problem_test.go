@@ -45,12 +45,12 @@ func TestUnderV1AFailureIsAProblemWhateverTheCause(t *testing.T) {
 	e := newEnv(t)
 	e.writeJob(t, "off", "name: off\ndisabled: true\ntriggers: {cron: '*/10 * * * *'}\nstages:\n  s: {run: 'true'}\n")
 	e.asProblem(t, 401, "unauthorized", "", "GET", "/api/v1/jobs", "")
-	e.asProblem(t, 404, "not_found", e.agent, "GET", "/api/v1/jobs/gc", "")
+	e.asProblem(t, 404, "not_found", e.aide, "GET", "/api/v1/jobs/gc", "")
 	e.asProblem(t, 403, "forbidden", e.viewer, "POST", "/api/v1/jobs/smoke/builds", "{}")
-	e.asProblem(t, 400, "bad_params", e.agent, "POST", "/api/v1/jobs/smoke/builds", `{"params": {"TIER": "nightly"}}`)
-	e.asProblem(t, 400, "bad_input", e.agent, "POST", "/api/v1/jobs/smoke/builds", `not JSON at all`)
+	e.asProblem(t, 400, "bad_params", e.aide, "POST", "/api/v1/jobs/smoke/builds", `{"params": {"TIER": "nightly"}}`)
+	e.asProblem(t, 400, "bad_input", e.aide, "POST", "/api/v1/jobs/smoke/builds", `not JSON at all`)
 	e.asProblem(t, 409, "job_disabled", e.admin, "POST", "/api/v1/jobs/off/builds", "")
-	e.asProblem(t, 413, "too_large", e.agent, "POST", "/api/v1/jobs/smoke/builds", `{"params": {"TIER": "`+strings.Repeat("a", 2*MaxBody)+`"}}`)
+	e.asProblem(t, 413, "too_large", e.aide, "POST", "/api/v1/jobs/smoke/builds", `{"params": {"TIER": "`+strings.Repeat("a", 2*MaxBody)+`"}}`)
 	once := e.started(t, "once")
 	d, _ := e.asProblem(t, 409, "dropped", e.admin, "POST", "/api/v1/jobs/once/builds", "")
 	contains(t, d.Detail, "dropped")
@@ -75,7 +75,7 @@ func TestACsrfRefusalAndAReloadAreProblemsToo(t *testing.T) {
 	sess := &store.Session{ID: "sess-p", UserID: e.user(t, "admin").ID, CSRF: "c", ExpiresAt: time.Now().Add(time.Hour)}
 	must(t, e.st.CreateSession(t.Context(), sess))
 	e.asProblem(t, 403, "csrf", "", "POST", "/api/v1/admin/reload", "", "Cookie", SessionCookieFor(sess).String())
-	d, _ := e.asProblem(t, 403, "forbidden", e.agent, "POST", "/api/v1/admin/reload", "")
+	d, _ := e.asProblem(t, 403, "forbidden", e.aide, "POST", "/api/v1/admin/reload", "")
 	contains(t, d.Detail, "not allowed")
 }
 

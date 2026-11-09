@@ -17,10 +17,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ndthuan/kipp/internal/agenthub"
 	"github.com/ndthuan/kipp/internal/cachesrv"
 	"github.com/ndthuan/kipp/internal/config"
 	"github.com/ndthuan/kipp/internal/runner"
+	"github.com/ndthuan/kipp/internal/runnerhub"
 	"github.com/ndthuan/kipp/internal/store"
 )
 
@@ -56,19 +56,19 @@ type Options struct {
 	Executors    int
 	RunsNoStages bool
 	// Builds is how many builds with something running run at once (see
-	// joinSlot), the one limit that also counts their stages on agents;
+	// joinSlot), the one limit that also counts their stages on runners;
 	// default Executors, or 4 for a server that runs no stage itself.
 	Builds        int
 	DefaultRunsOn []string
-	// Hub is the agents, and Engines the Docker engines, a stage with
+	// Hub is the runners, and Engines the Docker engines, a stage with
 	// runs_on is placed on; nil is none.
-	Hub     *agenthub.Hub
+	Hub     *runnerhub.Hub
 	Engines EngineSource
-	// AgentEnv names the server's variables a stage on an agent is also
+	// RunnerEnv names the server's variables a stage on a runner is also
 	// given (exact names); PassEnv is for the server's own stages only.
-	AgentEnv []string
-	Shell    string // runner.Local's shell, default sh
-	BaseURL  string // KIPP_URL for stages
+	RunnerEnv []string
+	Shell     string // runner.Local's shell, default sh
+	BaseURL   string // KIPP_URL for stages
 	// TimeZone is the zone a cron is read in when its job names none; nil
 	// is the host's.
 	TimeZone *time.Location
@@ -95,12 +95,12 @@ type Options struct {
 	// Cache is the keyed caches a stage with cache_scopes restores from and
 	// saves to; nil is none, and such a stage fails saying so. CacheURL is
 	// where a stage on the server reaches it (a loopback address), and
-	// AgentURL where a stage on an agent does: that one must be set by the
-	// operator, since a default would be the address the agents may not
+	// RunnerURL where a stage on a runner does: that one must be set by the
+	// operator, since a default would be the address the runners may not
 	// reach.
-	Cache    *cachesrv.Service
-	CacheURL string
-	AgentURL string
+	Cache     *cachesrv.Service
+	CacheURL  string
+	RunnerURL string
 	// Status says a state of a child's build to the host of its repo. It
 	// is called for the children of a multibranch job that names a token,
 	// and its error is a line in the build's hooks log and nothing more.

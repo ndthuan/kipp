@@ -316,15 +316,15 @@ func TestATokenLabelIsOneToAHundredCharactersWithoutControlCharacters(t *testing
 	alice := e.person(t, "alice", false)
 	e.sudo(t, alice)
 	for label, ok := range map[string]bool{
-		"":                                 false,
-		"   ":                              false,
-		strings.Repeat("ä", 100):           true,
-		strings.Repeat("a", 101):           false,
-		"tab\there":                        false,
-		"bell\a":                           false,
-		"line\nbreak":                      false,
-		"\xff not utf-8":                   false,
-		"agent on the build box (deploys)": true,
+		"":                                  false,
+		"   ":                               false,
+		strings.Repeat("ä", 100):            true,
+		strings.Repeat("a", 101):            false,
+		"tab\there":                         false,
+		"bell\a":                            false,
+		"line\nbreak":                       false,
+		"\xff not utf-8":                    false,
+		"runner on the build box (deploys)": true,
 	} {
 		_, _, err := e.api.svc.CreateOwnToken(context.Background(), alice.u, alice.sess, label, 0)
 		if ok && err != nil {

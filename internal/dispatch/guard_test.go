@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ndthuan/kipp/internal/agenthub"
 	"github.com/ndthuan/kipp/internal/metrics"
+	"github.com/ndthuan/kipp/internal/runnerhub"
 	"github.com/ndthuan/kipp/internal/store"
 )
 
@@ -259,7 +259,7 @@ type verdictCase struct {
 }
 
 func TestAStageThatCallsMetricsCheckSeesTheSameVerdictAsTheGuardAfterIt(t *testing.T) {
-	ag := newAgents(t, agenthub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
+	ag := newRunners(t, runnerhub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
 	ag.runBox(t.TempDir())
 	cases := []verdictCase{
 		{"held", `{"total": 87.19, "lib/a.mjs": 3}`, `{metric: coverage, item: total, no_lower: true}`, store.Success},
@@ -270,7 +270,7 @@ func TestAStageThatCallsMetricsCheckSeesTheSameVerdictAsTheGuardAfterIt(t *testi
 		{"not reported", `{"other": 1}`, `{metric: coverage, item: total, no_lower: true, required: false}`, store.Success},
 		{"pattern", `{"lib/b.mjs": 1}`, `{metric: coverage, item: "lib/*", no_lower: true}`, store.Failed},
 	}
-	for where, runsOn := range map[string]string{"server": "", "agent": "runs_on: linux"} {
+	for where, runsOn := range map[string]string{"server": "", "runner": "runs_on: linux"} {
 		for _, c := range cases {
 			t.Run(where+"/"+c.name, func(t *testing.T) { sameVerdict(t, ag, runsOn, c) })
 		}
@@ -278,9 +278,9 @@ func TestAStageThatCallsMetricsCheckSeesTheSameVerdictAsTheGuardAfterIt(t *testi
 }
 
 // sameVerdict runs c in a stage that calls metrics check and prints what
-// it said, on the server or on the agent runsOn names, and compares that
+// it said, on the server or on the runner runsOn names, and compares that
 // with the lines of the guard after the stage.
-func sameVerdict(t *testing.T, ag *agents, runsOn string, c verdictCase) {
+func sameVerdict(t *testing.T, ag *runners, runsOn string, c verdictCase) {
 	t.Helper()
 	h := newHarness(t, map[string]string{"site-smoke": `name: site-smoke
 metrics: {store: site}

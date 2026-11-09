@@ -235,7 +235,7 @@ they change. The build records the same (`pr`, `base_branch`,
 default branch's child alone, whatever started the build: never on a
 pull request, Build by hand included.
 
-A stage on an agent shares no files with the server, so one that needs
+A stage on a runner shares no files with the server, so one that needs
 the tree clones it, and redoes the merge from those variables:
 
 ```sh
@@ -246,7 +246,7 @@ git fetch origin "$KIPP_BASE_COMMIT" "$KIPP_COMMIT" &&
 ```
 
 (`REPO_URL` being the stage's own way to the repo, and the merge made
-under whatever identity the agent's git has; kipp's is
+under whatever identity the runner's git has; kipp's is
 `-c user.name=kipp -c user.email=kipp@localhost`.)
 
 ## Webhook

@@ -1155,7 +1155,7 @@ func TestTheBannerShowsWhenSet(t *testing.T) {
 // not execute fails a test. A new template fails here until it is listed.
 func TestEveryTemplateIsAPage(t *testing.T) {
 	tested := map[string]bool{"login": true, "jobs": true, "job": true, "build": true, "error": true, "queue": true,
-		"account": true, "sudo": true, "once": true, "confirm": true, "users": true, "user": true, "secrets": true, "server": true, "agents": true,
+		"account": true, "sudo": true, "once": true, "confirm": true, "users": true, "user": true, "secrets": true, "server": true, "runners": true,
 		"metrics": true, "metrics_store": true, "cache": true, "apps": true, "appgo": true, "overview": true, "authorize": true}
 	files, err := templateFS.ReadDir("templates")
 	must(t, err)

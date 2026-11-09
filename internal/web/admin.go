@@ -44,7 +44,7 @@ func (s *Site) adminRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin/secrets/{name}/delete", s.withUser(s.confirmDeleteSecret))
 	mux.HandleFunc("POST /admin/secrets/{name}/delete", s.withUser(s.deleteSecret))
 	s.appRoutes(mux)
-	s.agentRoutes(mux)
+	s.runnerRoutes(mux)
 	s.cacheRoutes(mux)
 	mux.HandleFunc("GET /admin/server", s.withUser(s.server))
 	mux.HandleFunc("POST /admin/server/reload", s.withUser(s.reload))

@@ -120,11 +120,11 @@ func TestAStageKeepsTheNeedsItsBuildRanWith(t *testing.T) {
 
 func TestAGrantReplacesAndTokensAndSessionsResolveUntilDeletedOrExpired(t *testing.T) {
 	s := open(t)
-	u, err := s.CreateUser(ctx, "agent", "h", false)
+	u, err := s.CreateUser(ctx, "runner", "h", false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CreateUser(ctx, "agent", "h", false); err == nil {
+	if _, err := s.CreateUser(ctx, "runner", "h", false); err == nil {
 		t.Fatal("duplicate user")
 	}
 	must(t, s.Grant(ctx, u.ID, "site-smoke", []string{"view", "build", "cancel"}))
@@ -481,7 +481,7 @@ func TestMarkRunningLostNamesTheStagesThatWereRunningAndTheirProcessGroups(t *te
 // Every request with a token would otherwise be a write to the database.
 func TestATokensLastUseIsWrittenAtMostOnceAMinute(t *testing.T) {
 	s := open(t)
-	u, err := s.CreateUser(ctx, "agent", "h", false)
+	u, err := s.CreateUser(ctx, "runner", "h", false)
 	must(t, err)
 	tok, err := s.CreateToken(ctx, u.ID, "ci", "hash")
 	must(t, err)
