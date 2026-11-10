@@ -111,7 +111,7 @@ func parsePages(assets map[string]asset, zone *time.Location) map[string]*templa
 		}
 		return "/static/" + name + "?v=" + a.version(), nil
 	}
-	funcs := template.FuncMap{"static": static, "dag": dagOf, "ago": ago, "clock": clockIn(zone), "zoned": zoned, "since": since, "join": join, "cancelOf": cancelOf, "exitText": exitText, "took": took, "millis": millis, "lines": lines, "buildPath": buildPath, "crumb": crumb,
+	funcs := template.FuncMap{"static": static, "dag": dagOf, "ago": ago, "clock": clockIn(zone), "zoned": zoned, "since": since, "join": join, "cancelOf": cancelOf, "exitText": exitText, "took": took, "millis": millis, "lines": lines, "buildPath": buildPath, "whyRow": whyRow, "commitShort": commitShort, "crumb": crumb,
 		"userPath": userPath, "secretPath": secretPath, "lasts": lasts, "expired": expired, "tokenList": tokenList, "appList": appList, "appScopes": appScopes, "tokenForm": tokenForm, "secretName": webhook.SecretName, "placePath": placePath, "bytes": byteSize, "scopePath": scopePath, "scopeField": scopeField, "metricsPath": metricsPath, "plural": plural, "percent": percent, "nameRule": nameRuleOf}
 	layout := template.Must(template.New("layout.html").Funcs(funcs).ParseFS(templateFS, "templates/layout.html"))
 	files, err := fs.Glob(templateFS, "templates/*.html")

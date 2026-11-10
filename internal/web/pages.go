@@ -402,6 +402,8 @@ type jobData struct {
 	View     *api.JobView
 	CanBuild bool
 	Tests    testsView
+	// Why says where each red build of the page went wrong, by build id.
+	Why map[int64]*why
 	// Store is the page of the store the job's builds report into, for a
 	// job its files still hold: whoever may view the job may view it.
 	Store, StoreName string
@@ -480,7 +482,12 @@ func (s *Site) job(w http.ResponseWriter, r *http.Request, u *store.User) {
 	if v.Job != nil {
 		here = crumb(v.Job.Group, false).href()
 	}
-	data := jobData{View: v, CanBuild: canBuild, Tests: testsOf(historyRows(hist), r.URL.Query().Get("results") == "all")}
+	whys, err := s.jobWhys(r.Context(), v.Builds)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	data := jobData{Why: whys, View: v, CanBuild: canBuild, Tests: testsOf(historyRows(hist), r.URL.Query().Get("results") == "all")}
 	if v.Job != nil {
 		data.StoreName = v.Job.StoreName()
 		data.Store = metricsPath(data.StoreName, "")

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/ndthuan/kipp/internal/api"
 	"github.com/ndthuan/kipp/internal/config"
@@ -20,20 +21,52 @@ type why struct {
 	Stages []string
 }
 
-func (s *Site) whys(ctx context.Context, o *overview.Overview) (map[int64]*why, error) {
+// whyRowData is what the "why" template draws under a build's status; a nil
+// Why draws nothing.
+type whyRowData struct {
+	Build *store.Build
+	Why   *why
+}
+
+func whyRow(b *store.Build, w *why) whyRowData { return whyRowData{b, w} }
+
+// commitShort is the first 7 characters of a full commit id, and empty for
+// any other detail, which prints whole.
+func commitShort(c string) string {
+	if len(c) != 40 || strings.Trim(c, "0123456789abcdef") != "" {
+		return ""
+	}
+	return c[:7]
+}
+
+// jobWhys reads the stopped stages of the red builds among a page's rows in
+// one query, so a long list costs no more reads than a short one.
+func (s *Site) jobWhys(ctx context.Context, builds []*store.Build) (map[int64]*why, error) {
 	var ids []int64
-	for _, f := range o.Failing {
-		ids = append(ids, f.Build.ID)
+	for _, b := range builds {
+		if b.Status.Red() {
+			ids = append(ids, b.ID)
+		}
 	}
 	stopped, err := s.st.StoppedStages(ctx, ids)
 	if err != nil {
 		return nil, err
 	}
 	out := map[int64]*why{}
-	for _, f := range o.Failing {
-		out[f.Build.ID] = whyOf(f.Build.Status, stopped[f.Build.ID])
+	for _, b := range builds {
+		if b.Status.Red() {
+			out[b.ID] = whyOf(b.Status, stopped[b.ID])
+		}
 	}
 	return out, nil
+}
+
+func (s *Site) whys(ctx context.Context, o *overview.Overview) (map[int64]*why, error) {
+	var builds []*store.Build
+	for _, f := range o.Failing {
+		builds = append(builds, f.Build)
+	}
+	return s.jobWhys(ctx, builds)
 }
 
 // whyOf reads the stages that failed or were stopped the way the status says

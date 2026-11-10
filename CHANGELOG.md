@@ -38,6 +38,11 @@ Added:
 
 Changed:
 
+- A job's build list shows a pushed commit as its first 7 characters (the
+  full id is the tooltip), the branch or tag the build was for, and under a
+  red build's status where it failed, with a link to that stage's log, as
+  the overview does. The build page's header shortens the commit the same
+  way. The API and MCP still give the full value.
 - After the password step an admin form comes back open and filled as it
   was sent, for the admin to send once more: add a user, make a token (own
   and for a user), set a secret (name, kind and scopes), change a secret's

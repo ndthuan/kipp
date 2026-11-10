@@ -29,7 +29,7 @@
 <tbody>
 {{range .}}<tr>
 <td class="lead" data-label="Job"><a class="link" href="/jobs/{{.Job}}">{{.Job}}</a>{{if .Flaky}} <span class="tag">flaky</span>{{end}}</td>
-<td class="lead" data-label="Build"><a class="link" href="{{buildPath .Build}}">#{{.Build.Number}}</a> <span class="status {{.Build.Status}}">{{.Build.Status}}</span>{{$b := .Build}}{{with index $why .Build.ID}}<div class="sub why">{{.Verb}}{{if .Stages}} in {{end}}{{range $i, $n := .Stages}}{{if $i}}, {{end}}<a class="link" href="{{buildPath $b}}#log-{{$n}}">{{$n}}</a>{{end}}</div>{{end}}</td>
+<td class="lead" data-label="Build"><a class="link" href="{{buildPath .Build}}">#{{.Build.Number}}</a> <span class="status {{.Build.Status}}">{{.Build.Status}}</span>{{template "why" (whyRow .Build (index $why .Build.ID))}}</td>
 <td class="lead" data-label="Red since">{{template "since" (since .Since)}}</td>
 <td data-label="Recent">{{template "dots" .Dots}}</td>
 </tr>

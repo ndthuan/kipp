@@ -154,3 +154,6 @@
 </div>
 <div><button class="action action-main">Make the token</button></div>
 </form>{{end}}
+
+{{define "why"}}{{with .Why}}<div class="sub why">{{.Verb}}{{if .Stages}} in {{end}}{{range $i, $n := .Stages}}{{if $i}}, {{end}}<a class="link" href="{{buildPath $.Build}}#log-{{$n}}">{{$n}}</a>{{end}}</div>{{end}}{{end}}
+{{define "detail"}}{{with commitShort .Commit}}<code title="{{$.Commit}}">{{.}}</code>{{end}}{{if ne .TriggerDetail .Commit}}{{with .TriggerDetail}}{{if $.Commit}} {{end}}<span class="sub">{{.}}</span>{{end}}{{end}}{{end}}

@@ -121,8 +121,8 @@
 <tbody>
 {{range .View.Builds}}<tr>
 <td class="lead" data-label="Build"><a class="link" href="{{buildPath .}}">#{{.Number}}</a>{{if .KeptAt}} <span class="tag">kept</span>{{end}}</td>
-<td class="lead" data-label="Status"><span class="status {{.Status}}">{{.Status}}</span></td>
-<td data-label="Trigger">{{.Trigger}}{{with .StartedBy}} <span class="sub">by {{.}}</span>{{end}}{{with .TriggerDetail}} <span class="sub">{{.}}</span>{{end}}</td>
+<td class="lead" data-label="Status"><span class="status {{.Status}}">{{.Status}}</span>{{template "why" (whyRow . (index $.Data.Why .ID))}}</td>
+<td data-label="Trigger">{{.Trigger}}{{with .StartedBy}} <span class="sub">by {{.}}</span>{{end}}{{if or .TriggerDetail .Commit}} {{template "detail" .}}{{end}}{{with .TriggerBranch}} <span class="tag">{{.}}</span>{{end}}{{with .TriggerTag}} <span class="tag">{{.}}</span>{{end}}</td>
 <td data-label="Started">{{clock .StartedAt}}</td>
 <td class="lead" data-label="Took">{{took .StartedAt .FinishedAt}}</td>
 </tr>
