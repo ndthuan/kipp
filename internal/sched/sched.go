@@ -156,6 +156,26 @@ func (s *Schedule) Next(after time.Time) time.Time {
 	}
 }
 
+// FasterThan reports whether a fire time in the `within` after `from` and
+// the one after it are closer than gap. It looks at the schedule and not at the
+// moment, so "*/5 9 * * *" is faster than 15 minutes at every hour of the
+// day, and it stops at the first gap that is.
+func (s *Schedule) FasterThan(gap time.Duration, from time.Time, within time.Duration) bool {
+	end := from.Add(within)
+	prev := s.Next(from)
+	for !prev.IsZero() && !prev.After(end) {
+		next := s.Next(prev)
+		if next.IsZero() {
+			return false
+		}
+		if next.Sub(prev) < gap {
+			return true
+		}
+		prev = next
+	}
+	return false
+}
+
 // nextWall is the first wall-clock minute after wall that matches, before
 // end, or the zero time. Wall-clock minutes are held as UTC times, where
 // every minute exists once.

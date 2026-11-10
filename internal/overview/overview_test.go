@@ -190,6 +190,41 @@ func TestComingUpIsTheNextEightByTime(t *testing.T) {
 	}
 }
 
+func TestComingUpFoldsJobsFiringMoreOftenThanEveryFifteenMinutes(t *testing.T) {
+	var jobs []Job
+	for i, cron := range []string{"H/2 * * * *", "*/5 * * * *", "*/15 * * * *", "0 9 * * *", "*/5 9 * * *"} {
+		at := now.Add(time.Duration(i+1) * time.Minute)
+		jobs = append(jobs, Job{Name: fmt.Sprintf("j%d", i), Cron: cron, Next: &at})
+	}
+	o := compute(jobs, 4, now)
+	if got := names(o.Frequent, func(u Upcoming) string { return u.Job }); got != "j0,j1,j4" {
+		t.Fatalf("frequent: %s", got)
+	}
+	if got := names(o.Coming, func(u Upcoming) string { return u.Job }); got != "j2,j3" {
+		t.Fatalf("coming: %s", got)
+	}
+	if len(o.Upcoming) != 5 {
+		t.Fatalf("upcoming keeps every job: %+v", o.Upcoming)
+	}
+}
+
+func TestComingUpRowsAreTheNextEightOfTheOtherJobs(t *testing.T) {
+	var jobs []Job
+	for i := range 12 {
+		at := now.Add(time.Duration(i+1) * time.Hour)
+		jobs = append(jobs, Job{Name: fmt.Sprintf("daily%02d", i), Cron: "0 9 * * *", Next: &at})
+	}
+	soon := now.Add(time.Minute)
+	jobs = append(jobs, Job{Name: "busy", Cron: "* * * * *", Next: &soon})
+	o := compute(jobs, 4, now)
+	if len(o.Coming) != UpcomingMax || o.Coming[0].Job != "daily00" || len(o.Frequent) != 1 {
+		t.Fatalf("%+v %+v", o.Coming, o.Frequent)
+	}
+	if o.Upcoming[0].Job != "busy" || len(o.Upcoming) != UpcomingMax {
+		t.Fatalf("upcoming is the next eight of all: %+v", o.Upcoming)
+	}
+}
+
 func TestDisabledJobsAreInEverySectionButTheGroupStrip(t *testing.T) {
 	at := now.Add(time.Minute)
 	j := job("off", "fsfsfsfsfs")

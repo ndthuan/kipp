@@ -9,6 +9,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/ndthuan/kipp/internal/sched"
 	"github.com/ndthuan/kipp/internal/store"
 )
 
@@ -26,6 +27,10 @@ const (
 	RecentMax   = 10
 	UpcomingMax = 8
 	Dots        = 5
+	// FrequentGap is the gap under which a job's schedule is "frequent",
+	// looked for over the FrequentLook after now.
+	FrequentGap  = 15 * time.Minute
+	FrequentLook = 24 * time.Hour
 )
 
 // Job is one leaf job the viewer may see: a job that builds itself, so
@@ -67,9 +72,15 @@ type Overview struct {
 	RecentFailures []Failure
 	// MoreFailures is how many of them RecentFailures leaves out.
 	MoreFailures int
-	Upcoming     []Upcoming
-	Groups       []Group
-	Charts       *Charts
+	// Upcoming is the next UpcomingMax builds of every job. Coming and
+	// Frequent are for the page: Coming is the next UpcomingMax builds of
+	// the jobs that fire no more often than every FrequentGap, and Frequent
+	// every job that fires more often, soonest first.
+	Upcoming []Upcoming
+	Coming   []Upcoming
+	Frequent []Upcoming
+	Groups   []Group
+	Charts   *Charts
 }
 
 // Failing is a job whose newest finished build is red. Build is that build,
@@ -136,7 +147,13 @@ func Compute(jobs []Job, cfg Config, now time.Time) *Overview {
 		o.addStanding(j, h, flips)
 		reds = append(reds, recentReds(j, cfg.rng().Length, now)...)
 		if j.Next != nil {
-			o.Upcoming = append(o.Upcoming, Upcoming{j.Name, j.Cron, *j.Next})
+			u := Upcoming{j.Name, j.Cron, *j.Next}
+			o.Upcoming = append(o.Upcoming, u)
+			if frequent(j, now) {
+				o.Frequent = append(o.Frequent, u)
+			} else {
+				o.Coming = append(o.Coming, u)
+			}
 		}
 	}
 	o.sort()
@@ -148,7 +165,15 @@ func Compute(jobs []Job, cfg Config, now time.Time) *Overview {
 		o.RecentFailures, o.MoreFailures = reds[:RecentMax], len(reds)-RecentMax
 	}
 	o.Upcoming = o.Upcoming[:min(len(o.Upcoming), UpcomingMax)]
+	o.Coming = o.Coming[:min(len(o.Coming), UpcomingMax)]
 	return o
+}
+
+// frequent is whether j's schedule fires more often than every FrequentGap.
+// Its Next carries the job's own zone, which the spec is read in.
+func frequent(j Job, now time.Time) bool {
+	s, err := sched.Parse(j.Cron, j.Name)
+	return err == nil && s.FasterThan(FrequentGap, now.In(j.Next.Location()), FrequentLook)
 }
 
 // addStanding puts a job into Failing, Unstable or Flaky, by its newest
@@ -180,9 +205,10 @@ func (o *Overview) sort() {
 		// Failed/Finished compared without division.
 		return cmp.Or(cmp.Compare(b.Flips, a.Flips), cmp.Compare(b.Failed*a.Finished, a.Failed*b.Finished), cmp.Compare(a.Job, b.Job))
 	})
-	slices.SortFunc(o.Upcoming, func(a, b Upcoming) int {
-		return cmp.Or(a.At.Compare(b.At), cmp.Compare(a.Job, b.Job))
-	})
+	byTime := func(a, b Upcoming) int { return cmp.Or(a.At.Compare(b.At), cmp.Compare(a.Job, b.Job)) }
+	slices.SortFunc(o.Upcoming, byTime)
+	slices.SortFunc(o.Coming, byTime)
+	slices.SortFunc(o.Frequent, byTime)
 }
 
 // endOf is when a build ended.

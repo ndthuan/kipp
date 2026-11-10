@@ -3,12 +3,15 @@ package web
 import (
 	"context"
 	"net/http"
+	"os"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/ndthuan/kipp/internal/config"
 	"github.com/ndthuan/kipp/internal/overview"
 	"github.com/ndthuan/kipp/internal/store"
 )
@@ -290,4 +293,33 @@ func TestACountThatIncludesBranchesAndPullRequestsSaysSoInItsTitleAndAZeroCountI
 		t.Fatalf("%q\nwant %q", got, want)
 	}
 	eq(t, "tooltip words", ch.Rows[0][1], "90% of 10, 3 disabled")
+}
+
+func TestComingUpFoldsFrequentJobsIntoOneLineThatListsThem(t *testing.T) {
+	e := site(t)
+	jobs := filepath.Join(t.TempDir(), "jobs")
+	must(t, os.MkdirAll(jobs, 0o750))
+	write := func(name, cron string) {
+		body := "name: " + name + "\ntriggers: {cron: '" + cron + "'}\nstages:\n  s: {run: echo s}\n"
+		must(t, os.WriteFile(filepath.Join(jobs, name+".yml"), []byte(body), 0o600))
+	}
+	write("pinger", "*/5 * * * *")
+	write("beat", "H/2 * * * *")
+	snap, err := config.Load(jobs)
+	must(t, err)
+	e.d.SetSnapshot(snap)
+	page := e.overviewPage(t, "admin")
+	_, coming, _ := strings.Cut(page, "<h2>Coming up</h2>")
+	coming, _, _ = strings.Cut(coming, "</section>")
+	contains(t, coming, "2 jobs run every few minutes", `<details class="frequent">`, `href="/jobs/pinger"`, `href="/jobs/beat"`)
+	lacks(t, coming, "<table", "Nothing is scheduled.")
+
+	write("daily", "0 9 * * *")
+	snap, err = config.Load(jobs)
+	must(t, err)
+	e.d.SetSnapshot(snap)
+	_, coming, _ = strings.Cut(e.overviewPage(t, "admin"), "<h2>Coming up</h2>")
+	coming, _, _ = strings.Cut(coming, "</section>")
+	contains(t, coming, "<table", `href="/jobs/daily"`, "2 jobs run every few minutes")
+	lacks(t, strings.SplitN(coming, "</table>", 2)[0], `href="/jobs/pinger"`)
 }

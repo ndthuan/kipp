@@ -94,7 +94,7 @@
 {{end}}</section>
 <section class="sec sec-coming">
 <h2>Coming up</h2>
-{{with $o.Upcoming}}<div class="scroll">
+{{with $o.Coming}}<div class="scroll">
 <table class="rows stacked">
 <thead><tr><th>When</th><th>Job</th><th>Schedule</th></tr></thead>
 <tbody>
@@ -106,8 +106,14 @@
 {{end}}</tbody>
 </table>
 </div>
-{{else}}<p class="sub">Nothing is scheduled.</p>
-{{end}}</section>
+{{end}}{{with $o.Frequent}}<details class="frequent">
+<summary class="sub">{{plural (len .) "job"}} {{if eq (len .) 1}}runs{{else}}run{{end}} every few minutes</summary>
+<ul>
+{{range .}}<li><a class="link" href="/jobs/{{.Job}}">{{.Job}}</a> <code>{{.Cron}}</code></li>
+{{end}}</ul>
+</details>
+{{else}}{{if not $o.Coming}}<p class="sub">Nothing is scheduled.</p>
+{{end}}{{end}}</section>
 </div>
 <section class="charts stack" aria-labelledby="charts-heading">
 <div class="charts-head">

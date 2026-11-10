@@ -10,6 +10,12 @@ lines and the data directory are the public surface.
 
 Added:
 
+- The overview's Coming up folds the jobs whose schedule fires more often
+  than every 15 minutes (the smallest gap over the next 24 hours) into one
+  line, "N jobs run every few minutes", that opens to list them; the rows
+  are the next 8 builds of the other jobs. `upcoming` in the API and MCP
+  is unchanged.
+
 - Pages tell a time within 24 hours of now relative ("3h 5m ago", "in 9m"),
   and a time further away as date and time without seconds; every such time
   is a `<time>` with the full value, seconds and zone, in its `title`, and

@@ -346,6 +346,11 @@
     .sec-failed { grid-area: failed; }
     .sec-coming { grid-area: coming; }
   }
+  /* The jobs that fire every few minutes, folded under Coming up. */
+  .frequent { margin-top: calc(var(--space) * 3); padding-inline: calc(var(--space) * 3); }
+  .frequent > summary { cursor: pointer; }
+  .frequent ul { display: flex; flex-direction: column; gap: calc(var(--space) * 1); margin-top: calc(var(--space) * 2); font-size: var(--size-sm); }
+  .frequent li { display: flex; flex-wrap: wrap; gap: calc(var(--space) * 1) calc(var(--space) * 3); }
   /* Unstable is green to every count but it is not quite right: its heading
      wears the warning colour, as the badge and the dots do. */
   .attn-unstable::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: calc(var(--space) * 2); border-radius: var(--radius-pill); background-color: var(--warn); }
@@ -584,7 +589,7 @@
     .action, .action-small, .seg a, .navlink, .brand, .menu-toggle,
     .group > summary, .user > summary, .menu a, .menu-button, .menu li.menu-who,
     .theme > summary, .queue-badge, .sort, .link-plain, td .link, th .link, .pager .link,
-    .results > summary, .guards > summary, .artifacts > summary, .log summary {
+    .results > summary, .guards > summary, .artifacts > summary, .log summary, .frequent > summary {
       min-height: 44px;
     }
     .action, .seg a, .navlink, .brand, .menu a, .menu-button, .queue-badge, td .link, td .link-plain, th .link, .pager .link {
@@ -595,7 +600,7 @@
     .entry { min-height: 44px; }
     .seg { align-items: stretch; }
     .theme > summary { min-width: 44px; align-items: center; justify-content: center; }
-    .results > summary, .guards > summary, .artifacts > summary, .log summary { display: flex; align-items: center; }
+    .results > summary, .guards > summary, .artifacts > summary, .log summary, .frequent > summary { display: flex; align-items: center; }
     .dots { display: inline-flex; vertical-align: middle; }
     .dot { position: relative; margin-right: calc(var(--space) * 3); }
     .dot::after { content: ""; position: absolute; inset: -17px calc(var(--space) * -1.5); }
