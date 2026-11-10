@@ -40,6 +40,15 @@ Changed:
   secret's value, file, user and password and every password field are
   never carried. Adding an engine or a standing runner now leads back to
   the runners page after the password, not to the overview.
+- A refused admin form comes back as its own page, with the status it had,
+  the form open, its fields as they were sent (never a secret or a
+  password) and why at its top, instead of a bare error page: add a user
+  and make a token (own and for a user) now do, and a refused change of a
+  secret's scopes opens that secret's row and not the Set form. The name
+  fields of users, secrets, GitHub Apps, engines and runners carry the
+  pattern of their rule, so a browser says what is wrong before sending.
+  The error page's link leads back to the page of this site the request
+  came from, and to the jobs only when there is none.
 - On a phone (under 48rem) the tables of the overview, the queue, the job
   list and a job's and a build's pages stack into rows instead of scrolling
   sideways: the name, its status and its age or duration on the first line,

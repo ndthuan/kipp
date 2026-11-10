@@ -3,17 +3,17 @@
 <div class="head">
 <h1>GitHub Apps</h1>
 {{if .On}}<div class="head-actions">
-<details class="build drop"{{if or $.Error ($.Fill.Is "app")}} open{{end}}>
+<details class="build drop"{{if $.Fill.Is "app"}} open{{end}}>
 <summary class="action action-main">Make an App</summary>
 <form class="panel stack pop" id="make" method="post" action="/admin/apps">
 <h2>Make an App</h2>
-{{with $.Error}}<p class="notice notice-error" role="alert">{{.}}</p>{{end}}
-{{if not .BaseURL}}<p class="notice notice-warn">kipp was started without <code>--base-url</code>: GitHub could not send the App's webhook here.</p>{{end}}
+{{with $.Fill.Refusal "app"}}<p class="notice notice-error" role="alert">{{.}}</p>
+{{end}}{{if not .BaseURL}}<p class="notice notice-warn">kipp was started without <code>--base-url</code>: GitHub could not send the App's webhook here.</p>{{end}}
 <input type="hidden" name="csrf" value="{{$.CSRF}}">
 <div>
 <label class="entry-label" for="app-name">Name</label>
 <p class="entry-help" id="app-name-help">Lower-case letters, digits and -. It is the App's name at GitHub, so it must be free there, and the name of its key file and of its webhook route.</p>
-<input class="entry" id="app-name" name="name" value="{{$.Fill.Value "app" "name"}}" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="app-name-help" required>
+{{$rule := nameRule "app"}}<input class="entry" id="app-name" name="name" value="{{$.Fill.Value "app" "name"}}" pattern="{{$rule.Pattern}}" title="{{$rule.Title}}" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="app-name-help" required>
 </div>
 <div>
 <label class="entry-label" for="app-org">Organization</label>

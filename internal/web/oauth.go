@@ -74,7 +74,7 @@ type consentData struct {
 // not to be trusted is told to the user, any other is told, at its own.
 func (s *Site) authFailed(w http.ResponseWriter, r *http.Request, e *oauth.AuthError) {
 	if e.RedirectURI == "" {
-		s.render(w, r, "error", http.StatusBadRequest, page{Title: "Cannot connect", Error: "This app cannot be connected: " + e.Description + "."})
+		s.errorPage(w, r, http.StatusBadRequest, "Cannot connect", "This app cannot be connected: "+e.Description+".")
 		return
 	}
 	http.Redirect(w, r, s.oauth.ErrorRedirect(e), http.StatusSeeOther)

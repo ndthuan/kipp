@@ -172,6 +172,31 @@ func refilled(next, action, about string, carry []carried) string {
 type filled struct {
 	form, of string
 	values   url.Values
+	// msg is why the form was refused, when it comes back for that.
+	msg string
+}
+
+// saying is f come back refused, for msg.
+func (f filled) saying(msg string) filled {
+	f.msg = msg
+	return f
+}
+
+// Refusal is why the form called form was refused, "" when it was not or
+// another is filled.
+func (f filled) Refusal(form string) string {
+	if !f.Is(form) {
+		return ""
+	}
+	return f.msg
+}
+
+// RowRefusal is why the form called form, of the row of, was refused.
+func (f filled) RowRefusal(form, of string) string {
+	if !f.IsRow(form, of) {
+		return ""
+	}
+	return f.msg
 }
 
 // filledAs is the form of route filled from values.
@@ -334,11 +359,16 @@ type accountData struct {
 	PasswordError string
 }
 
+// makeOwnRoute is the route of the form that makes one's own token.
+const makeOwnRoute = "POST /account/tokens"
+
 func (s *Site) account(w http.ResponseWriter, r *http.Request, u *store.User) {
-	s.accountPage(w, r, u, http.StatusOK, "")
+	s.accountPage(w, r, u, http.StatusOK, "", fillOf(r, makeOwnRoute))
 }
 
-func (s *Site) accountPage(w http.ResponseWriter, r *http.Request, u *store.User, code int, pwErr string) {
+// accountPage is the account page; pwErr is why the password form was
+// refused, fill the token form that comes back.
+func (s *Site) accountPage(w http.ResponseWriter, r *http.Request, u *store.User, code int, pwErr string, fill filled) {
 	svc := s.api.Service()
 	tokens, err := svc.OwnTokens(r.Context(), u)
 	if err != nil {
@@ -361,7 +391,7 @@ func (s *Site) accountPage(w http.ResponseWriter, r *http.Request, u *store.User
 	if code == http.StatusOK {
 		d.Notice = noticeOf(r)
 	}
-	s.render(w, r, "account", code, page{Title: "Account", Here: "/account", Data: d, Fill: fillOf(r, "POST /account/tokens"), oneTime: true})
+	s.render(w, r, "account", code, page{Title: "Account", Here: "/account", Data: d, Fill: fill, oneTime: true})
 }
 
 // changePassword replaces the user's password, and this browser's session
@@ -376,9 +406,9 @@ func (s *Site) changePassword(w http.ResponseWriter, r *http.Request, u *store.U
 		}
 		done(w, r, "/account", "password")
 	case errors.Is(err, api.ErrWrongPassword):
-		s.accountPage(w, r, u, http.StatusUnauthorized, "The current password is wrong.")
+		s.accountPage(w, r, u, http.StatusUnauthorized, "The current password is wrong.", filled{})
 	case errors.Is(err, api.ErrBadInput):
-		s.accountPage(w, r, u, http.StatusBadRequest, plainly(err))
+		s.accountPage(w, r, u, http.StatusBadRequest, plainly(err), filled{})
 	default:
 		s.fail(w, r, err)
 	}
@@ -417,13 +447,15 @@ func tokenLasts(t *store.Token) string {
 
 func (s *Site) createOwnToken(w http.ResponseWriter, r *http.Request, u *store.User) {
 	n, err := days(r)
-	if err != nil {
-		s.fail(w, r, err)
-		return
+	var plain string
+	var t *store.Token
+	if err == nil {
+		plain, t, err = s.api.Service().CreateOwnToken(r.Context(), u, api.SessionFrom(r.Context()), r.PostFormValue("label"), n)
 	}
-	plain, t, err := s.api.Service().CreateOwnToken(r.Context(), u, api.SessionFrom(r.Context()), r.PostFormValue("label"), n)
 	if err != nil {
-		s.fail(w, r, err)
+		s.refusedAs(w, r, err, func(code int, msg string) {
+			s.accountPage(w, r, u, code, "", filledAs(makeOwnRoute, r.PostForm, "").saying(msg))
+		})
 		return
 	}
 	s.once(w, r, "/account", onceData{

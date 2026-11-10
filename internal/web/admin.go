@@ -58,20 +58,34 @@ type usersData struct {
 	Notice string
 }
 
+// addUserRoute is the route of the form that adds a user.
+const addUserRoute = "POST /admin/users"
+
 func (s *Site) users(w http.ResponseWriter, r *http.Request, u *store.User) {
+	s.usersPage(w, r, u, http.StatusOK, fillOf(r, addUserRoute))
+}
+
+// usersPage is the users page with fill's form open and filled.
+func (s *Site) usersPage(w http.ResponseWriter, r *http.Request, u *store.User, code int, fill filled) {
 	all, err := s.api.Service().Users(r.Context(), u)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	s.render(w, r, "users", http.StatusOK, page{Title: "Users", Here: "/admin/users", Data: usersData{Users: all, Notice: noticeOf(r)}, Fill: fillOf(r, "POST /admin/users"), oneTime: true})
+	d := usersData{Users: all}
+	if code == http.StatusOK {
+		d.Notice = noticeOf(r)
+	}
+	s.render(w, r, "users", code, page{Title: "Users", Here: "/admin/users", Data: d, Fill: fill, oneTime: true})
 }
 
 func (s *Site) addUser(w http.ResponseWriter, r *http.Request, u *store.User) {
 	name := r.PostFormValue("name")
 	pw, err := s.api.Service().AddUser(r.Context(), u, api.SessionFrom(r.Context()), name, r.PostFormValue("admin") == "on")
 	if err != nil {
-		s.fail(w, r, err)
+		s.refusedAs(w, r, err, func(code int, msg string) {
+			s.usersPage(w, r, u, code, filledAs(addUserRoute, r.PostForm, "").saying(msg))
+		})
 		return
 	}
 	s.once(w, r, "/admin/users", onceData{
@@ -114,13 +128,17 @@ type userData struct {
 	AppsOn bool
 }
 
+// makeForUserRoute is the route of the form that makes a token for a user.
+const makeForUserRoute = "POST /admin/users/{name}/tokens"
+
 func (s *Site) userPage(w http.ResponseWriter, r *http.Request, u *store.User) {
-	s.showUser(w, r, u, r.PathValue("name"), http.StatusOK, nil)
+	s.showUser(w, r, u, r.PathValue("name"), http.StatusOK, nil, fillOf(r, makeForUserRoute))
 }
 
 // showUser draws the user's page; with fault, the grants form is as it
-// was sent and the refused rows say why.
-func (s *Site) showUser(w http.ResponseWriter, r *http.Request, u *store.User, name string, status int, fault *grantFault) {
+// was sent and the refused rows say why; fill is the token form that comes
+// back.
+func (s *Site) showUser(w http.ResponseWriter, r *http.Request, u *store.User, name string, status int, fault *grantFault, fill filled) {
 	svc := s.api.Service()
 	info, err := svc.User(r.Context(), u, name)
 	if err != nil {
@@ -132,7 +150,10 @@ func (s *Site) showUser(w http.ResponseWriter, r *http.Request, u *store.User, n
 		s.fail(w, r, err)
 		return
 	}
-	d := userData{Info: info, Self: info.Name == u.Name, Days: api.TokenDays, Notice: noticeOf(r)}
+	d := userData{Info: info, Self: info.Name == u.Name, Days: api.TokenDays}
+	if status == http.StatusOK {
+		d.Notice = noticeOf(r)
+	}
 	if s.oauth != nil {
 		d.AppsOn = true
 		if d.Apps, err = s.userApps(r, info.Name); err != nil {
@@ -150,7 +171,7 @@ func (s *Site) showUser(w http.ResponseWriter, r *http.Request, u *store.User, n
 		}
 		d.Groups = append(d.Groups, gg)
 	}
-	s.render(w, r, "user", status, page{Title: info.Name, Here: "/admin/users", Data: d, Fill: fillOf(r, "POST /admin/users/{name}/tokens"), oneTime: true})
+	s.render(w, r, "user", status, page{Title: info.Name, Here: "/admin/users", Data: d, Fill: fill, oneTime: true})
 }
 
 // grantRowOf is a job's row of the grants form. Grants stored as build or
@@ -277,7 +298,7 @@ func (s *Site) applyGrants(w http.ResponseWriter, r *http.Request, u *store.User
 	perms := grantForm(form)
 	err := s.api.Service().SetGrants(r.Context(), u, api.SessionFrom(r.Context()), name, perms)
 	if nv, ok := errors.AsType[*store.NeedsViewError](err); ok {
-		s.showUser(w, r, u, name, http.StatusBadRequest, &grantFault{perms: perms, jobs: nv.Jobs})
+		s.showUser(w, r, u, name, http.StatusBadRequest, &grantFault{perms: perms, jobs: nv.Jobs}, filled{})
 		return
 	}
 	if err != nil {
@@ -297,15 +318,17 @@ func (s *Site) removeGoneGrant(w http.ResponseWriter, r *http.Request, u *store.
 }
 
 func (s *Site) createToken(w http.ResponseWriter, r *http.Request, u *store.User) {
-	n, err := days(r)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
 	name := r.PathValue("name")
-	plain, t, err := s.api.Service().CreateToken(r.Context(), u, api.SessionFrom(r.Context()), name, r.PostFormValue("label"), n)
+	n, err := days(r)
+	var plain string
+	var t *store.Token
+	if err == nil {
+		plain, t, err = s.api.Service().CreateToken(r.Context(), u, api.SessionFrom(r.Context()), name, r.PostFormValue("label"), n)
+	}
 	if err != nil {
-		s.fail(w, r, err)
+		s.refusedAs(w, r, err, func(code int, msg string) {
+			s.showUser(w, r, u, name, code, nil, filledAs(makeForUserRoute, r.PostForm, "").saying(msg))
+		})
 		return
 	}
 	s.once(w, r, "/admin/users", onceData{
@@ -430,20 +453,24 @@ func scopeOptions(c *api.ScopeChoices, have []string) []scopeOptionGroup {
 	return out
 }
 
-// setFormRoute is the route of the form that sets a secret.
-const setFormRoute = "POST /admin/secrets"
+// setFormRoute is the route of the form that sets a secret, scopesRoute
+// of a secret's row's form that replaces its scopes.
+const (
+	setFormRoute = "POST /admin/secrets"
+	scopesRoute  = "POST /admin/secrets/{name}/scopes"
+)
 
 func (s *Site) secrets(w http.ResponseWriter, r *http.Request, u *store.User) {
-	fill := fillOf(r, setFormRoute, "POST /admin/secrets/{name}/scopes")
+	fill := fillOf(r, setFormRoute, scopesRoute)
 	if name := r.URL.Query().Get("name"); fill.form == "" && name != "" {
 		// A "set" link picks only the secret's name.
 		fill = filledAs(setFormRoute, url.Values{"name": {name}}, "")
 	}
-	s.secretsPage(w, r, u, http.StatusOK, fill, "")
+	s.secretsPage(w, r, u, http.StatusOK, fill)
 }
 
 // secretsPage is the secrets page with fill's form open and filled.
-func (s *Site) secretsPage(w http.ResponseWriter, r *http.Request, u *store.User, code int, fill filled, msg string) {
+func (s *Site) secretsPage(w http.ResponseWriter, r *http.Request, u *store.User, code int, fill filled) {
 	all, err := s.api.Service().Secrets(r.Context(), u)
 	if err != nil {
 		s.fail(w, r, err)
@@ -458,7 +485,7 @@ func (s *Site) secretsPage(w http.ResponseWriter, r *http.Request, u *store.User
 	if code == http.StatusOK {
 		d.Notice = noticeOf(r)
 	}
-	s.render(w, r, "secrets", code, page{Title: "Secrets", Here: "/admin/secrets", Error: msg, Data: d, Fill: fill})
+	s.render(w, r, "secrets", code, page{Title: "Secrets", Here: "/admin/secrets", Data: d, Fill: fill})
 }
 
 // setSecret stores a secret of the kind the form names, a value when it
@@ -473,7 +500,7 @@ func (s *Site) setSecret(w http.ResponseWriter, r *http.Request, u *store.User) 
 	case err == nil:
 		done(w, r, "/admin/secrets", "secret-set")
 	case errors.Is(err, api.ErrBadInput):
-		s.secretsPage(w, r, u, http.StatusBadRequest, filledAs(setFormRoute, r.PostForm, ""), plainly(err))
+		s.secretsPage(w, r, u, http.StatusBadRequest, filledAs(setFormRoute, r.PostForm, "").saying(plainly(err)))
 	default:
 		s.fail(w, r, err)
 	}
@@ -486,7 +513,7 @@ func (s *Site) scopeSecret(w http.ResponseWriter, r *http.Request, u *store.User
 	case err == nil:
 		done(w, r, "/admin/secrets", "scoped")
 	case errors.Is(err, api.ErrBadInput):
-		s.secretsPage(w, r, u, http.StatusBadRequest, filled{}, plainly(err))
+		s.secretsPage(w, r, u, http.StatusBadRequest, filledAs(scopesRoute, r.PostForm, r.PathValue("name")).saying(plainly(err)))
 	default:
 		s.fail(w, r, err)
 	}

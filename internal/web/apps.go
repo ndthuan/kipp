@@ -229,14 +229,14 @@ func useWarnings(v *appView, use api.AppUse) []string {
 }
 
 func (s *Site) appsList(w http.ResponseWriter, r *http.Request, u *store.User) {
-	s.appsPage(w, r, u, http.StatusOK, fillOf(r, makeAppRoute), "")
+	s.appsPage(w, r, u, http.StatusOK, fillOf(r, makeAppRoute))
 }
 
 // makeAppRoute is the route of the form that makes an App.
 const makeAppRoute = "POST /admin/apps"
 
 // appsPage is the Apps page with fill's form open and filled.
-func (s *Site) appsPage(w http.ResponseWriter, r *http.Request, u *store.User, code int, fill filled, msg string) {
+func (s *Site) appsPage(w http.ResponseWriter, r *http.Request, u *store.User, code int, fill filled) {
 	if !u.Admin {
 		s.fail(w, r, api.ErrForbidden)
 		return
@@ -260,7 +260,7 @@ func (s *Site) appsPage(w http.ResponseWriter, r *http.Request, u *store.User, c
 		keyFile = s.apps.keyFile
 	}
 	d.Apps = appViews(made, keyFile, uses)
-	s.render(w, r, "apps", code, page{Title: "GitHub Apps", Here: "/admin/apps", Error: msg, Data: d, Fill: fill})
+	s.render(w, r, "apps", code, page{Title: "GitHub Apps", Here: "/admin/apps", Data: d, Fill: fill})
 }
 
 // manifest is the App kipp asks GitHub to make: read-only on code, write on
@@ -300,7 +300,7 @@ func (s *Site) startApp(w http.ResponseWriter, r *http.Request, u *store.User) {
 	name := strings.ToLower(strings.TrimSpace(r.PostFormValue("name")))
 	org := strings.TrimSpace(r.PostFormValue("org"))
 	refuse := func(msg string) {
-		s.appsPage(w, r, u, http.StatusBadRequest, filledAs(makeAppRoute, url.Values{"name": {name}, "org": {org}}, ""), msg)
+		s.appsPage(w, r, u, http.StatusBadRequest, filledAs(makeAppRoute, url.Values{"name": {name}, "org": {org}}, "").saying(msg))
 	}
 	switch {
 	case s.apps == nil:

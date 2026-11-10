@@ -7,11 +7,11 @@
 <summary class="action action-main">Add an engine</summary>
 <form class="panel stack pop" id="add-engine" method="post" action="/admin/runners/engines">
 <h2>Add an engine</h2>
-{{if $.Fill.Is "engine"}}{{with $.Error}}<p class="notice notice-error" role="alert">{{.}}</p>{{end}}{{end}}
-<input type="hidden" name="csrf" value="{{$.CSRF}}">
+{{with $.Fill.Refusal "engine"}}<p class="notice notice-error" role="alert">{{.}}</p>
+{{end}}<input type="hidden" name="csrf" value="{{$.CSRF}}">
 <div>
 <label class="entry-label" for="engine-name">Name</label>
-<input class="entry" id="engine-name" name="name" value="{{$.Fill.Value "engine" "name"}}" autocomplete="off" autocapitalize="none" spellcheck="false" required>
+{{$rule := nameRule "job"}}<input class="entry" id="engine-name" name="name" value="{{$.Fill.Value "engine" "name"}}" pattern="{{$rule.Pattern}}" title="{{$rule.Title}}" autocomplete="off" autocapitalize="none" spellcheck="false" required>
 </div>
 <div>
 <label class="entry-label" for="engine-url">Docker URL</label>
@@ -39,13 +39,13 @@
 <summary class="action">Add a standing runner</summary>
 <form class="panel stack pop" id="add-runner" method="post" action="/admin/runners/runners">
 <h2>Add a standing runner</h2>
-{{if $.Fill.Is "runner"}}{{with $.Error}}<p class="notice notice-error" role="alert">{{.}}</p>{{end}}{{end}}
-<input type="hidden" name="csrf" value="{{$.CSRF}}">
+{{with $.Fill.Refusal "runner"}}<p class="notice notice-error" role="alert">{{.}}</p>
+{{end}}<input type="hidden" name="csrf" value="{{$.CSRF}}">
 {{with $.Once}}<input type="hidden" name="once" value="{{.}}">
 {{end}}
 <div>
 <label class="entry-label" for="runner-name">Name</label>
-<input class="entry" id="runner-name" name="name" value="{{$.Fill.Value "runner" "name"}}" autocomplete="off" autocapitalize="none" spellcheck="false" required>
+<input class="entry" id="runner-name" name="name" value="{{$.Fill.Value "runner" "name"}}" pattern="{{$rule.Pattern}}" title="{{$rule.Title}}" autocomplete="off" autocapitalize="none" spellcheck="false" required>
 </div>
 <div>
 <label class="entry-label" for="runner-labels">Labels</label>

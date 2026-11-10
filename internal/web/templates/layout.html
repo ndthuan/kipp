@@ -137,7 +137,8 @@
 {{end}}{{end}}
 {{define "token-form"}}<form class="panel stack pop" method="post" action="{{.Action}}">
 <h3>Make a token</h3>
-<input type="hidden" name="csrf" value="{{.CSRF}}">
+{{with .Fill.Refusal "token"}}<p class="notice notice-error" role="alert">{{.}}</p>
+{{end}}<input type="hidden" name="csrf" value="{{.CSRF}}">
 {{with .Once}}<input type="hidden" name="once" value="{{.}}">
 {{end}}
 <div>

@@ -112,7 +112,7 @@ func parsePages(assets map[string]asset, zone *time.Location) map[string]*templa
 		return "/static/" + name + "?v=" + a.version(), nil
 	}
 	funcs := template.FuncMap{"static": static, "dag": dagOf, "ago": ago, "clock": clockIn(zone), "zoned": zoned, "since": since, "join": join, "cancelOf": cancelOf, "exitText": exitText, "took": took, "millis": millis, "lines": lines, "buildPath": buildPath, "crumb": crumb,
-		"userPath": userPath, "secretPath": secretPath, "lasts": lasts, "expired": expired, "tokenList": tokenList, "appList": appList, "appScopes": appScopes, "tokenForm": tokenForm, "secretName": webhook.SecretName, "placePath": placePath, "bytes": byteSize, "scopePath": scopePath, "scopeField": scopeField, "metricsPath": metricsPath, "plural": plural, "percent": percent}
+		"userPath": userPath, "secretPath": secretPath, "lasts": lasts, "expired": expired, "tokenList": tokenList, "appList": appList, "appScopes": appScopes, "tokenForm": tokenForm, "secretName": webhook.SecretName, "placePath": placePath, "bytes": byteSize, "scopePath": scopePath, "scopeField": scopeField, "metricsPath": metricsPath, "plural": plural, "percent": percent, "nameRule": nameRuleOf}
 	layout := template.Must(template.New("layout.html").Funcs(funcs).ParseFS(templateFS, "templates/layout.html"))
 	files, err := fs.Glob(templateFS, "templates/*.html")
 	if err != nil {
@@ -410,7 +410,7 @@ func (s *Site) fail(w http.ResponseWriter, r *http.Request, err error) {
 	if code == http.StatusInternalServerError && r.Context().Err() == nil { // a client that left is not the server's failure
 		slog.Error("web", "method", r.Method, "path", r.URL.Path, "err", err)
 	}
-	s.render(w, r, "error", code, page{Title: http.StatusText(code), Error: msg})
+	s.errorPage(w, r, code, http.StatusText(code), msg)
 }
 
 // refusal is the status and the words err is answered with. A password

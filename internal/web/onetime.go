@@ -154,8 +154,8 @@ func (s *Site) oneTime(h pageHandler) pageHandler {
 				s.fail(w, r, api.ErrForbidden)
 				return
 			}
-			s.render(w, r, "error", http.StatusConflict, page{Title: "Sent already", Error: "This form was sent already, or its page is too old, so nothing was made this time: " +
-				"what a first sending made was shown once, on its answer, and is not shown again. To make another, open the form's page again."})
+			s.errorPage(w, r, http.StatusConflict, "Sent already", "This form was sent already, or its page is too old, so nothing was made this time: "+
+				"what a first sending made was shown once, on its answer, and is not shown again. To make another, open the form's page again.")
 			return
 		}
 		sw := &statusWriter{ResponseWriter: w, code: http.StatusOK}

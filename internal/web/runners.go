@@ -51,12 +51,11 @@ func (runnersData) OSArch(a api.RunnerInfo) string {
 }
 
 func (s *Site) runners(w http.ResponseWriter, r *http.Request, u *store.User) {
-	s.runnersPage(w, r, u, http.StatusOK, fillOf(r, addEngineRoute, addRunnerRoute), "")
+	s.runnersPage(w, r, u, http.StatusOK, fillOf(r, addEngineRoute, addRunnerRoute))
 }
 
-// runnersPage is the runners page with fill's form open and filled; a
-// refusal's msg is shown inside that form.
-func (s *Site) runnersPage(w http.ResponseWriter, r *http.Request, u *store.User, code int, fill filled, msg string) {
+// runnersPage is the runners page with fill's form open and filled.
+func (s *Site) runnersPage(w http.ResponseWriter, r *http.Request, u *store.User, code int, fill filled) {
 	var d runnersData
 	var err error
 	if d.Engines, err = s.api.Service().Engines(r.Context(), u); err != nil {
@@ -71,17 +70,16 @@ func (s *Site) runnersPage(w http.ResponseWriter, r *http.Request, u *store.User
 	if code == http.StatusOK {
 		d.Notice = noticeOf(r)
 	}
-	s.render(w, r, "runners", code, page{Title: "Runners", Here: "/admin/runners", Error: msg, Data: d, Fill: fill, oneTime: true})
+	s.render(w, r, "runners", code, page{Title: "Runners", Here: "/admin/runners", Data: d, Fill: fill, oneTime: true})
 }
 
 // refusedForm is the page again with the form of route as it was sent, or
-// the error page for anything else.
+// the error page for anything else. A name taken is a 400 here, as it has
+// always been, not the 409 of the other forms.
 func (s *Site) refusedForm(w http.ResponseWriter, r *http.Request, u *store.User, route string, err error) {
-	if errors.Is(err, api.ErrBadInput) || errors.Is(err, api.ErrConflict) {
-		s.runnersPage(w, r, u, http.StatusBadRequest, filledAs(route, r.PostForm, ""), plainly(err))
-		return
-	}
-	s.fail(w, r, err)
+	s.refusedAs(w, r, err, func(_ int, msg string) {
+		s.runnersPage(w, r, u, http.StatusBadRequest, filledAs(route, r.PostForm, "").saying(msg))
+	})
 }
 
 func (s *Site) addEngine(w http.ResponseWriter, r *http.Request, u *store.User) {
