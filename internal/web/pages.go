@@ -31,8 +31,13 @@ type group struct {
 type jobsData struct {
 	Queue  queueData
 	Groups []*group
-	// Self is this view's own address, which the page asks for again.
-	Self string
+	// Self is the address of the group the view is in, Refresh the address the
+	// page asks for again, which also keeps its status.
+	Self, Refresh string
+	// Status is the status choice in force, "" for All, and Statuses the
+	// choices, each leading to the same group with its own status.
+	Status   string
+	Statuses []statusTab
 	// Heading names the view for a reader that goes by headings.
 	Heading string
 }
@@ -95,11 +100,80 @@ func picked(all []*group, q url.Values) []*group {
 	return out
 }
 
-// shown is the page for a query: every group, or the one it picks.
+// statusTab is one choice of the status control.
+type statusTab struct {
+	Label, Value, Href string
+	Current            bool
+}
+
+// statusChoices are the values of ?status=, in the order the control shows
+// them; the first, All, is the one an unknown value means.
+var statusChoices = []statusTab{{Label: "All"}, {Label: "Failing", Value: "failing"}, {Label: "Unstable", Value: "unstable"}, {Label: "Running", Value: "running"}, {Label: "Disabled", Value: "disabled"}}
+
+// statusOf is the status the query asks for, "" for All.
+func statusOf(q url.Values) string {
+	v := q.Get("status")
+	if slices.ContainsFunc(statusChoices, func(c statusTab) bool { return c.Value == v }) {
+		return v
+	}
+	return ""
+}
+
+// hasStatus reports whether the job is in the status. Failing is the status
+// of the job's row being red, as for the row's colour.
+func hasStatus(j api.JobSummary, status string) bool {
+	switch status {
+	case "failing":
+		return j.Status().Red()
+	case "unstable":
+		return j.Status() == store.Unstable
+	case "running":
+		return j.Running
+	case "disabled":
+		return j.Disabled
+	}
+	return true
+}
+
+// withStatus is the groups with only the jobs in the status, and none left
+// empty.
+func withStatus(all []*group, status string) []*group {
+	if status == "" {
+		return all
+	}
+	var out []*group
+	for _, g := range all {
+		jobs := slices.DeleteFunc(slices.Clone(g.Jobs), func(j api.JobSummary) bool { return !hasStatus(j, status) })
+		if len(jobs) > 0 {
+			out = append(out, &group{Name: g.Name, Removed: g.Removed, Jobs: jobs})
+		}
+	}
+	return out
+}
+
+// shown is the page for a query: every group, or the one it picks, and in
+// them the jobs of the status it asks for.
 func shown(all []*group, q url.Values) jobsData {
-	d := jobsData{Groups: all, Self: "/jobs", Heading: "Jobs"}
+	d := jobsData{Groups: all, Self: "/jobs", Heading: "Jobs", Status: statusOf(q)}
 	if one := picked(all, q); len(one) > 0 {
 		d.Groups, d.Self, d.Heading = one, one[0].href(), one[0].label()
+	}
+	d.Groups = withStatus(d.Groups, d.Status)
+	d.Refresh = d.Self
+	sep := "?"
+	if strings.Contains(d.Self, "?") {
+		sep = "&"
+	}
+	for _, c := range statusChoices {
+		c.Current = c.Value == d.Status
+		c.Href = d.Self
+		if c.Value != "" {
+			c.Href += sep + "status=" + c.Value
+		}
+		if c.Current {
+			d.Refresh = c.Href
+		}
+		d.Statuses = append(d.Statuses, c)
 	}
 	return d
 }

@@ -275,6 +275,24 @@ func (s *Store) LastBuilds(ctx context.Context) (map[string]*Build, error) {
 	return out, nil
 }
 
+// ActiveJobs is every job with a build running or queued now.
+func (s *Store) ActiveJobs(ctx context.Context) (map[string]bool, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT job FROM builds WHERE status IN (?, ?)`, Queued, Running)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	out := map[string]bool{}
+	for rows.Next() {
+		var job string
+		if err := rows.Scan(&job); err != nil {
+			return nil, err
+		}
+		out[job] = true
+	}
+	return out, rows.Err()
+}
+
 // RecentFinished is up to n of the newest finished builds of every job,
 // newest first. A job with none finished has no entry.
 func (s *Store) RecentFinished(ctx context.Context, n int) (map[string][]*Build, error) {

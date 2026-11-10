@@ -286,6 +286,10 @@
   .charts-head h2 { margin: 0; }
   .seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: var(--radius-m); overflow: hidden; font-size: var(--size-sm); }
   .seg a { padding: calc(var(--space) * 1.5) calc(var(--space) * 3); color: var(--fg-muted); text-decoration: none; }
+  .jobs-bar { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--space) * 3); }
+  .jobs-bar .entry { flex: 1 1 calc(var(--space) * 50); min-width: 0; }
+  .jobs-bar .seg { max-width: 100%; }
+  .jobs-bar .seg a { padding-inline: calc(var(--space) * 2); }
   .seg a + a { border-left: 1px solid var(--line-strong); }
   .seg a:hover { background-color: var(--bg-sunken); color: var(--fg); }
   .seg a[aria-current] { background-color: var(--accent-soft); color: var(--on-accent-soft); font-weight: var(--weight-medium); }
@@ -599,6 +603,7 @@
     .stacked, .stacked tbody { display: block; }
     .stacked thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
     .stacked tr { display: flex; flex-wrap: wrap; align-items: baseline; gap: calc(var(--space) * 1) calc(var(--space) * 3); padding: calc(var(--space) * 2) calc(var(--space) * 3); border-bottom: 1px solid var(--line); }
+    .stacked tr[hidden] { display: none; }
     .stacked td { display: block; min-width: 0; padding: 0; border-bottom: 0; white-space: normal; overflow-wrap: anywhere; }
     .stacked td:empty { display: none; }
     .stacked td.lead { flex: 0 1 auto; }

@@ -648,3 +648,17 @@ func TestABuildKeepsTheTagItWasPushedFor(t *testing.T) {
 		t.Fatalf("%+v, %v", got, err)
 	}
 }
+
+func TestActiveJobsAreTheOnesWithABuildRunningOrQueuedNow(t *testing.T) {
+	s := open(t)
+	for job, status := range map[string]Status{"run": Running, "wait": Queued, "done": Success, "red": Failed} {
+		must(t, s.CreateBuild(ctx, &Build{Job: job, Status: status, Trigger: "cli"}))
+	}
+	// An old build that finished does not hide the one that runs.
+	must(t, s.CreateBuild(ctx, &Build{Job: "run", Status: Success, Trigger: "cli"}))
+	got, err := s.ActiveJobs(ctx)
+	must(t, err)
+	if len(got) != 2 || !got["run"] || !got["wait"] {
+		t.Fatalf("%v", got)
+	}
+}

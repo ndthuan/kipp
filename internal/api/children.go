@@ -42,6 +42,26 @@ func childrenOf(snap *config.Snapshot, parent string, last map[string]*store.Bui
 	return n, worst
 }
 
+// familyOf is what a job's row says of the children it has: how many, the
+// worst of their last builds, and whether the job or one of them has a build
+// running or queued.
+func familyOf(snap *config.Snapshot, name string, j *config.Job, last map[string]*store.Build, active map[string]bool) (int, store.Status, bool) {
+	n, worst := childrenOf(snap, name, last)
+	if j.IsOwner() {
+		n, worst = reposOf(snap, name, last)
+	}
+	return n, worst, active[name] || n > 0 && familyActive(snap, name, active)
+}
+
+// familyActive reports whether a job under parent, or in the owner's folder,
+// has a build running or queued.
+func familyActive(snap *config.Snapshot, parent string, active map[string]bool) bool {
+	return slices.ContainsFunc(snap.Names, func(name string) bool {
+		j := snap.Jobs[name]
+		return active[name] && (j.Parent == parent || j.Folder == parent)
+	})
+}
+
 // RepoView is one repo of an owner job, with how many children it builds
 // and the worst of their last builds.
 type RepoView struct {

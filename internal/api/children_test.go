@@ -115,3 +115,46 @@ func TestASourceJobsBuildShowsTheCommitItBuiltAndNothingElseOfAChild(t *testing.
 		}
 	}
 }
+
+func TestAJobIsRunningWhenItOrAChildHasABuildRunningOrQueued(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	now := time.Now()
+	e.withSite(t, store.Child{Parent: "site", Key: "main", Kind: "branch", Branch: "main", State: "live", LastSeenAt: now})
+	must(t, e.st.CreateBuild(ctx, &store.Build{Job: "site.main", Parent: "site", Status: store.Failed, Trigger: "webhook"}))
+	must(t, e.st.CreateBuild(ctx, &store.Build{Job: "smoke", Status: store.Queued, Trigger: "cli"}))
+	must(t, e.st.CreateBuild(ctx, &store.Build{Job: "quiet", Status: store.Success, Trigger: "cli"}))
+	running := func() map[string]bool {
+		jobs, err := e.api.Service().Jobs(ctx, e.user(t, "admin"))
+		must(t, err)
+		out := map[string]bool{}
+		for _, j := range jobs {
+			out[j.Name] = j.Running
+		}
+		return out
+	}
+	if got := running(); !got["smoke"] || got["site"] || got["quiet"] {
+		t.Fatalf("a queued build counts, a parent whose child is red does not: %v", got)
+	}
+	must(t, e.st.CreateBuild(ctx, &store.Build{Job: "site.main", Parent: "site", Status: store.Running, Trigger: "webhook"}))
+	if got := running(); !got["site"] {
+		t.Fatalf("a parent runs when a child does: %v", got)
+	}
+}
+
+func TestAJobSummaryStatusIsTheOneItsRowShows(t *testing.T) {
+	failed := &store.Build{Status: store.Failed}
+	for name, tc := range map[string]struct {
+		j    JobSummary
+		want store.Status
+	}{
+		"never built":      {JobSummary{}, ""},
+		"its last build":   {JobSummary{Last: failed}, store.Failed},
+		"a parent's worst": {JobSummary{Children: 2, Worst: store.Timeout}, store.Timeout},
+		"own build first":  {JobSummary{Children: 2, Worst: store.Timeout, Last: &store.Build{Status: store.Success}}, store.Success},
+	} {
+		if got := tc.j.Status(); got != tc.want {
+			t.Errorf("%s: %q, want %q", name, got, tc.want)
+		}
+	}
+}

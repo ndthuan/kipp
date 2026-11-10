@@ -30,6 +30,11 @@ Added:
 - A build's token may start a build of a job it has `build` on, recorded as
   started by `build <job>#<number>`, and never one of its own job (403
   `forbidden`). `api/` describes build tokens as bearer tokens.
+- The job list has a status choice (All, Failing, Unstable, Running,
+  Disabled) in `?status=`, which combines with `group` and reads an unknown
+  value as All, and a name filter that narrows the rows as you type (`/`
+  goes to it, Escape empties it). The filter is made by a script, so the
+  page without one is as it was.
 
 Changed:
 

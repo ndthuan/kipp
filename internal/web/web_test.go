@@ -597,7 +597,7 @@ func TestTheHeaderHasAMenuForEachGroupAndTheJobsPageShowsOnlyTheOnePicked(t *tes
 		`<summary>backend</summary>`, `<a class="menu-all" href="/jobs?group=backend">All in backend</a>`,
 		`<summary>No group</summary>`, `<a class="menu-all" href="/jobs?only=ungrouped">All in No group</a>`,
 		`hx-get="/jobs"`, `class="link" href="/jobs/smoke"`, `class="link" href="/jobs/slow"`)
-	lacks(t, page, `class="tabs"`, `<h1>Jobs</h1>`, `>All</a>`, `href="/?`)
+	lacks(t, page, `class="tabs"`, `<h1>Jobs</h1>`, `href="/?`)
 
 	_, page = get(t, c, e.srv.URL+"/jobs?group=backend")
 	contains(t, page, `<a class="brand" href="/">kipp</a>`, `<a class="navlink" href="/jobs">Jobs</a>`, `<summary aria-current="true">backend</summary>`,

@@ -199,6 +199,20 @@ type JobSummary struct {
 	// the worst of their last builds' statuses, empty before any built.
 	Children int
 	Worst    store.Status
+	// Running: the job, or a child of it, has a build running or queued.
+	Running bool
+}
+
+// Status is the status the job's row shows: its last build's, or for a
+// multibranch parent that has none of its own, the worst of its children's.
+func (j JobSummary) Status() store.Status {
+	if j.Children > 0 && j.Last == nil {
+		return j.Worst
+	}
+	if j.Last == nil {
+		return ""
+	}
+	return j.Last.Status
 }
 
 // JobView is one job's page. A Removed job has no Job: what is left of it
@@ -397,17 +411,17 @@ func (s *Service) Jobs(ctx context.Context, u *store.User) ([]JobSummary, error)
 	if err != nil {
 		return nil, err
 	}
+	active, err := s.deps.Store.ActiveJobs(ctx)
+	if err != nil {
+		return nil, err
+	}
 	now := time.Now()
 	out := make([]JobSummary, 0, len(names))
 	for _, n := range names {
-		row := JobSummary{Name: n, Last: last[n], Recent: recent[n], Removed: true}
+		row := JobSummary{Name: n, Last: last[n], Recent: recent[n], Removed: true, Running: active[n]}
 		if j := snap.Jobs[n]; j != nil {
 			row = JobSummary{Name: n, Group: j.Group, Description: j.Description, Cron: j.Triggers.Cron, Next: nextFire(j, now, s.deps.Dispatch.Zone(j)), Last: last[n], Recent: recent[n], Disabled: j.Disabled}
-			if j.IsOwner() {
-				row.Children, row.Worst = reposOf(snap, n, last)
-			} else {
-				row.Children, row.Worst = childrenOf(snap, n, last)
-			}
+			row.Children, row.Worst, row.Running = familyOf(snap, n, j, last, active)
 		}
 		out = append(out, row)
 	}
