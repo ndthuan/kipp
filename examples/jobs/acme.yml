@@ -33,8 +33,12 @@ owner:
     api:
       secrets: [API_DEPLOY_KEY]    # replaces the job's secrets for acme/api
       env: {REGION: eu}            # added to the job's env
+      fingerprint: ["go version"]  # replaces the job's fingerprint for acme/api
 secrets: [DEPLOY_KEY]
 locks: [acme-ports]
+# The tools every build of a repo runs with; a deploy that reuses a green
+# run (site-staging.yml) names commands that print the same.
+fingerprint: ["go version", "node --version"]
 triggers:
   cron: "H 3 * * *"              # builds the default branch of every repo
 keep: {builds: 50}

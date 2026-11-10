@@ -35,7 +35,7 @@
 <tbody>
 {{range .View.Stages}}<tr>
 <td class="lead" data-label="Stage"><a class="link" href="#log-{{.Name}}">{{.Name}}</a></td>
-<td class="lead" data-label="Status"><span class="status {{.Status}}">{{.Status}}</span>{{if gt .Tries 1}}<span class="sub">, {{.Tries}} tries</span>{{end}}</td>
+<td class="lead" data-label="Status"><span class="status {{.Status}}">{{.Status}}</span>{{if gt .Tries 1}}<span class="sub">, {{.Tries}} tries</span>{{end}}{{with .Reused}}<span class="sub">, reused from <a class="link" href="/jobs/{{.Job}}/{{.Number}}#log-{{.Stage}}">{{.Job}} #{{.Number}}</a></span>{{end}}</td>
 <td data-label="Exit">{{exitText . $build}}</td>
 <td data-label="Started">{{template "when" (when .StartedAt)}}</td>
 <td class="lead" data-label="Took">{{took .StartedAt .FinishedAt}}</td>

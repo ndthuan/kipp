@@ -35,7 +35,9 @@ owner:
       secrets: [API_DEPLOY_KEY]
       locks: [api-deploy]
       env: {REGION: eu}
+      fingerprint: [go version]    # replaces the job's for this repo
 secrets: [DEPLOY_KEY]
+fingerprint: [go version, node --version]
 triggers:
   cron: "H 3 * * *"
 ```
@@ -47,8 +49,11 @@ and `orphans` mean what they do in a multibranch job, for every repo.
 The job's `secrets`, `locks`, `env`, `timeout`, `keep` and `cron` are the
 defaults of every repo. A repo listed under `owner.repos` replaces the
 job's `secrets` or `locks` where it gives them (an empty list too), adds
-its `env` to the job's, and names its own `metrics` (`store` and
-`remember`) where the job's would not suit it.
+its `env` to the job's, names its own `metrics` (`store` and
+`remember`) where the job's would not suit it, and replaces the job's
+`fingerprint` with its own `fingerprint` (a list of one or more commands,
+never empty) for every build of that repo's node and children
+([Reusing a green run](jobs.md#reusing-a-green-run-reuse-and-fingerprint)).
 [`examples/jobs/acme.yml`](../examples/jobs/acme.yml) is the example
 above.
 

@@ -25,3 +25,19 @@ properties:
     type: integer
     minimum: 1
     description: How many times its command ran, which `retries` makes more than one; 1 for a stage that ran once or has not run.
+  reused:
+    type: object
+    additionalProperties: false
+    description: |
+      The green run the stage was reused from instead of running (the
+      stage's `reuse`): it ended success with no exit code and took no time.
+      Absent for a stage that ran, or did not.
+    required: [job, number, stage]
+    properties:
+      job:
+        type: string
+      number:
+        type: integer
+        minimum: 1
+      stage:
+        type: string

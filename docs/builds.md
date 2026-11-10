@@ -20,6 +20,10 @@ A build is `queued`, then `running`, and ends as `success`, `unstable`,
 `failed`, `cancelled`, `timeout` or `lost`. A stage is `pending`, then
 `running`, and ends as `success`, `unstable`, `failed`, `skipped` or
 `cancelled`.
+A stage with `reuse` that found a green run of its tree ends `success`
+without running: no exit code, no time, and the page says
+`success, reused from <job> #<n>`
+([Reusing a green run](jobs.md#reusing-a-green-run-reuse-and-fingerprint)).
 
 The log of a stage that was stopped ends with a line that says why:
 `kipp: cancelled by <user>`, `kipp: the job's timeout of <d> passed`, or

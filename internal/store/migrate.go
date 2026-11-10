@@ -157,6 +157,17 @@ CREATE TABLE pending_deliveries (
   event TEXT NOT NULL, delivery TEXT NOT NULL, body BLOB NOT NULL, received_at TEXT NOT NULL);
 `, `
 ALTER TABLE agents RENAME TO runners;
+`, `
+ALTER TABLE builds ADD COLUMN built_tree TEXT NOT NULL DEFAULT '';
+ALTER TABLE builds ADD COLUMN fingerprint TEXT NOT NULL DEFAULT '';
+ALTER TABLE builds ADD COLUMN fingerprint_sum TEXT NOT NULL DEFAULT '';
+ALTER TABLE stages ADD COLUMN runner_class TEXT NOT NULL DEFAULT '';
+ALTER TABLE stages ADD COLUMN tree TEXT NOT NULL DEFAULT '';
+ALTER TABLE stages ADD COLUMN reused_job TEXT NOT NULL DEFAULT '';
+ALTER TABLE stages ADD COLUMN reused_number INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE stages ADD COLUMN reused_stage TEXT NOT NULL DEFAULT '';
+CREATE INDEX builds_built_tree ON builds(built_tree) WHERE built_tree != '';
+CREATE INDEX stages_tree ON stages(tree) WHERE tree != '';
 `}
 
 // Upgrade is what Open did to the schema of the database it opened.

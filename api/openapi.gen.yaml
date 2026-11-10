@@ -4329,6 +4329,25 @@ components:
         ran_on:
           description: Where it ran, `local`, a runner's name, or `engine/n` for a container; empty before it starts.
           type: string
+        reused:
+          additionalProperties: false
+          description: |
+            The green run the stage was reused from instead of running (the
+            stage's `reuse`): it ended success with no exit code and took no time.
+            Absent for a stage that ran, or did not.
+          properties:
+            job:
+              type: string
+            number:
+              minimum: 1
+              type: integer
+            stage:
+              type: string
+          required:
+            - job
+            - number
+            - stage
+          type: object
         started_at:
           $ref: "#/components/schemas/NullableTimestamp"
         status:

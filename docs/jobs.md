@@ -294,6 +294,7 @@ name is lower-case letters, digits, `.`, `-` and `_`, and may not be
 | `metrics` | Numbers the stage reports, and guards on them ([Metrics](metrics.md)). |
 | `runs_on` | Labels of the runner or engine the stage runs on ([Runners and engines](runners.md)). |
 | `image` | With `runs_on`, the image of the container the stage runs in. |
+| `reuse` | Ends the stage `success` without running it when a green run of the same tree exists ([Reusing a green run](#reusing-a-green-run-reuse-and-fingerprint)). |
 
 - Stages form a DAG through `needs`. Those that are ready run at once, up
   to the server's `--executors` (and a runner's executors). A stage is
@@ -396,6 +397,103 @@ unstable stage and no failed one ends `unstable`: `on_success` runs (with
 `KIPP_STATUS=unstable`), `on_failure` does not, and the jobs that name it
 in `triggers.after` are built. A failed stage, a cancel, the timeout and
 a server that stops each win over it.
+
+## Reusing a green run: reuse and fingerprint
+
+A gate that already passed on a tree need not run again on the same tree.
+A pull request is built as its head merged into its base
+([Multibranch jobs](multibranch.md)), and a squash merge lands that same
+tree on the base branch under another commit, so a deploy of the merged
+commit can find its gate green in the pull request's build. The key is
+the git **tree**, never the commit: a commit hash never survives a squash.
+
+```yaml
+name: site-staging
+params:
+  FULL_GATE: {type: bool}
+fingerprint: ["go version", "node --version"]
+stages:
+  checkout: {run: 'git clone --quiet https://github.com/acme/site.git src && git -C src checkout --quiet "$KIPP_COMMIT"'}
+  gate:
+    needs: [checkout]
+    workdir: src
+    run: deploy/gate.sh
+    reuse:
+      from: [acme.site]          # jobs whose green runs count, each with the jobs under it
+      stage: run                 # the stage that must have ended success there
+      tree: $KIPP_WORKSPACE/src  # the git work tree the stage gates
+      force: FULL_GATE           # a bool param; true runs the stage in full
+  ship: {needs: [gate], workdir: src, run: deploy/ship.sh staging}
+```
+
+`fingerprint` is a job-level list of shell commands that name the tools a
+build runs with. kipp runs each once while the build prepares, before any
+clone, in the workspace with the build's environment (`_vars.yml`, the job's
+`env`, its secrets and the `KIPP_*` variables), for 30 seconds at most, and
+keeps what they printed on their standard output, joined by newlines, and its
+SHA-256 with the build. Only the output counts, never the commands, so two
+jobs that reach the same tool by different paths match when they print the
+same thing (`PATH="$CI_HOST_PATH" go version` and `/opt/homebrew/bin/go
+version`). A command that fails or takes too long fails the build in
+`prepare` with a line that names it: a fingerprint that could not be taken
+never matches. A toolchain upgrade on the machine changes the output, and the
+gate runs again. A multibranch or owner job takes its `fingerprint` for every
+child build, and `owner.repos.<name>.fingerprint` replaces it for one repo
+([Organization folders](organization-folders.md)).
+
+`reuse` on a stage, in a job file or a repo's stages file:
+
+- `from` names jobs. A name stands for that job and every job whose name
+  starts with it and a dot: `acme.site` is the repo's node and each of its
+  branches and pull requests. Stages named `stage` count there. The stage's
+  own job always counts too, by the stage's own name, so a deploy built again
+  finds its own earlier green gate.
+- `tree` is a git work tree, with `$VARS` expanded from the stage's
+  environment, the `KIPP_ENV` of the stages it needs included; a relative
+  path is inside the stage's directory. It is required in a job of its own
+  stages, which kipp checks nothing out for. In a `source` job and a
+  multibranch child it may be left out, and is then the checkout kipp made
+  for the build. kipp reads that tree's hash the moment it checks a child or a
+  `source` job out (for a pull request, the merge it made) and keeps it with
+  the build, so every such build is a green run others can match.
+- `force` names a bool param of the job.
+
+Before the stage starts, kipp decides, and says in the stage's log:
+
+1. `force` true: `<stage>: full run forced by <PARAM>`, and the stage runs.
+2. Else it reads `git rev-parse HEAD^{tree}` in the work tree. No repo there,
+   or one with any change (`git status --porcelain` not empty, kipp's own
+   `.kipp` directory in the workspace aside), matches nothing:
+   `<stage>: no git work tree at <dir>; running it` or
+   `<stage>: the work tree at <dir> has changes; running it`.
+3. A job without a `fingerprint` matches nothing:
+   `<stage>: the job takes no fingerprint, so no green run can match; running it`.
+4. It looks for the newest build still kept, in a job `from` names or in the
+   stage's own, whose tree equals this one, whose fingerprint's SHA-256
+   equals this build's, and whose stage ended `success` (not `unstable`, and
+   not itself reused) on the same runner class: `local` for a stage on the
+   server's machine, else the stage's sorted `runs_on` labels and its
+   `image`. Found, the stage ends `success` without running, and its log is
+   the one line `<stage> skipped: tree <12 hex> green in <job> #<n>`. Not
+   found: `<stage>: no green run of tree <12 hex>; running it`.
+
+A stage that runs ends as it ran, and when it ends `success` it is itself a
+green run of the tree it read for a later build. A reused stage counts as
+`success` for the stages that need it, has no exit code, takes no time and
+writes nothing to `KIPP_ENV`. The build page says
+`success, reused from <job> #<n>` with a link to that build, and the API's
+and MCP's stage carry `reused: {job, number, stage}`. Only the stage with
+`reuse` is skipped; every other stage of the build runs as before. A build
+in a job without a `fingerprint` is never matched, whether or not it ran
+the stage: no fingerprint is not an empty one.
+
+Refused by `kipp check`: `reuse` without `from` or without `stage`, a `stage`
+or a `from` that is not a name, a `force` that names no param of the job or
+one that is not `bool`, `reuse` with `retries`, `junit`, `metrics` or
+`artifacts` (a skipped stage produces none of them), `tree` on a stage with
+`runs_on` (the tree is read on the server's machine), `tree` left out in a
+job of its own stages, and a `fingerprint` that is not a list of one or more
+commands, each a string.
 
 ## Hooks
 

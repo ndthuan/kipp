@@ -83,6 +83,9 @@ linters:
       # git on the repo and ref of a job file; a leading dash is refused.
       - path: ^internal/dispatch/build\.go$
         text: "G204"
+      # A job's fingerprint commands, and git in the work tree a stage gates.
+      - path: ^internal/dispatch/reuse\.go$
+        text: "G204"
       # The coverage tool reads the reports its caller names.
       - path: ^internal/devtools/coverage/main\.go$
         text: "G304"

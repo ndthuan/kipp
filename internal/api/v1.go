@@ -124,7 +124,7 @@ func toBuildsV1(builds []*store.Build) []buildSummaryV1 {
 func toBuildV1(v *BuildView) buildV1 {
 	out := buildV1{buildSummaryV1: toBuildSummaryV1(v.Build), Stages: []stageJSON{}, Complete: v.Complete}
 	for _, s := range v.Stages {
-		out.Stages = append(out.Stages, stageJSON{s.Name, nonNil(s.Needs), s.Status, s.ExitCode, stampPtr(s.StartedAt), stampPtr(s.FinishedAt), s.RanOn, s.Tries})
+		out.Stages = append(out.Stages, stageJSON{s.Name, nonNil(s.Needs), s.Status, s.ExitCode, stampPtr(s.StartedAt), stampPtr(s.FinishedAt), s.RanOn, s.Tries, reusedOf(s.Reused)})
 	}
 	return out
 }

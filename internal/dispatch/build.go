@@ -69,6 +69,9 @@ type buildEnv struct {
 	previous, previousOK string
 	// token is the build's KIPP_TOKEN, empty for a build that has none.
 	token string
+	// fingerprintSum is the SHA-256 of what the job's fingerprint commands
+	// printed, empty for a job that takes none.
+	fingerprintSum string
 }
 
 // runBuild carries one build from running to a terminal status.
@@ -205,6 +208,11 @@ func (d *Dispatcher) prepare(ctx context.Context, b *store.Build, job *config.Jo
 		return err
 	}
 	d.useSecrets(b, job, e, secrets)
+	// Before the clone, so that nothing in the repo can change what the
+	// commands find.
+	if err := d.takeFingerprint(ctx, b, job, e); err != nil {
+		return err
+	}
 	if err := d.repoStages(ctx, b, job, e, secrets); err != nil {
 		return err
 	}
@@ -252,7 +260,7 @@ func (d *Dispatcher) repoStages(ctx context.Context, b *store.Build, job *config
 	if err := checkFile(job, e, secrets, path); err != nil {
 		return err
 	}
-	if err := errors.Join(job.CheckWhenParams(e.stages), job.CheckCaches(e.stages, e.declared())); err != nil {
+	if err := errors.Join(job.CheckWhenParams(e.stages), job.CheckCaches(e.stages, e.declared()), job.CheckReuse(e.stages, false)); err != nil {
 		return fmt.Errorf("%s: %w", path, err)
 	}
 	d.useSecrets(b, job, e, secrets)
@@ -308,6 +316,7 @@ func (d *Dispatcher) cloneStages(ctx context.Context, b *store.Build, src *confi
 	if built != "" {
 		d.setCommits(ctx, b, built, "")
 	}
+	d.recordTree(ctx, b, e.workspace)
 	root, err := os.OpenRoot(e.workspace)
 	if err != nil {
 		return nil, err
@@ -479,6 +488,13 @@ func (d *Dispatcher) runStages(ctx context.Context, b *store.Build, e *buildEnv)
 // runStage waits for an executor, runs the command and records how it ended.
 // Once the build is cancelled a stage that has not started never does.
 func (d *Dispatcher) runStage(ctx context.Context, b *store.Build, e *buildEnv, s *config.Stage) pipeline.Outcome {
+	tree := ""
+	if s.Reuse != nil && ctx.Err() == nil {
+		var reused bool
+		if tree, reused = d.reuse(ctx, b, e, s); reused {
+			return pipeline.Succeeded
+		}
+	}
 	free, ok := func() {}, ctx.Err() == nil
 	if !d.remote(s) {
 		free, ok = d.executor(ctx, b)
@@ -490,6 +506,12 @@ func (d *Dispatcher) runStage(ctx context.Context, b *store.Build, e *buildEnv, 
 	defer free()
 	d.setStage(ctx, b, s.Name, store.StageRunning, nil)
 	status, code := d.execStage(ctx, b, e, s)
+	if status != store.StageSuccess {
+		tree = "" // only a success is a green run
+	}
+	if err := d.st.SetStageRun(context.WithoutCancel(ctx), b.ID, s.Name, s.RunnerClass(), tree); err != nil {
+		d.log.Warn("recording the class and tree of a stage", "build", b.ID, "stage", s.Name, "err", err)
+	}
 	d.setStage(ctx, b, s.Name, status, code)
 	return outcome(status)
 }

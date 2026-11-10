@@ -55,6 +55,13 @@ stages:
   `triggers.webhook` (the job has a webhook of its own, [below](#webhook))
   and an absolute `workdir`; a relative one is a path inside the clone.
 - `params` apply to every child.
+- `fingerprint` ([Reusing a green run](jobs.md#reusing-a-green-run-reuse-and-fingerprint))
+  is taken for every child's build, and a stage of the repo's file may
+  name `reuse` without a `tree`: it gates the checkout kipp made, whose
+  tree (for a pull request, the merge's) each child build records. An
+  owner job's repo replaces the fingerprint with
+  `owner.repos.<name>.fingerprint`
+  ([Organization folders](organization-folders.md)).
 - The file's `env:`, and a stage's own, are variables as the job file's
   are, in the same order ([Variables](jobs.md#variables)). The file may not
   list secrets, and a name that starts with `KIPP_`, `CI` and the name of

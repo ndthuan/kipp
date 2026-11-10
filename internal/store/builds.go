@@ -122,6 +122,9 @@ type Stage struct {
 	// Tries is how many times the stage's command ran: 1 unless its
 	// retries ran it again.
 	Tries int
+	// Reused is the green run the stage was reused from instead of
+	// running; nil for a stage that ran, or did not.
+	Reused *StageRef
 }
 
 // Commit is the commit a push named for this build, whether the build is
@@ -521,7 +524,7 @@ func (s *Store) SetStageTries(ctx context.Context, buildID int64, name string, t
 
 // Stages of a build, in the order they were put.
 func (s *Store) Stages(ctx context.Context, buildID int64) ([]*Stage, error) {
-	return collect(ctx, s.db, scanStage, `SELECT build_id, name, needs, status, exit_code, started_at, finished_at, ran_on, tries FROM stages WHERE build_id = ? ORDER BY seq`, buildID)
+	return collect(ctx, s.db, scanStage, `SELECT build_id, name, needs, status, exit_code, started_at, finished_at, ran_on, tries, reused_job, reused_number, reused_stage FROM stages WHERE build_id = ? ORDER BY seq`, buildID)
 }
 
 // StoppedStages are the stages of the builds that ended badly: the failed
@@ -538,7 +541,7 @@ func (s *Store) StoppedStages(ctx context.Context, buildIDs []int64) (map[int64]
 		args = append(args, id)
 	}
 	args = append(args, StageFailed, StageCancelled, StageRunning)
-	rows, err := collect(ctx, s.db, scanStage, `SELECT build_id, name, needs, status, exit_code, started_at, finished_at, ran_on, tries FROM stages
+	rows, err := collect(ctx, s.db, scanStage, `SELECT build_id, name, needs, status, exit_code, started_at, finished_at, ran_on, tries, reused_job, reused_number, reused_stage FROM stages
 		WHERE build_id IN (`+marks+`) AND status IN (?, ?, ?) ORDER BY build_id, seq`, args...)
 	if err != nil {
 		return nil, err
@@ -555,8 +558,12 @@ func scanStage(row scanner) (*Stage, error) {
 	var needs string
 	var code sql.NullInt64
 	var started, finished sql.NullString
-	if err := row.Scan(&st.BuildID, &st.Name, &needs, &st.Status, &code, &started, &finished, &st.RanOn, &st.Tries); err != nil {
+	var reused StageRef
+	if err := row.Scan(&st.BuildID, &st.Name, &needs, &st.Status, &code, &started, &finished, &st.RanOn, &st.Tries, &reused.Job, &reused.Number, &reused.Stage); err != nil {
 		return nil, err
+	}
+	if reused.Job != "" {
+		st.Reused = &reused
 	}
 	if err := json.Unmarshal([]byte(needs), &st.Needs); err != nil {
 		return nil, fmt.Errorf("stored needs of stage %s: %w", st.Name, err)

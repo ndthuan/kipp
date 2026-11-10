@@ -10,6 +10,17 @@ lines and the data directory are the public surface.
 
 Added:
 
+- A stage may be reused: with `reuse: {from, stage, tree, force}` it ends
+  `success` without running when a build still kept, in a job `from` names
+  (or one under it) or in its own, ran that stage green on the same git
+  tree, with the same toolset fingerprint and on the same runner class. A
+  pull request's merge and the squash that lands it have the same tree, so
+  a deploy finds its gate green in the pull request's build. The job-level
+  `fingerprint` (and `owner.repos.<name>.fingerprint`) lists the commands
+  whose output names the toolset. Every checkout kipp makes records its
+  tree. The stage's log says why it ran or which build it reused, the build
+  page says `success, reused from <job> #<n>`, and the API and MCP stage
+  carry `reused`.
 - A user's page puts Tokens (and Connected apps) above Grants. With the
   script, the grants grid has a filter by job name (hidden rows keep their
   ticks and are still saved), a box in each group's heading that ticks or

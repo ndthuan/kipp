@@ -97,6 +97,10 @@ type Job struct {
 	Parent        string
 	Origin        *ChildRecord
 	DefaultBranch string
+	// Fingerprint are the commands whose joined output names the tools a
+	// build runs with; nil takes none, and a build without one is never a
+	// green run another can reuse, nor reuses one.
+	Fingerprint []string
 }
 
 // Param is a build parameter with its default. Description is what the
@@ -209,6 +213,9 @@ type Stage struct {
 	// Cache are the caches kipp restores before the command and saves after
 	// it; their scopes are reached whether or not CacheScopes names them.
 	Cache []CacheSpec `yaml:"cache"`
+	// Reuse lets the stage end success without running when a green run of
+	// the same tree, toolset and runner class exists; nil always runs.
+	Reuse *Reuse `yaml:"reuse"`
 }
 
 // Remote reports whether the stage runs somewhere other than the server.
@@ -294,6 +301,7 @@ type file struct {
 	Metrics     *JobMetrics       `yaml:"metrics"`
 	Multibranch *multibranchFile  `yaml:"multibranch"`
 	Owner       *ownerFile        `yaml:"owner"`
+	Fingerprint yaml.Node         `yaml:"fingerprint"`
 
 	CacheWritesDefault bool         `yaml:"cache_writes_default"`
 	Permissions        *Permissions `yaml:"permissions"`
@@ -381,6 +389,10 @@ func ParseJob(filename string, data []byte) (*Job, error) {
 	}
 	if j.Concurrency == "" {
 		j.Concurrency = Queue
+	}
+	var err error
+	if j.Fingerprint, err = fingerprintOf("fingerprint", f.Fingerprint); err != nil {
+		return nil, err
 	}
 	steps := []func() error{
 		func() error { return j.checkName(filename) },
@@ -647,6 +659,9 @@ func (j *Job) setStages(o ordered[Stage]) error {
 	if err := j.CheckWhenParams(stages); err != nil {
 		return err
 	}
+	if err := j.CheckReuse(stages, true); err != nil {
+		return err
+	}
 	return j.CheckStagesEnv("job file", stages)
 }
 
@@ -748,6 +763,9 @@ func (s *Stage) check() error {
 		return err
 	}
 	if err := s.checkTestsFailed(); err != nil {
+		return err
+	}
+	if err := s.checkReuse(); err != nil {
 		return err
 	}
 	return s.Metrics.check(s.Name)

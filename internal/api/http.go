@@ -289,6 +289,23 @@ type stageJSON struct {
 	RanOn string `json:"ran_on"`
 	// Tries is how many times its command ran: 1 unless retries ran it again.
 	Tries int `json:"tries"`
+	// Reused is the green run the stage was reused from; absent for one
+	// that ran, or did not.
+	Reused *reusedJSON `json:"reused,omitempty"`
+}
+
+type reusedJSON struct {
+	Job    string `json:"job"`
+	Number int    `json:"number"`
+	Stage  string `json:"stage"`
+}
+
+// reusedOf is a stage's reuse as the API says it.
+func reusedOf(r *store.StageRef) *reusedJSON {
+	if r == nil {
+		return nil
+	}
+	return &reusedJSON{r.Job, r.Number, r.Stage}
 }
 
 type activityJSON struct {

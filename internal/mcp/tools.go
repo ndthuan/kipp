@@ -535,6 +535,14 @@ type stageOut struct {
 	DurationSeconds *int     `json:"duration_seconds,omitempty"`
 	RanOn           string   `json:"ran_on,omitempty"`
 	Tries           int      `json:"tries,omitempty"`
+	// Reused is the green run the stage was reused from instead of running.
+	Reused *reusedOut `json:"reused,omitempty"`
+}
+
+type reusedOut struct {
+	Job    string `json:"job"`
+	Number int    `json:"number"`
+	Stage  string `json:"stage"`
 }
 
 type getBuildOut struct {
@@ -556,6 +564,9 @@ func (s *Server) getBuild(ctx context.Context, c *Caller, in jobRef) (getBuildOu
 	for _, st := range v.Stages {
 		row := stageOut{Name: st.Name, Status: string(st.Status), ExitCode: st.ExitCode, Needs: st.Needs, StartedAt: stampOf(st.StartedAt),
 			FinishedAt: stampOf(st.FinishedAt), RanOn: st.RanOn, Tries: st.Tries}
+		if r := st.Reused; r != nil {
+			row.Reused = &reusedOut{Job: r.Job, Number: r.Number, Stage: r.Stage}
+		}
 		if st.StartedAt != nil && st.FinishedAt != nil {
 			row.DurationSeconds = new(int(st.FinishedAt.Sub(*st.StartedAt).Seconds()))
 		}

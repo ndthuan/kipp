@@ -11,6 +11,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"go.yaml.in/yaml/v3"
 )
 
 // The states of a repo of an owner job: live is indexed, gone left the
@@ -54,11 +56,13 @@ type Owner struct {
 
 // RepoSettings is what a repo has other than the owner job's: nil leaves
 // what the job gives, and a list given, even an empty one, replaces it.
-// Env is added to the job's; Metrics replaces the job's where given.
+// Env is added to the job's; Metrics and Fingerprint replace the job's
+// where given.
 type RepoSettings struct {
 	Locks, Secrets []string
 	Env            map[string]string
 	Metrics        *JobMetrics
+	Fingerprint    []string
 }
 
 // ownerFile is the YAML shape of owner:.
@@ -86,6 +90,8 @@ type repoSettingsFile struct {
 	Secrets []string          `yaml:"secrets"`
 	Env     map[string]string `yaml:"env"`
 	Metrics *JobMetrics       `yaml:"metrics"`
+
+	Fingerprint yaml.Node `yaml:"fingerprint"`
 }
 
 // App is a GitHub App kipp signs in as: its ID and the file its private
@@ -188,7 +194,11 @@ func (o *Owner) check(f *ownerFile) error {
 		if err := r.check(name); err != nil {
 			return err
 		}
-		o.Repos[strings.ToLower(name)] = RepoSettings(r)
+		fp, err := fingerprintOf("owner.repos."+name+".fingerprint", r.Fingerprint)
+		if err != nil {
+			return err
+		}
+		o.Repos[strings.ToLower(name)] = RepoSettings{Locks: r.Locks, Secrets: r.Secrets, Env: r.Env, Metrics: r.Metrics, Fingerprint: fp}
 	}
 	return nil
 }
@@ -300,6 +310,9 @@ func (j *Job) Node(rec RepoRecord) *Job {
 		}
 		if r.Metrics != nil {
 			n.Metrics = r.Metrics
+		}
+		if r.Fingerprint != nil {
+			n.Fingerprint = r.Fingerprint
 		}
 	}
 	return &n

@@ -93,6 +93,7 @@ func (d *Dispatcher) cloneChild(ctx context.Context, b *store.Build, job *config
 	if err != nil {
 		return nil, err
 	}
+	d.recordTree(ctx, b, e.workspace)
 	d.useSecrets(b, job, e, secrets)
 	root, err := os.OpenRoot(e.workspace)
 	if err != nil {
