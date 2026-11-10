@@ -17,7 +17,7 @@ info:
     url: https://github.com/ndthuan/kipp/blob/main/LICENSE
   summary: The HTTP API of a kipp server, version 1.
   title: kipp API
-  version: 1.2.0
+  version: 1.3.0
 servers:
   - description: This server.
     url: /api/v1

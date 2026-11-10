@@ -8,6 +8,8 @@ lines and the data directory are the public surface.
 
 ## Unreleased
 
+## [1.3.0] - 2026-11-10
+
 Added:
 
 - A stage may be reused: with `reuse: {from, stage, tree, force}` it ends
