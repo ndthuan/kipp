@@ -52,7 +52,7 @@
 {{if .Others}}<p>You are logged in on {{.Others}} other {{if eq .Others 1}}session{{else}}sessions{{end}} beside this one.</p>
 <form method="post" action="/account/sessions/end">
 <input type="hidden" name="csrf" value="{{$.CSRF}}">
-<button class="action action-quiet">End the other sessions</button>
+<button class="action">End the other sessions</button>
 </form>
 {{else}}<p class="sub">You are logged in here only.</p>
 {{end}}</section>

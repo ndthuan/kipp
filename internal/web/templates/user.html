@@ -16,11 +16,11 @@
 <section class="stack narrow" aria-labelledby="admin-heading">
 <h2 id="admin-heading">Admin</h2>
 {{if .Info.Admin}}<p>{{.Info.Name}} is an admin: they see and do everything, and manage users and secrets.</p>
-<p><a class="action action-quiet" href="{{$path}}/admin/off">Take admin away</a></p>
+<p><a class="action" href="{{$path}}/admin/off">Take admin away</a></p>
 {{else}}<p>{{.Info.Name}} is not an admin: they see and do what the grants below allow.</p>
 <form method="post" action="{{$path}}/admin/on">
 <input type="hidden" name="csrf" value="{{$.CSRF}}">
-<button class="action action-quiet">Make {{.Info.Name}} an admin</button>
+<button class="action">Make {{.Info.Name}} an admin</button>
 </form>
 {{end}}</section>
 
@@ -76,7 +76,7 @@
 <section class="stack narrow" aria-labelledby="danger-heading">
 <h2 id="danger-heading">Password and deletion</h2>
 <div class="actions">
-<a class="action action-quiet" href="{{$path}}/password">Reset the password</a>
+<a class="action" href="{{$path}}/password">Reset the password</a>
 {{if not .Self}}<a class="action action-danger" href="{{$path}}/delete">Delete {{.Info.Name}}</a>{{end}}
 </div>
 {{if .Self}}<p class="sub">You change your own password on your <a class="link" href="/account">Account</a> page; another admin or the kipp command deletes you.</p>{{end}}

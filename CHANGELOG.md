@@ -64,6 +64,11 @@ Added:
 
 Changed:
 
+- A button that stands alone on the account, server and user pages (End the
+  other sessions, Reload the job files, Make kipp quiet, Take builds again,
+  Cancel upgrade, Make an admin, Take admin away, Reset the password) has a
+  border, like Keep on a build page. The quiet look stays in the header, menus
+  and table rows.
 - On a narrow screen the overview shows Now (running and waiting builds) third,
   after Failing now and Unstable now and before Flaky, and the markup holds
   that order, so keyboard and screen reader order is the order seen. Two

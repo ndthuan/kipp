@@ -12,7 +12,7 @@
 {{end}}</ol>
 {{if .CanCancel}}<form method="post" action="/admin/server/upgrade/cancel">
 <input type="hidden" name="csrf" value="{{$.CSRF}}">
-<button class="action action-quiet">Cancel upgrade</button>
+<button class="action">Cancel upgrade</button>
 <span class="sub">Quiet turns off again and everything stays as it was.</span>
 </form>
 {{end}}{{else}}{{if eq .Result "done"}}<p><strong>kipp is now {{.Version}}.</strong> The backup made before the upgrade is kept for 7 days.</p>
@@ -80,19 +80,19 @@
 {{end}}
 <form method="post" action="/admin/server/reload">
 <input type="hidden" name="csrf" value="{{$.CSRF}}">
-<button class="action action-quiet">Reload the job files</button>
+<button class="action">Reload the job files</button>
 </form>
 
 <h2>Restart</h2>
 {{with .Quiet}}{{if .On}}<p class="sub">Quiet since {{clock .Since}}: no build starts, and a trigger is refused with a message. {{.Running}} running, {{.Queued}} queued{{if and (not .Running) (not .Queued)}}: nothing is left, so kipp may be restarted{{end}}.</p>
 <form method="post" action="/admin/server/quiet/off">
 <input type="hidden" name="csrf" value="{{$.CSRF}}">
-<button class="action action-quiet">Take builds again</button>
+<button class="action">Take builds again</button>
 </form>
 {{else}}<p class="sub">Before a restart, make kipp quiet: it starts no build, the running and queued ones end by themselves, and a trigger is refused with a message. <code>up.sh --restart --safe</code> does this and restarts when nothing is left.</p>
 <form method="post" action="/admin/server/quiet">
 <input type="hidden" name="csrf" value="{{$.CSRF}}">
-<button class="action action-quiet">Make kipp quiet</button>
+<button class="action">Make kipp quiet</button>
 </form>
 {{end}}{{end}}
 
