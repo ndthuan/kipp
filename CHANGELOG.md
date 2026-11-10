@@ -10,6 +10,11 @@ lines and the data directory are the public surface.
 
 Added:
 
+- Metrics is a link in the header beside Jobs, no longer a line in the menu
+  under the user's name. That menu holds the name, Account, for an admin an
+  "Admin" group (Users, Secrets, GitHub Apps, Runners, Cache, Server), and
+  Log out after a rule.
+
 - The overview's Coming up folds the jobs whose schedule fires more often
   than every 15 minutes (the smallest gap over the next 24 hours) into one
   line, "N jobs run every few minutes", that opens to list them; the rows

@@ -174,7 +174,7 @@ after the stage still runs.
 
 ## Pages
 
-The Metrics page (`/metrics`, in the menu under your name) lists the
+The Metrics page (`/metrics`, beside Jobs in the header) lists the
 stores you may see, an orphaned one marked for an admin. A store's page
 (`/metrics/<store>`, linked from the page of each job that names it)
 shows one metric at a time: per item the value the store remembers, its

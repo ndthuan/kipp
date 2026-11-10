@@ -129,6 +129,45 @@ func TestTheUserMenuLeadsToTheAccountAndForAnAdminToTheAdminPages(t *testing.T) 
 	contains(t, page, `<summary aria-current="true" aria-label="admin"`, `<a href="/admin/secrets" aria-current="page">Secrets</a>`)
 }
 
+// Metrics is a page for everyone who may see a job, so it is in the bar
+// beside Jobs; the menu holds the person's own page, and for an admin an
+// "Admin" group of the server's, in this order, then Log out after a rule.
+func TestTheUserMenuGroupsTheAdminPagesAndMetricsIsInTheBar(t *testing.T) {
+	e := site(t)
+	order := func(page string, subs ...string) {
+		t.Helper()
+		last := -1
+		for _, s := range subs {
+			i := strings.Index(page, s)
+			if i < 0 || i <= last {
+				t.Fatalf("%q is missing or out of order in the header", s)
+			}
+			last = i
+		}
+	}
+
+	_, page := get(t, e.login(t, "bob"), e.srv.URL+"/jobs")
+	order(page, `<a class="navlink" href="/jobs"`, `<a class="navlink" href="/metrics">Metrics</a>`, `<li class="menu-who">bob</li>`,
+		`<a href="/account">Account</a>`, `<li class="menu-out"><form method="post" action="/logout">`)
+	lacks(t, page, `>Admin<`, `menu-group`, `<li><a href="/metrics"`)
+
+	_, page = get(t, e.login(t, "admin"), e.srv.URL+"/jobs")
+	order(page, `<li class="menu-who">admin</li>`, `<a href="/account">Account</a>`,
+		`<li class="menu-who menu-label" id="menu-admin">Admin</li>`, `<ul class="menu-group" aria-labelledby="menu-admin">`,
+		`>Users</a>`, `>Secrets</a>`, `>GitHub Apps</a>`, `>Runners</a>`, `>Cache</a>`, `>Server</a>`, `<li class="menu-out">`)
+
+	// aria-current is on the one page, and the user menu is current on its own pages only.
+	admin := e.login(t, "admin")
+	for _, path := range []string{"/account", "/admin/users", "/admin/secrets", "/admin/apps", "/admin/runners", "/admin/cache", "/admin/server"} {
+		_, page = get(t, admin, e.srv.URL+path)
+		contains(t, page, `<a href="`+path+`" aria-current="page">`, `<summary aria-current="true" aria-label="admin"`)
+		lacks(t, page, `<a class="navlink" href="/metrics" aria-current`, `<a class="navlink" href="/jobs" aria-current`)
+	}
+	_, page = get(t, admin, e.srv.URL+"/metrics")
+	contains(t, page, `<a class="navlink" href="/metrics" aria-current="page">Metrics</a>`)
+	lacks(t, page, `<summary aria-current="true" aria-label="admin"`, `<a class="navlink" href="/jobs" aria-current`)
+}
+
 func TestTheUsersPageListsEveryUserAndAddsOneWithAPasswordShownOnce(t *testing.T) {
 	e := site(t)
 	admin := e.login(t, "admin")

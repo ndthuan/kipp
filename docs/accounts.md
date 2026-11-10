@@ -61,7 +61,7 @@ system's) is kept in a cookie, `kipp_theme`, which is only a look.
 
 ## Admin pages
 
-An admin has more pages in the menu under their name:
+An admin has more pages in the "Admin" group of the menu under their name:
 
 - **Users**: add a user (a password is made and shown once; the user
   changes it on their Account page), make one an admin or take it away,

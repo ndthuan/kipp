@@ -38,10 +38,12 @@ func TestTheMetricsPageListsRememberedValuesOfAStoreTheUserMayView(t *testing.T)
 	code, index := get(t, c, e.srv.URL+"/metrics")
 	eq(t, "the index", code, http.StatusOK)
 	contains(t, index, `<a class="link" href="/metrics/smoke">smoke</a>`, `href="/metrics/smoke?metric=seconds">seconds</a> <span class="sub">3</span>`,
-		`<a href="/metrics" aria-current="page">Metrics</a>`)
+		`<a class="navlink" href="/metrics" aria-current="page">Metrics</a>`)
+	lacks(t, index, `<a href="/metrics"`, `<summary aria-current="true"`)
 	lacks(t, index, "orphaned")
 
 	code, page := get(t, c, e.srv.URL+"/metrics/smoke")
+	contains(t, page, `<a class="navlink" href="/metrics" aria-current="page">Metrics</a>`)
 	eq(t, "the store", code, http.StatusOK)
 	selfContained(t, page)
 	contains(t, page,

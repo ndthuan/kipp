@@ -135,7 +135,7 @@
   .user .menu { left: auto; right: 0; min-width: calc(var(--space) * 40); }
   .menu a[aria-current] { background-color: var(--accent-soft); color: var(--on-accent-soft); font-weight: var(--weight-medium); }
   .menu-all { font-weight: var(--weight-medium); }
-  .menu li:first-child { padding-bottom: calc(var(--space) * 1); margin-bottom: calc(var(--space) * 1); border-bottom: 1px solid var(--line); }
+  .menu > li:first-child { padding-bottom: calc(var(--space) * 1); margin-bottom: calc(var(--space) * 1); border-bottom: 1px solid var(--line); }
   /* How a job's last build ended, beside its name: a failed one is square
      as well as red. A job never built has an empty ring. */
   .mark { flex: none; width: 8px; height: 8px; border-radius: var(--radius-pill); border: 1px solid var(--line-strong); }
@@ -161,7 +161,12 @@
      short rather than hiding it. */
   .who-name { max-width: calc(var(--space) * 40); overflow: hidden; text-overflow: ellipsis; }
   .icon-user { display: none; width: 18px; height: 18px; }
+  /* The user menu's groups: "Admin" labels the server's pages, set apart
+     from the person's own, and a rule keeps Log out from them. */
+  .menu-group { list-style: none; margin: 0; padding: 0; }
+  .menu-out { margin-top: calc(var(--space) * 1); padding-top: calc(var(--space) * 1); border-top: 1px solid var(--line); }
   .menu-who { padding: calc(var(--space) * 1.5) calc(var(--space) * 3); color: var(--fg); font-weight: var(--weight-medium); overflow-wrap: anywhere; }
+  .menu-label { color: var(--fg-subtle); font-weight: var(--weight-normal); }
   /* The header is one row on a phone as on a desktop: the user shows as a
      person icon (the name stays its label and the menu's first line), and
      the gaps and the brand tighten, so the brand, the Groups button, the
