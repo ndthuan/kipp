@@ -99,7 +99,7 @@
 <thead><tr><th>When</th><th>Job</th><th>Schedule</th></tr></thead>
 <tbody>
 {{range .}}<tr>
-<td class="lead" data-label="When">{{clock .At}}</td>
+<td class="lead" data-label="When">{{template "when" (when .At)}}</td>
 <td class="lead" data-label="Job"><a class="link" href="/jobs/{{.Job}}">{{.Job}}</a></td>
 <td data-label="Schedule"><code>{{.Cron}}</code></td>
 </tr>

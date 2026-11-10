@@ -12,8 +12,8 @@
 <td><code>{{.Key}}</code></td>
 <td>{{.Namespace}}</td>
 <td>{{bytes .Size}}</td>
-<td>{{clock .SavedAt}}</td>
-<td>{{if .LastRestoredAt.IsZero}}<span class="sub">never</span>{{else}}{{clock .LastRestoredAt}}{{end}}</td>
+<td>{{template "when" (when .SavedAt)}}</td>
+<td>{{if .LastRestoredAt.IsZero}}<span class="sub">never</span>{{else}}{{template "when" (when .LastRestoredAt)}}{{end}}</td>
 <td><a class="action action-quiet action-small" href="/admin/cache/entries/{{.ID}}/delete">Remove</a></td>
 </tr>
 {{end}}</tbody>

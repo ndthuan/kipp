@@ -32,6 +32,9 @@ function page() {
   };
   const refreshed = [];
   const since = { attrs: { datetime: "2026-10-14T09:56:48Z" }, textContent: "", getAttribute(k) { return this.attrs[k]; } };
+  const mk = (datetime, abs) => ({ attrs: { datetime, "data-abs": abs }, textContent: "", getAttribute(k) { return this.attrs[k]; } });
+  const past = mk("2026-10-13T10:30:00Z", "2026-10-13 17:30");
+  const future = mk("2026-10-15T10:20:00Z", "2026-10-15 17:20");
   let stream = null;
   class FakeEventSource {
     constructor(url) {
@@ -50,12 +53,12 @@ function page() {
     EventSource: FakeEventSource,
     CustomEvent: class { constructor(type) { this.type = type; } },
     document: {
-      querySelectorAll: (sel) => (sel === "time.since" ? [since] : []),
+      querySelectorAll: (sel) => (sel === "time.since" ? [since] : sel === "time.when" ? [past, future] : []),
       body: { dispatchEvent: (e) => refreshed.push(e.type) },
     },
   };
   new Function(...Object.keys(context), script)(...Object.values(context));
-  return { stream, refreshed, since, advance };
+  return { stream, refreshed, since, past, future, advance };
 }
 
 {
@@ -101,6 +104,16 @@ function page() {
   assert.equal(since.textContent, "3m 13s", "a time counts on its own");
   advance(3600 * 1000);
   assert.equal(since.textContent, "1h 3m");
+}
+
+{
+  const { past, future, advance } = page();
+  advance(1000);
+  assert.equal(past.textContent, "23h 30m ago", "a time within a day past is relative");
+  assert.equal(future.textContent, "2026-10-15 17:20", "a time more than a day ahead stays absolute");
+  advance(31 * 60 * 1000);
+  assert.equal(past.textContent, "2026-10-13 17:30", "a past time a day old turns absolute");
+  assert.equal(future.textContent, "in 23h 48m", "a future time within a day turns relative");
 }
 
 console.log("queue.js: ok");

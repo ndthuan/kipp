@@ -108,9 +108,9 @@
 <tbody>
 {{range .Tokens}}<tr>
 <td>{{.Label}}</td>
-<td>{{clock .CreatedAt}}</td>
-<td>{{with .LastUsedAt}}{{clock .}}{{else}}<span class="sub">never</span>{{end}}</td>
-<td>{{with .ExpiresAt}}{{clock .}}{{if expired .}} <span class="status failed">expired</span>{{end}}{{else}}<span class="sub">never</span>{{end}}</td>
+<td>{{template "when" (when .CreatedAt)}}</td>
+<td>{{with .LastUsedAt}}{{template "when" (when .)}}{{else}}<span class="sub">never</span>{{end}}</td>
+<td>{{with .ExpiresAt}}{{template "when" (when .)}}{{if expired .}} <span class="status failed">expired</span>{{end}}{{else}}<span class="sub">never</span>{{end}}</td>
 <td><a class="action action-quiet action-small" href="{{$.Base}}/{{.ID}}/revoke">Revoke</a></td>
 </tr>
 {{end}}</tbody>
@@ -125,9 +125,9 @@
 {{range .Apps}}<tr>
 <td>{{.ClientName}}</td>
 <td>{{appScopes .}}</td>
-<td>{{clock .CreatedAt}}</td>
-<td>{{with .LastUsedAt}}{{clock .}}{{else}}<span class="sub">never</span>{{end}}</td>
-<td>{{clock .ExpiresAt}}</td>
+<td>{{template "when" (when .CreatedAt)}}</td>
+<td>{{with .LastUsedAt}}{{template "when" (when .)}}{{else}}<span class="sub">never</span>{{end}}</td>
+<td>{{template "when" (when .ExpiresAt)}}</td>
 <td><a class="action action-quiet action-small" href="{{$.Base}}/{{.ID}}/revoke">Disconnect</a></td>
 </tr>
 {{end}}</tbody>
@@ -157,3 +157,4 @@
 
 {{define "why"}}{{with .Why}}<div class="sub why">{{.Verb}}{{if .Stages}} in {{end}}{{range $i, $n := .Stages}}{{if $i}}, {{end}}<a class="link" href="{{buildPath $.Build}}#log-{{$n}}">{{$n}}</a>{{end}}</div>{{end}}{{end}}
 {{define "detail"}}{{with commitShort .Commit}}<code title="{{$.Commit}}">{{.}}</code>{{end}}{{if ne .TriggerDetail .Commit}}{{with .TriggerDetail}}{{if $.Commit}} {{end}}<span class="sub">{{.}}</span>{{end}}{{end}}{{end}}
+{{define "when"}}{{with .}}<time class="when" datetime="{{.At}}" title="{{.Title}}" data-abs="{{.Abs}}">{{.Text}}</time>{{end}}{{end}}

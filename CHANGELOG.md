@@ -10,6 +10,12 @@ lines and the data directory are the public surface.
 
 Added:
 
+- Pages tell a time within 24 hours of now relative ("3h 5m ago", "in 9m"),
+  and a time further away as date and time without seconds; every such time
+  is a `<time>` with the full value, seconds and zone, in its `title`, and
+  stays current on an open page. The server page and the audit list keep the
+  exact clock time.
+
 - Every build is given `KIPP_TOKEN`, a token of its own (`kippb_...`) that
   calls the server's API and `/mcp` back, as GitHub's `GITHUB_TOKEN` does:
   it is made when the build starts, held in memory, masked in every log and

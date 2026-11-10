@@ -939,6 +939,36 @@ func clockIn(zone *time.Location) func(v any) string {
 	}
 }
 
+// whenView is a time as the "when" template shows it: within 24 hours of now
+// relative ("3h 5m ago", "in 9m"), further away as date and time without
+// seconds in the server's zone. Title is the full value with seconds and
+// zone, and Abs the absolute text, so queue.js can keep the choice true on a
+// page that stays open.
+type whenView struct{ At, Title, Abs, Text string }
+
+// whenIn makes the view of a time; a time that is not set has none.
+func whenIn(zone *time.Location, now func() time.Time) func(v any) *whenView {
+	return func(v any) *whenView {
+		if t, ok := v.(*time.Time); ok && t != nil {
+			v = *t
+		}
+		t, ok := v.(time.Time)
+		if !ok || t.IsZero() {
+			return nil
+		}
+		abs := t.In(zone).Format("2006-01-02 15:04")
+		text := abs
+		if d := t.Sub(now()); d > -24*time.Hour && d < 24*time.Hour {
+			if d < 0 {
+				text = short(-d) + " ago"
+			} else {
+				text = "in " + short(d)
+			}
+		}
+		return &whenView{At: t.UTC().Format(time.RFC3339), Title: t.In(zone).Format("2006-01-02 15:04:05 MST"), Abs: abs, Text: text}
+	}
+}
+
 // zoned shows a time in its own zone, and names the zone: a job's next
 // build, which is in the zone its cron is read in.
 func zoned(t *time.Time) string {

@@ -32,7 +32,7 @@
 <td><a class="link" href="{{userPath .Name}}">{{.Name}}</a>{{if .Admin}} <span class="tag">admin</span>{{end}}</td>
 <td>{{if .Admin}}<span class="sub">every job, as an admin</span>{{else}}{{len .Grants}}{{end}}</td>
 <td>{{len .Tokens}}</td>
-<td>{{with .LastLoginAt}}{{clock .}}{{else}}<span class="sub">never</span>{{end}}</td>
+<td>{{with .LastLoginAt}}{{template "when" (when .)}}{{else}}<span class="sub">never</span>{{end}}</td>
 </tr>
 {{end}}</tbody>
 </table>

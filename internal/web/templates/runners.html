@@ -75,7 +75,7 @@
 <td><code>{{.URL}}</code></td>
 <td><code>{{join .Labels}}</code></td>
 <td>{{len .Running}} of {{.Max}}{{with .Running}} <span class="sub">{{join .}}</span>{{end}}</td>
-<td>{{if .Reachable}}<span class="status success">reachable</span> <span class="sub">since {{clock .Since}}</span>{{else if .LastError}}<span class="status failed">unreachable</span> <span class="sub">since {{clock .Since}}: {{.LastError}}</span>{{else}}<span class="status">not asked yet</span>{{end}}</td>
+<td>{{if .Reachable}}<span class="status success">reachable</span> <span class="sub">since {{template "when" (when .Since)}}</span>{{else if .LastError}}<span class="status failed">unreachable</span> <span class="sub">since {{template "when" (when .Since)}}: {{.LastError}}</span>{{else}}<span class="status">not asked yet</span>{{end}}</td>
 <td><form method="post" action="{{placePath "engines" .Name}}/{{if .Enabled}}disable{{else}}enable{{end}}"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="action action-quiet action-small">{{if .Enabled}}Disable{{else}}Enable{{end}}</button></form>
 <a class="action action-quiet action-small" href="{{placePath "engines" .Name}}/delete">Remove</a></td>
 </tr>
@@ -94,7 +94,7 @@
 <td>{{.Name}}{{if not .Enabled}} <span class="tag">disabled</span>{{end}}</td>
 <td><code>{{join .Labels}}</code></td>
 <td>{{len .Stages}} of {{.Executors}}{{with .Stages}} <span class="sub">{{join .}}</span>{{end}}</td>
-<td>{{if .Online}}<span class="status success">online</span> <span class="sub">since {{clock .Since}}</span>{{else}}<span class="status">offline</span>{{with .LastSeenAt}} <span class="sub">last seen {{clock .}}</span>{{else}} <span class="sub">never seen</span>{{end}}{{end}}</td>
+<td>{{if .Online}}<span class="status success">online</span> <span class="sub">since {{template "when" (when .Since)}}</span>{{else}}<span class="status">offline</span>{{with .LastSeenAt}} <span class="sub">last seen {{template "when" (when .)}}</span>{{else}} <span class="sub">never seen</span>{{end}}{{end}}</td>
 <td>{{with .Version}}{{.}}{{if ne . $.Data.ServerVersion}} <span class="status failed">not the server's</span>{{end}} <span class="sub">{{$.Data.OSArch $runner}}</span>{{else}}<span class="sub">unknown</span>{{end}}</td>
 <td><form method="post" action="{{placePath "runners" .Name}}/{{if .Enabled}}disable{{else}}enable{{end}}"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="action action-quiet action-small">{{if .Enabled}}Disable{{else}}Enable{{end}}</button></form>
 <a class="action action-quiet action-small" href="{{placePath "runners" .Name}}/token">New token</a>

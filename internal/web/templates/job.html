@@ -123,7 +123,7 @@
 <td class="lead" data-label="Build"><a class="link" href="{{buildPath .}}">#{{.Number}}</a>{{if .KeptAt}} <span class="tag">kept</span>{{end}}</td>
 <td class="lead" data-label="Status"><span class="status {{.Status}}">{{.Status}}</span>{{template "why" (whyRow . (index $.Data.Why .ID))}}</td>
 <td data-label="Trigger">{{.Trigger}}{{with .StartedBy}} <span class="sub">by {{.}}</span>{{end}}{{if or .TriggerDetail .Commit}} {{template "detail" .}}{{end}}{{with .TriggerBranch}} <span class="tag">{{.}}</span>{{end}}{{with .TriggerTag}} <span class="tag">{{.}}</span>{{end}}</td>
-<td data-label="Started">{{clock .StartedAt}}</td>
+<td data-label="Started">{{template "when" (when .StartedAt)}}</td>
 <td class="lead" data-label="Took">{{took .StartedAt .FinishedAt}}</td>
 </tr>
 {{end}}</tbody>
@@ -161,7 +161,7 @@
 {{if .View.Activity}}
 <h2>Activity</h2>
 <ul class="activity">
-{{range .View.Activity}}<li><span class="sub">{{clock .At}}</span> {{.Line}}</li>
+{{range .View.Activity}}<li><span class="sub">{{template "when" (when .At)}}</span> {{.Line}}</li>
 {{end}}</ul>
 {{end}}
 {{end}}

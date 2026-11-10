@@ -11,7 +11,7 @@
 </div>
 </div>
 {{with .Notice}}<p class="notice" role="status">{{.}}</p>{{end}}
-<p class="sub">Last login {{with .Info.LastLoginAt}}{{clock .}}{{else}}never{{end}}; {{.Info.Sessions}} {{if eq .Info.Sessions 1}}session{{else}}sessions{{end}} now.</p>
+<p class="sub">Last login {{with .Info.LastLoginAt}}{{template "when" (when .)}}{{else}}never{{end}}; {{.Info.Sessions}} {{if eq .Info.Sessions 1}}session{{else}}sessions{{end}} now.</p>
 
 <section class="stack narrow" aria-labelledby="admin-heading">
 <h2 id="admin-heading">Admin</h2>

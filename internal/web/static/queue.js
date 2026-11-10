@@ -4,7 +4,7 @@
 // and every part of the page that shows the queue (hx-trigger="kipp-changed
 // from:body") asks for itself again. While the stream is down, as when the
 // server restarts, it asks every 30 seconds instead, and once more when the
-// stream is back. It also keeps every <time class="since"> counting.
+// stream is back. It also keeps every <time class="since"> and <time class="when"> counting.
 (() => {
   const POLL_MS = 30000;
   const SETTLE_MS = 300;
@@ -17,10 +17,27 @@
     return `${Math.floor(s / 86400)}d ${Math.floor((s % 86400) / 3600)}h`;
   };
 
+
+  // A <time class="when"> reads relative within 24 hours of now, past as
+  // "3h 5m ago" and future as "in 9m", and as its data-abs text beyond that;
+  // the server writes the same choice (whenIn in pages.go).
+  const DAY_MS = 86400000;
+  const whenText = (t) => {
+    const at = Date.parse(t.getAttribute("datetime"));
+    if (Number.isNaN(at)) return null;
+    const d = at - Date.now();
+    if (d <= -DAY_MS || d >= DAY_MS) return t.getAttribute("data-abs");
+    return d < 0 ? `${short(-d)} ago` : `in ${short(d)}`;
+  };
+
   const tick = () => {
     for (const t of document.querySelectorAll("time.since")) {
       const at = Date.parse(t.getAttribute("datetime"));
       if (!Number.isNaN(at)) t.textContent = short(Date.now() - at);
+    }
+    for (const t of document.querySelectorAll("time.when")) {
+      const text = whenText(t);
+      if (text !== null) t.textContent = text;
     }
   };
   setInterval(tick, 1000);
