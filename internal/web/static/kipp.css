@@ -281,7 +281,9 @@
   .rows time { font-variant-numeric: tabular-nums; }
   /* The overview: two columns, then a strip of graphs. Under
      75rem the columns are one, and the sections take the order that puts
-     what needs attention before what is coming up. */
+     what is red first, then what is running, then the long lists. Tab order
+     follows the markup, where Now stays after Failed, so that the two
+     columns of the wide layout keep their own lists together. */
   .charts-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: calc(var(--space) * 2) calc(var(--space) * 4); }
   .charts-head h2 { margin: 0; }
   .seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: var(--radius-m); overflow: hidden; font-size: var(--size-sm); }
@@ -324,9 +326,9 @@
   .col > *, .columns > * { min-width: 0; }
   .sec-failing { order: 1; }
   .sec-unstable { order: 2; }
-  .sec-flaky { order: 3; }
-  .sec-failed { order: 4; }
-  .sec-now { order: 5; }
+  .sec-now { order: 3; }
+  .sec-flaky { order: 4; }
+  .sec-failed { order: 5; }
   .sec-coming { order: 6; }
   @media (min-width: 75rem) {
     .columns { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
