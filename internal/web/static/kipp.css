@@ -242,6 +242,12 @@
   /* In a table the row grows to hold the form: a pop over the page would be
      cut off by the table's scrolling box. */
   td .pop { position: static; margin-top: calc(var(--space) * 2); box-shadow: none; }
+  /* On a phone the form would sit past the right edge of what the box shows,
+     and a box scrolls instead of widening the page: so it opens over the page,
+     inside the screen, as a heading's does. */
+  @media (max-width: 47.99rem) {
+    td .pop { position: fixed; top: calc(var(--space) * 16); left: calc(var(--space) * 4); right: calc(var(--space) * 4); width: auto; margin-top: 0; box-shadow: var(--shadow-pop); }
+  }
   /* When a job builds by itself, set apart from the prose around it. */
   .sched { display: flex; flex-wrap: wrap; gap: calc(var(--space) * 2) calc(var(--space) * 6); font-size: var(--size-sm); }
   .sched div { display: flex; align-items: center; gap: calc(var(--space) * 2); }
@@ -383,7 +389,7 @@
   }
   .children td:last-child { font-variant-numeric: tabular-nums; }
   /* A table scrolls inside its own box, so the page never does at 360px. */
-  .scroll { overflow-x: auto; }
+  .scroll { position: relative; overflow-x: auto; }
   /* A long table also scrolls down inside its box, under its header. While
      there is more below, the last rows fade into the page: the fade is a
      block of its own after the table that sticks to the bottom of the box,

@@ -112,6 +112,14 @@ Changed:
   every other cell under it with its column's name. From 48rem up nothing
   changes.
 
+Fixed:
+
+- On a phone the admin tables (secrets, users, runners, GitHub Apps, tokens)
+  no longer widen the page: a table's scrolling box now holds what is placed
+  inside it, so the page does not scroll sideways, and the form behind a
+  row's button (a secret's scopes) opens over the page inside the screen.
+  From 48rem up nothing changes.
+
 ## [1.2.0] - 2026-11-09
 
 - A build's log is easier to read: the text is larger, the page scrolls

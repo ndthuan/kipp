@@ -139,3 +139,19 @@ func TestAUsersPageMakesATokenFromAButtonAndKeepsItsOneButtonForms(t *testing.T)
 	contains(t, page, `action="/admin/users/alice/admin/on"`, `action="/admin/users/alice/grants"`)
 	eq(t, "one token form", strings.Count(page, "<h3>Make a token</h3>"), 1)
 }
+
+// A table scrolls inside its box, so what is placed absolutely inside it (the
+// hidden name of the last column) must be placed against that box: against the
+// page it sits past the box's right edge and widens the page on a phone. A
+// form kept behind a row's button opens over the page, inside the screen,
+// because inside the box it would sit past the right edge of what shows.
+func TestATableBoxHoldsItsChildrenAndARowsFormOpensWithinTheScreen(t *testing.T) {
+	css, err := os.ReadFile("static/kipp.css")
+	must(t, err)
+	contains(t, string(css), ".scroll { position: relative; overflow-x: auto; }")
+	_, narrow, ok := strings.Cut(string(css), "@media (max-width: 47.99rem) {\n    td .pop {")
+	if !ok {
+		t.Fatal("kipp.css has no rule that opens a row's form within the screen on a phone")
+	}
+	contains(t, strings.SplitN(narrow, "}", 2)[0], "position: fixed;", "left:", "right:", "width: auto;")
+}
