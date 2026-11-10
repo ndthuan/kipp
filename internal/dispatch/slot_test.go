@@ -108,8 +108,7 @@ func TestAStageWhosePlaceIsFreeWaitsForABuildsSlotAndSaysSo(t *testing.T) {
 		return len(h.waitingOf(t, remote.ID)) == 1 && h.slotsTaken() == 0
 	})
 	holder := h.trigger(t, "hold")
-	h.untilRunning(t, holder.ID)
-	eventually(t, "the holder runs", func() bool { return h.slotsTaken() == 1 })
+	h.untilStageHoldsSlot(t, holder.ID, "s")
 	ag.runBox(t.TempDir())
 	eventually(t, "the stage waits for a slot", func() bool {
 		return h.waitingOf(t, remote.ID)["s"] == waitForSlotLine
@@ -146,11 +145,7 @@ func TestAStageWaitingForASlotIsNotStarvedByQueuedBuilds(t *testing.T) {
 		return len(h.waitingOf(t, remote.ID)) == 1 && h.slotsTaken() == 0
 	})
 	holder := h.trigger(t, "hold")
-	// The holder lets go of the slot between its prepare and its stage, and a
-	// build queued in that gap would take it.
-	eventually(t, "the holder's stage holds the slot", func() bool {
-		return h.stages(t, holder.ID)["s"] != nil && h.stages(t, holder.ID)["s"].Status == store.StageRunning && h.slotsTaken() == 1
-	})
+	h.untilStageHoldsSlot(t, holder.ID, "s")
 	var quick []*store.Build
 	for range 4 {
 		quick = append(quick, h.trigger(t, "quick"))
