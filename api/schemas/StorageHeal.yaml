@@ -1,0 +1,34 @@
+type: object
+additionalProperties: false
+description: A clean of the data directory's disk under its floor.
+required: [at, floor_bytes, free_before_bytes, free_after_bytes, freed_bytes, floor_met, steps]
+properties:
+  at:
+    $ref: Timestamp.yaml
+  floor_bytes:
+    type: integer
+  free_before_bytes:
+    type: integer
+  free_after_bytes:
+    type: integer
+  freed_bytes:
+    type: integer
+  floor_met:
+    type: boolean
+  steps:
+    type: array
+    description: What it removed, in order.
+    items:
+      type: object
+      additionalProperties: false
+      required: [kind, path, bytes, error]
+      properties:
+        kind:
+          type: string
+          enum: [stage_temp, workspace, cache]
+        path:
+          type: string
+        bytes:
+          type: integer
+        error:
+          type: string

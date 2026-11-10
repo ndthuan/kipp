@@ -23,6 +23,7 @@ const usage = `usage: kipp <command> [flags]
   reload    ask a running server to re-read its jobs directory
   quiet     on, off, status: stop a running server taking builds, before a restart
   upgrade   upgrade a running server to the latest release, or return it to the version before
+  db        compact: compact a running server's database, quiet while it runs
   run       start a build and optionally wait for it
   user      add, passwd, delete, grant, revoke, list
   token     create, revoke, list
@@ -41,6 +42,7 @@ var commands = map[string]Command{
 	"reload":  cmdReload,
 	"quiet":   cmdQuiet,
 	"upgrade": cmdUpgrade,
+	"db":      cmdDB,
 	"run":     cmdRun,
 	"user":    cmdUser,
 	"token":   cmdToken,

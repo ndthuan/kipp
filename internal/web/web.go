@@ -28,6 +28,7 @@ import (
 	"github.com/ndthuan/kipp/internal/auth"
 	"github.com/ndthuan/kipp/internal/config"
 	"github.com/ndthuan/kipp/internal/oauth"
+	"github.com/ndthuan/kipp/internal/storage"
 	"github.com/ndthuan/kipp/internal/store"
 	"github.com/ndthuan/kipp/internal/webhook"
 )
@@ -112,7 +113,8 @@ func parsePages(assets map[string]asset, zone *time.Location) map[string]*templa
 		return "/static/" + name + "?v=" + a.version(), nil
 	}
 	funcs := template.FuncMap{"static": static, "dag": dagOf, "ago": ago, "clock": clockIn(zone), "when": whenIn(zone, time.Now), "zoned": zoned, "since": since, "join": join, "cancelOf": cancelOf, "exitText": exitText, "took": took, "millis": millis, "lines": lines, "buildPath": buildPath, "whyRow": whyRow, "commitShort": commitShort, "crumb": crumb,
-		"userPath": userPath, "secretPath": secretPath, "lasts": lasts, "expired": expired, "tokenList": tokenList, "appList": appList, "appScopes": appScopes, "tokenForm": tokenForm, "secretName": webhook.SecretName, "placePath": placePath, "bytes": byteSize, "scopePath": scopePath, "scopeField": scopeField, "metricsPath": metricsPath, "plural": plural, "percent": percent, "nameRule": nameRuleOf}
+		"userPath": userPath, "secretPath": secretPath, "lasts": lasts, "expired": expired, "tokenList": tokenList, "appList": appList, "appScopes": appScopes, "tokenForm": tokenForm, "secretName": webhook.SecretName, "placePath": placePath, "bytes": byteSize, "scopePath": scopePath, "scopeField": scopeField, "metricsPath": metricsPath, "plural": plural, "percent": percent, "nameRule": nameRuleOf,
+		"removePath": removePath, "partLabel": partLabel, "compactTook": compactTook, "rows": rowsText}
 	layout := template.Must(template.New("layout.html").Funcs(funcs).ParseFS(templateFS, "templates/layout.html"))
 	files, err := fs.Glob(templateFS, "templates/*.html")
 	if err != nil {
@@ -294,6 +296,9 @@ type page struct {
 	Theme     string // "light" or "dark" when the reader picked one, else the system's
 	Banner    string // shown on every page when not empty
 	Quiet     bool   // the server is quiet before a restart: every page says so
+	// SelfCheck is the last self-check of the database when it failed, for
+	// an admin's every page; nil otherwise.
+	SelfCheck *storage.Check
 	// Upgrade is the upgrade as an admin's pages show it, nil for anyone
 	// else; render reads it unless the page has it already.
 	Upgrade *upgradeView
@@ -336,10 +341,7 @@ func (s *Site) render(w http.ResponseWriter, r *http.Request, name string, code 
 	p.User = api.UserFrom(r.Context())
 	p.Version = s.version
 	p.Theme = themeOf(r)
-	if msg := s.api.Service().ReloadError(p.User); msg != "" {
-		p.Banner = msg
-	}
-	p.Quiet = p.User != nil && s.api.Service().Quieting()
+	s.notices(&p)
 	if p.Upgrade == nil {
 		p.Upgrade = s.upgradeViewOf(r, p.User)
 	}
@@ -361,6 +363,18 @@ func (s *Site) render(w http.ResponseWriter, r *http.Request, name string, code 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(code)
 	_, _ = buf.WriteTo(w)
+}
+
+// notices fills what every page says above its content: a refused reload,
+// quiet, and to an admin a failed self-check of the database.
+func (s *Site) notices(p *page) {
+	if msg := s.api.Service().ReloadError(p.User); msg != "" {
+		p.Banner = msg
+	}
+	p.Quiet = p.User != nil && s.api.Service().Quieting()
+	if p.User != nil && p.User.Admin {
+		p.SelfCheck = s.api.Service().SelfCheckFailed()
+	}
 }
 
 // themeCookie holds the theme a reader picked in the footer. It is the

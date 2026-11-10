@@ -76,7 +76,8 @@ wins:
 kipp records two metrics of every build by itself: `kipp.stage_seconds`
 (item the stage's name: how long its command ran, all tries together)
 and `kipp.case_seconds` (item `<suite> / <case>`: each JUnit case that
-was not skipped).
+was not skipped). The history of `kipp.case_seconds` keeps the newest 30
+builds of each case per job; the daily sweep removes older rows.
 
 On a runner or in a container the files are read there and sent back.
 

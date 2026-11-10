@@ -30,6 +30,7 @@ required:
   - notes_url
   - upgradable
   - checked_at
+  - self_check
 properties:
   version:
     type: string
@@ -107,3 +108,8 @@ properties:
     description: Whether the release in `latest` carries the signed checksums an upgrade needs.
   checked_at:
     $ref: NullableTimestamp.yaml
+  self_check:
+    anyOf:
+      - $ref: SelfCheck.yaml
+      - type: "null"
+    description: The last self-check of the database; null before any.

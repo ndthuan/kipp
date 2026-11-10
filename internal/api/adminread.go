@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ndthuan/kipp/internal/config"
+	"github.com/ndthuan/kipp/internal/storage"
 	"github.com/ndthuan/kipp/internal/store"
 	"github.com/ndthuan/kipp/internal/webhook"
 )
@@ -271,6 +272,8 @@ type ServerInfo struct {
 	Latest, NotesURL string
 	Upgradable       bool
 	CheckedAt        time.Time
+	// SelfCheck is the last self-check of the database, nil before any.
+	SelfCheck *storage.Check
 }
 
 // ServerInfo is for an admin; a token may read it.
@@ -280,6 +283,9 @@ func (s *Service) ServerInfo(_ context.Context, u *store.User) (*ServerInfo, err
 	}
 	info := s.deps.ServerInfo()
 	info.Jobs = len(s.deps.Dispatch.Snapshot().Names)
+	if s.deps.Storage != nil {
+		info.SelfCheck = s.deps.Storage.LastCheck()
+	}
 	return &info, nil
 }
 

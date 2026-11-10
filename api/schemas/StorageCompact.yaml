@@ -1,0 +1,37 @@
+type: object
+additionalProperties: false
+description: A compact of the database.
+required: [state, by, started_at, ended_at, running, queued, before_bytes, after_bytes, incremental, error, holds_quiet]
+properties:
+  state:
+    type: string
+    enum: [idle, waiting, compacting, done, failed]
+    description: "`idle` before any since the server started, `waiting` (quiet, for the builds to end), `compacting` (VACUUM runs), `done` or `failed`."
+  by:
+    type: string
+    description: Who started it.
+  started_at:
+    $ref: NullableTimestamp.yaml
+  ended_at:
+    $ref: NullableTimestamp.yaml
+  running:
+    type: integer
+    description: The running builds it waits for.
+  queued:
+    type: integer
+    description: The queued builds it waits for.
+  before_bytes:
+    type: integer
+    description: The database file and its write-ahead log before.
+  after_bytes:
+    type: integer
+    description: The same, after.
+  incremental:
+    type: boolean
+    description: True when this compact turned incremental `auto_vacuum` on.
+  error:
+    type: string
+    description: Why it failed; empty when it did not.
+  holds_quiet:
+    type: boolean
+    description: True while it keeps the server quiet.

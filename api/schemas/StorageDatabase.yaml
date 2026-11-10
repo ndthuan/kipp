@@ -1,0 +1,52 @@
+type: object
+additionalProperties: false
+description: The database file and what is in it.
+required: [file_bytes, wal_bytes, page_size, pages, free_bytes, used_bytes, auto_vacuum, exact, tables_measured_at, measuring, measure_error, tables]
+properties:
+  file_bytes:
+    type: integer
+    description: db.sqlite on disk.
+  wal_bytes:
+    type: integer
+    description: Its write-ahead log on disk.
+  page_size:
+    type: integer
+  pages:
+    type: integer
+  free_bytes:
+    type: integer
+    description: The free pages, which a compact gives back.
+  used_bytes:
+    type: integer
+  auto_vacuum:
+    type: string
+    enum: [none, full, incremental]
+    description: "`incremental` once a compact has run: the retention then gives the pages it frees back by itself."
+  exact:
+    type: boolean
+    description: True when the tables were measured page by page; false for an estimate by their rows, indexes counted in their table.
+  tables_measured_at:
+    $ref: NullableTimestamp.yaml
+  measuring:
+    type: boolean
+    description: True while a measure runs.
+  measure_error:
+    type: string
+    description: Why the last measure failed; empty when it did not.
+  tables:
+    type: array
+    description: The tables and indexes, the largest first.
+    items:
+      type: object
+      additionalProperties: false
+      required: [name, table, index, bytes]
+      properties:
+        name:
+          type: string
+        table:
+          type: string
+          description: The table an index belongs to; the table itself for a table.
+        index:
+          type: boolean
+        bytes:
+          type: integer

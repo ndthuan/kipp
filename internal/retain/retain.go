@@ -28,12 +28,56 @@ const (
 	// OAuthClientDays is how long an app that registered itself and was
 	// never used is kept.
 	OAuthClientDays = 30
+	// CaseHistoryBuilds is how many builds of each item of a per-case
+	// metric (config.PerCaseMetrics) a job keeps in its history: the recent
+	// trend of a case is what is read, and one row per case per build was
+	// most of the database on a busy server.
+	CaseHistoryBuilds = 30
 )
 
-// Job removes the job's builds beyond its keep rule, with their log folders.
+// Job removes the job's builds beyond its keep rule, with their log folders,
+// and gives the pages they freed back to the disk.
 func Job(ctx context.Context, st *store.Store, job *config.Job, logsDir string, now time.Time) error {
-	_, err := apply(ctx, st, job.Name, job.Keep, logsDir, now)
+	n, err := apply(ctx, st, job.Name, job.Keep, logsDir, now)
+	if n > 0 {
+		_, verr := st.IncrementalVacuum(ctx)
+		err = errors.Join(err, verr)
+	}
 	return err
+}
+
+// Remove removes every build of a job that has ended and is not kept by
+// hand, with its logs and artifacts, then the job's folders when nothing is
+// left in them, and is how many builds it removed. It is "remove now" of a
+// job whose file is gone; the caller checks that it is.
+func Remove(ctx context.Context, st *store.Store, name, logsDir string) (int, error) {
+	if err := singleElement(name); err != nil {
+		return 0, err
+	}
+	ids, err := st.EndedBuilds(ctx, name)
+	if err != nil {
+		return 0, err
+	}
+	n, err := removeAll(ctx, st, name, logsDir, ids)
+	for _, dir := range []string{logsDir, ArtifactsDir(logsDir)} {
+		if root, oerr := os.OpenRoot(dir); oerr == nil {
+			// Remove takes an empty folder only: what a kept build left stays.
+			_ = root.Remove(name)
+			_ = root.Close()
+		}
+	}
+	if n > 0 {
+		_, verr := st.IncrementalVacuum(ctx)
+		err = errors.Join(err, verr)
+	}
+	return n, err
+}
+
+func singleElement(name string) error {
+	if !fs.ValidPath(name) || name == "." || filepath.Base(name) != name {
+		return fmt.Errorf("retain: job name %q is not a single path element", name)
+	}
+	return nil
 }
 
 func apply(ctx context.Context, st *store.Store, name string, keep config.Keep, logsDir string, now time.Time) (int, error) {
@@ -41,8 +85,17 @@ func apply(ctx context.Context, st *store.Store, name string, keep config.Keep, 
 	if err != nil || len(ids) == 0 {
 		return 0, err
 	}
-	if !fs.ValidPath(name) || name == "." || filepath.Base(name) != name {
-		return 0, fmt.Errorf("retain: job name %q is not a single path element", name)
+	if err := singleElement(name); err != nil {
+		return 0, err
+	}
+	return removeAll(ctx, st, name, logsDir, ids)
+}
+
+// removeAll removes the listed builds of the job, each with its logs and
+// artifacts, and is how many it removed.
+func removeAll(ctx context.Context, st *store.Store, name, logsDir string, ids []int64) (int, error) {
+	if len(ids) == 0 {
+		return 0, nil
 	}
 	root, err := os.OpenRoot(logsDir)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -92,8 +145,10 @@ func remove(ctx context.Context, st *store.Store, root *os.Root, arts, name stri
 }
 
 // Sweep is the daily pass: every job in the snapshot by its rule, every
-// job with no job file by the rule for removed jobs, then expired sessions,
-// the audit beyond AuditRows and deliveries older than DeliveryDays.
+// job with no job file by the rule for removed jobs, the history of the
+// per-case metrics beyond CaseHistoryBuilds, then expired sessions, the
+// audit beyond AuditRows and deliveries older than DeliveryDays; last, the
+// pages all this freed go back to the disk.
 // A job or a build that fails does not stop the rest; the error holds every
 // failure, the count what was removed all the same.
 func Sweep(ctx context.Context, st *store.Store, snap *config.Snapshot, logsDir string, now time.Time) (int, error) {
@@ -118,6 +173,12 @@ func Sweep(ctx context.Context, st *store.Store, snap *config.Snapshot, logsDir 
 	errs = append(errs, st.DeleteExpiredSessions(ctx, now), st.PruneAudit(ctx, AuditRows),
 		st.PruneDeliveries(ctx, now.AddDate(0, 0, -DeliveryDays)),
 		st.DeleteExpiredOAuth(ctx, now, now.AddDate(0, 0, -OAuthClientDays)))
+	for _, m := range config.PerCaseMetrics {
+		_, err := st.CapItemHistory(ctx, m, CaseHistoryBuilds)
+		errs = append(errs, err)
+	}
+	_, err = st.IncrementalVacuum(ctx)
+	errs = append(errs, err)
 	return total, errors.Join(errs...)
 }
 

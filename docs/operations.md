@@ -143,6 +143,9 @@ upgrade/       the backups of upgrades, their progress (`status.json`) and
                the next start removes one a stopped server left
 update-check.json
                the newest release the update check found, and when
+self-check.json
+               the result of the last self-check of the database; see
+               Storage
 secret.key     the key the secrets are sealed with (mode 600)
 device.key     the key the device cookies are signed with (mode 600)
 lock           held by the running server; one server per directory
@@ -161,6 +164,118 @@ secret-files/, stage-tmp/
 
 A server that starts removes what a crashed one left in `workspace/`,
 `secret-files/` and `stage-tmp/`.
+
+## Storage
+
+The Storage page (**Storage** in the admin menu, `/admin/storage`) and
+`GET /api/v1/admin/storage` say what the data directory holds and what to
+change. An admin's alone.
+
+- **Disk**: the free and total room of the data directory's disk, and its
+  floor (below).
+- **Data directory**: the size of each part: the database and its
+  write-ahead log, `logs/`, `artifacts/`, `cache/`, `workspace/`,
+  `stage-tmp/`, `upgrade/`, the `db.schema-N.sqlite` copies, `bin/` and
+  the dry runs, the keys and small files. A file kipp did not make is
+  shown as such and never removed.
+- **Database**: each table and index, largest first, measured page by
+  page (SQLite's `dbstat`) on a read-only connection, so a measure never
+  holds a build back. It runs when the server starts, again when it is
+  over an hour old and the page is opened, after the daily sweep and
+  after a compact. A SQLite without `dbstat` gets an estimate by each
+  table's rows, said as such.
+- **Jobs**: each job's builds, its `keep`, its test and metric rows, its
+  logs and artifacts, and their size, the rows' share an estimate.
+
+### Recommendations
+
+Each says what it would save; kipp never edits a job file.
+
+- **Keep fewer builds**: a job that holds more than a tenth of the
+  database. It names the line to put in the job file, `keep: {builds: N}`
+  with N chosen to bring it under a tenth, and, for a branch or pull
+  request job, the parent's file.
+- **Remove now**: the builds of a job whose file is gone, which the
+  retention removes 90 days after the newest. The button asks first,
+  removes every ended build that is not kept by hand with its logs and
+  artifacts, and writes a row of the audit (`storage.remove-job`).
+  `DELETE /api/v1/admin/storage/jobs/<name>` does the same.
+- **Compact**: a database whose free pages are more than a tenth of it.
+- **Not kipp's**: a file in the data directory kipp did not make.
+
+### Compacting the database
+
+Deleting rows leaves free pages in `db.sqlite`; SQLite reuses them but
+does not give them back to the disk. A compact (`VACUUM`) rewrites the
+file without them. Start one with **Compact database** on the Storage
+page, `kipp db compact` or `POST /api/v1/admin/storage/compact`. It:
+
+1. turns quiet on, unless it is on already, and waits for the running and
+   queued builds to end, as a safe restart does, for up to 2 hours;
+2. checks the disk has room: two copies of the database in use when the
+   temporary directory is on the same disk as the data directory, else
+   one on each;
+3. compacts, and the first time turns on incremental `auto_vacuum`, so
+   that from then on the retention gives the pages it frees back to the
+   disk after each sweep (`PRAGMA incremental_vacuum`);
+4. runs `PRAGMA optimize`, turns quiet off again (a quiet that was on
+   before stays on) and writes one row of the audit (`db.compact`) with
+   the size before and after.
+
+The pages answer slowly while it rewrites the file: start it when nobody
+waits on a build. A refusal (no room, a compact already running) changes
+nothing and is a row of the audit too.
+
+### Self-check
+
+Every day after the 03:30 retention sweep kipp runs `PRAGMA quick_check`
+on a read-only connection; it does not hold quiet. The result is kept in
+`self-check.json`, shown on the Storage page and as `self_check` in
+`GET /api/v1/admin/server`. A failure is logged at ERROR and puts a
+banner on every page an admin opens, until a check passes.
+
+### Restoring the database by hand
+
+kipp never restores a backup by itself: that would lose every build newer
+than the backup without a word. When a self-check fails:
+
+1. Read the problems on the Storage page. Take a copy of the data
+   directory as it is before anything else.
+2. Stop the server (`kipp quiet on --wait`, then stop the service).
+3. Try SQLite's recovery into a new file, and check it:
+
+   ```sh
+   sqlite3 data/db.sqlite ".recover" | sqlite3 recovered.sqlite
+   sqlite3 recovered.sqlite "PRAGMA integrity_check"
+   ```
+
+   It prints `ok` when the recovered file is sound. Otherwise use your
+   newest backup ([Backups](#backups)) or the one the last upgrade made
+   ([The backup an upgrade makes](#the-backup-an-upgrade-makes)), with the
+   `secret.key` taken with it.
+4. Put the file in place as `db.sqlite` (mode 600), remove
+   `db.sqlite-wal` and `db.sqlite-shm`, and start the server. The next
+   daily self-check, or a restart, says whether it passed.
+
+### The disk floor
+
+Every 10 minutes, and after the daily sweep, kipp looks at the free room
+on the data directory's disk. Below the floor, 5 GiB or a twentieth of
+the disk, whichever is less, it removes what is safe to remove, in this
+order, and stops as soon as the floor is met:
+
+1. what is left in `stage-tmp/` by stages that no longer run;
+2. `workspace/<job>` of jobs whose file is gone and that run no build;
+3. cache entries not restored for 7 days.
+
+Each step is logged and shown on the Storage page. kipp removes nothing
+else: when the floor is still not met, free room by hand.
+
+### Metrics per case
+
+Metrics kept per test case, `kipp.case_seconds`, keep the newest 30 builds
+of each case per job; the daily sweep removes older rows. A job's own
+metrics keep all of its builds.
 
 ## Backups
 

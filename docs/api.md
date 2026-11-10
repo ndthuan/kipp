@@ -199,8 +199,9 @@ and none answers a password, a token, a hash or a secret's value.
   `update_check` (false with `--no-update-check`), `latest` and
   `notes_url` (the newest release and its page when it is newer than
   `version`, else empty), `upgradable` (that release carries the signed
-  checksums an upgrade needs) and `checked_at` (when it was last looked up,
-  null before any answer).
+  checksums an upgrade needs), `checked_at` (when it was last looked up,
+  null before any answer) and `self_check`, the last self-check of the
+  database (`at`, `ok`, `problems`, `error`; null before any).
 - `GET /api/v1/admin/engines`: each engine's `name`, `kind`, `url` (with
   no credentials in it), `labels`, `executors`, `enabled`, `reachable`,
   `since`, `version`, `last_error` and `running`, the stages that run on it as `job#number/stage`.
@@ -214,6 +215,38 @@ and none answers a password, a token, a hash or a secret's value.
   `actor` (a user's name, `cli` or `kipp`), `action`, `target`, `detail`.
 - `GET /api/v1/admin/quiet`: `quiet`, `since`, `running`, `queued` and
   `idle`.
+
+## Storage
+
+An admin's token, or an admin's browser session. What each part means is
+in [Storage](operations.md#storage).
+
+- `GET /api/v1/admin/storage`: `at`; `disk` (`free_bytes`,
+  `total_bytes`, `floor_bytes`, null when they cannot be read); `parts`
+  of the data directory (`kind`, `name`, `bytes`, `made_by_kipp`);
+  `database` (`file_bytes`, `wal_bytes`, `page_size`, `pages`,
+  `free_bytes`, `used_bytes`, `auto_vacuum`, `tables` with `name`,
+  `table`, `index` and `bytes`, largest first, `exact`, false for an
+  estimate by rows, `tables_measured_at`, `measuring`, `measure_error`);
+  `jobs` (`name`, `builds`, `kept`, `keep_builds`, `keep_days`,
+  `test_rows`, `metric_rows`, `db_bytes`, `log_bytes`, `artifact_bytes`,
+  `gone`, `removed` or `closed` for a job whose file or branch is gone,
+  `parent`, `until`, when the retention removes a gone job's builds);
+  `recommendations` (`kind`: `keep`, `remove`, `compact` or `stray`,
+  `target`, `reason`, `saving_bytes`, `change`, `until`), the largest
+  saving first; `self_check`; `heal`, the last clean below the disk floor
+  (null before any); and `compact`.
+- `GET /api/v1/admin/storage/compact`: the compact: `state` (`idle`,
+  `waiting`, `compacting`, `done`, `failed`), `by`, `started_at`,
+  `ended_at`, `running` and `queued` while it waits, `before_bytes`,
+  `after_bytes`, `incremental` (it turned on incremental `auto_vacuum`),
+  `error` and `holds_quiet`.
+- `POST /api/v1/admin/storage/compact`: starts one and answers 202 with
+  the same shape; 409 when one runs already or the disk has no room.
+- `DELETE /api/v1/admin/storage/jobs/<name>`: removes the ended builds of
+  a job whose file is gone, but those kept by hand, with their logs and
+  artifacts, and answers `job` and `removed`, the number of builds; 409
+  while the job has a file, 404 when nothing is left to remove.
 
 ## Upgrade
 

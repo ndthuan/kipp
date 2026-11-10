@@ -1,0 +1,113 @@
+{{define "content"}}
+{{with .Data}}{{$r := .R}}
+<h1>Storage</h1>
+{{with .Notice}}<p class="notice" role="status">{{.}}</p>{{end}}
+{{with $.Error}}<p class="notice notice-error" role="alert">{{.}}</p>{{end}}
+<p class="lead">What the data directory holds, what to change, and the compact of the database. kipp shows a file it did not make and never removes it, and never edits a job file: a recommendation says what to change.</p>
+<dl class="facts">
+<div><dt>Disk</dt><dd>{{.Disk}}</dd></div>
+<div><dt>Database</dt><dd>{{bytes $r.Database.File}}{{if $r.Database.WAL}}, and {{bytes $r.Database.WAL}} of write-ahead log{{end}}; {{bytes $r.Database.FreeBytes}} of it free pages</dd></div>
+</dl>
+
+{{with $r.Compact}}<section id="compact" class="panel stack"{{if $.Data.Active}} hx-get="/admin/storage" hx-select="#compact" hx-target="this" hx-swap="outerHTML" hx-trigger="every 3s"{{end}}>
+<h2>Compact</h2>
+{{if eq .State "waiting"}}<p class="notice notice-warn" role="status">The compact holds quiet: no build starts. It waits for {{plural .Running "running build"}} and {{plural .Queued "queued build"}} to end.</p>
+{{else if eq .State "compacting"}}<p class="notice notice-warn" role="status">The compact holds quiet and rewrites the database. Pages may answer slowly until it ends.</p>
+{{else if eq .State "done"}}<p class="notice" role="status">Compacted by {{.By}} at {{clock .EndedAt}}: {{bytes .Before}} to {{bytes .After}} in {{compactTook .}}.{{if .Incremental}} Incremental auto_vacuum is on: the retention gives the pages it frees back from now on.{{end}} Quiet is off.</p>
+{{else if eq .State "failed"}}<p class="notice notice-error" role="alert">The compact started by {{.By}} failed at {{clock .EndedAt}}: {{.Error}}. Quiet is off.</p>
+{{end}}{{if not $.Data.Active}}<form class="stack" method="post" action="/admin/storage/compact">
+<input type="hidden" name="csrf" value="{{$.CSRF}}">
+<p class="sub">A compact rewrites the database without its free pages. It turns quiet on, waits for the builds to end as a safe restart does (up to 2 hours), checks the disk has room for two copies of the database in use, compacts, and turns quiet off again. The first one also turns on incremental auto_vacuum. auto_vacuum is <code>{{$r.Database.AutoVacuum}}</code> now.</p>
+<div><button class="action">Compact database</button></div>
+</form>
+{{end}}</section>
+{{end}}
+
+<h2>Recommendations</h2>
+{{if $r.Recommendations}}<div class="scroll">
+<table>
+<thead><tr><th>About</th><th>Why</th><th>Saves</th><th>Change</th></tr></thead>
+<tbody>
+{{range $r.Recommendations}}<tr>
+<td>{{if .Target}}<code>{{.Target}}</code>{{else}}the database{{end}}</td>
+<td>{{.Reason}}</td>
+<td>about {{bytes .Saving}}</td>
+<td>{{if eq .Kind "keep"}}<code>{{.Change}}</code>{{else if eq .Kind "remove"}}<a class="action action-quiet action-small" href="{{removePath .Target}}">Remove now</a>{{else if eq .Kind "compact"}}<a class="link" href="#compact">Compact database</a>{{else}}{{.Change}}{{end}}</td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>
+{{else}}<p class="sub">Nothing to change.{{if $r.Database.MeasuredAt.IsZero}} The tables are not measured yet, and the recommendations by job come once they are.{{end}}</p>
+{{end}}
+
+<h2>Data directory</h2>
+<div class="scroll">
+<table>
+<thead><tr><th>Part</th><th>On disk</th><th>Size</th></tr></thead>
+<tbody>
+{{range $r.Parts}}<tr>
+<td>{{partLabel .Kind}}{{if not .Made}} <span class="sub">kipp did not make this file</span>{{end}}</td>
+<td><code>{{.Name}}</code></td>
+<td>{{bytes .Bytes}}</td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>
+
+<h2>Database</h2>
+<p class="sub">{{if $r.Database.Measuring}}The tables are being measured now. {{end}}{{if not $r.Database.MeasuredAt.IsZero}}Measured at {{clock $r.Database.MeasuredAt}}{{if not $r.Database.Exact}}, an estimate by each table's rows: this SQLite has no dbstat, so indexes are counted in their tables{{else}}, page by page{{end}}; taken again after an hour, after the daily sweep and after a compact.{{else if not $r.Database.Measuring}}The tables are not measured yet.{{end}}{{with $r.Database.MeasureError}} The last measure failed: {{.}}.{{end}}</p>
+{{if $r.Database.Objects}}<div class="scroll">
+<table>
+<thead><tr><th>Name</th><th>Kind</th><th>Size</th></tr></thead>
+<tbody>
+{{range $r.Database.Objects}}<tr>
+<td><code>{{.Name}}</code></td>
+<td>{{if .Index}}index of <code>{{.Table}}</code>{{else}}table{{end}}</td>
+<td>{{bytes .Bytes}}</td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>
+{{end}}
+
+<h2>Jobs</h2>
+{{if $r.Jobs}}<div class="scroll">
+<table>
+<thead><tr><th>Job</th><th>Size</th><th>Builds</th><th>Keep</th><th>Test rows</th><th>Metric rows</th><th>Logs</th><th>Artifacts</th></tr></thead>
+<tbody>
+{{range $r.Jobs}}<tr>
+<td><code>{{.Name}}</code>{{if eq .Gone "removed"}} <span class="sub">job file gone</span>{{else if eq .Gone "closed"}} <span class="sub">branch or pull request gone</span>{{end}}</td>
+<td>{{bytes .Bytes}}</td>
+<td>{{.Builds}}{{if .Kept}} <span class="sub">{{.Kept}} kept</span>{{end}}</td>
+<td>{{if .Gone}}{{.Keep.Days}} days{{else}}{{.Keep.Builds}}{{if .Keep.Days}}, {{.Keep.Days}} days{{end}}{{end}}</td>
+<td>{{rows .Tests}}</td>
+<td>{{rows .Metrics}}</td>
+<td>{{bytes .Logs}}</td>
+<td>{{bytes .Artifacts}}</td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>
+<p class="sub">Size is the job's logs and artifacts and an estimate of its rows in the database. Per-case metrics such as <code>kipp.case_seconds</code> keep their newest 30 builds per case.</p>
+{{else}}<p class="sub">No job holds anything yet.</p>
+{{end}}
+
+<section id="self-check" class="stack">
+<h2>Self-check</h2>
+{{with $r.Check}}{{if .OK}}<p>The database passed its self-check (<code>PRAGMA quick_check</code>) at {{clock .At}}.</p>
+{{else}}<p class="notice notice-error" role="alert">The database failed its self-check at {{clock .At}}.{{with .Error}} It could not run: {{.}}{{end}}</p>
+{{if .Problems}}<ul>
+{{range .Problems}}<li><code>{{.}}</code></li>
+{{end}}</ul>
+{{end}}<p>kipp does not restore a backup by itself: that would lose every build newer than the backup. <a class="link" href="{{$.Data.DocsURL}}" rel="noopener noreferrer">Restore it by hand</a>.</p>
+{{end}}{{else}}<p class="sub">No self-check has run yet.</p>
+{{end}}<p class="sub">It runs every day after the 03:30 retention sweep, on a read-only connection: it does not hold quiet.</p>
+</section>
+
+{{with $r.Heal}}<section class="stack">
+<h2>Disk floor</h2>
+<p>At {{clock .At}} the disk had {{bytes .FreeBefore}} free, under its floor of {{bytes .Floor}}. kipp removed {{bytes .Freed}}: {{range $i, $s := .Steps}}{{if $i}}, {{end}}<code>{{$s.Path}}</code>{{end}}. {{if .FloorMet}}The floor is met{{else}}The floor is still not met: free room by hand{{end}} ({{bytes .FreeAfter}} free).</p>
+</section>
+{{end}}
+{{end}}
+{{end}}

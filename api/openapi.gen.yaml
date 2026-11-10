@@ -35,7 +35,7 @@ tags:
     name: metrics
   - description: What runs and what waits.
     name: queue
-  - description: Reads of users, secrets, engines, runners, the cache and the audit, the server's quiet mode and its upgrade; for an admin.
+  - description: Reads of users, secrets, engines, runners, the cache and the audit, the server's quiet mode, its upgrade and its storage; for an admin.
     name: admin
   - description: Deliveries from GitHub.
     name: webhooks
@@ -278,6 +278,133 @@ paths:
       tags:
         - admin
         - server
+      x-kipp-package: api
+  /admin/storage:
+    get:
+      description: |
+        The disk of the data directory; its parts (the database, logs,
+        artifacts, cache, workspaces, stage temp, upgrade backups and the other
+        kinds kipp keeps, then each other entry of its top level, with whether
+        kipp made it); the database's file, write-ahead log and free pages and
+        its tables and indexes as last measured (a measure older than an hour is
+        taken again apart, as the server starts and after each compact); what
+        each job holds, the largest first, with whether its file is gone; the
+        recommendations, each with its reason, its estimated saving and the
+        exact change; the last self-check, the last clean of a disk under its
+        floor, and the compact that runs or ran last. For an admin. kipp never
+        removes a file it did not make and never edits a job file.
+      operationId: getStorage
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Storage"
+          description: The report.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: What the data directory holds and what to change
+      tags:
+        - admin
+      x-kipp-package: api
+  /admin/storage/compact:
+    get:
+      operationId: getCompact
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorageCompact"
+          description: The compact.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: The compact of the database that runs or ran last
+      tags:
+        - admin
+      x-kipp-package: api
+    post:
+      description: |
+        Starts a compact and answers at once. It turns quiet on (unless an
+        admin already had), waits for the running and queued builds to end for
+        up to two hours as a safe restart does, checks that the disks have room
+        for two copies of the database's pages in use (SQLite's temporary copy
+        and the write-ahead log), runs `VACUUM` (turning incremental
+        `auto_vacuum` on the first time), then `PRAGMA optimize`, and turns
+        quiet off again. Follow it with `GET`. A failure turns quiet off too
+        and says why. One row of the audit. 409 when one runs already or when
+        the disk has no room, with the numbers.
+      operationId: startCompact
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorageCompact"
+          description: The compact, started.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - bearerToken: []
+        - csrfToken: []
+          sessionCookie: []
+      summary: Compact the database
+      tags:
+        - admin
+      x-kipp-package: api
+  /admin/storage/jobs/{name}:
+    delete:
+      description: |
+        Removes the ended builds of a removed job, or of a branch or pull
+        request of a multibranch job that is gone, with their logs and
+        artifacts, as the retention would 90 days after the newest. A build
+        kept by hand stays. 409 for a job that has a job file, 404 when nothing
+        of it is left. One row of the audit.
+      operationId: removeJobData
+      parameters:
+        - $ref: "#/components/parameters/JobName"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StorageJobRemoved"
+          description: What was removed.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - bearerToken: []
+        - csrfToken: []
+          sessionCookie: []
+      summary: Remove now the data of a job whose file is gone
+      tags:
+        - admin
       x-kipp-package: api
   /admin/upgrade:
     delete:
@@ -4240,6 +4367,28 @@ components:
         - missing
         - out_of_scope
       type: object
+    SelfCheck:
+      additionalProperties: false
+      description: The last self-check of the database, `PRAGMA quick_check` after the daily retention sweep.
+      properties:
+        at:
+          $ref: "#/components/schemas/Timestamp"
+        error:
+          description: Why it could not run, which is a failure too; empty when it ran.
+          type: string
+        ok:
+          type: boolean
+        problems:
+          description: What it found wrong, the first 20 lines.
+          items:
+            type: string
+          type: array
+      required:
+        - at
+        - ok
+        - problems
+        - error
+      type: object
     Server:
       additionalProperties: false
       description: What the server runs with.
@@ -4308,6 +4457,11 @@ components:
         schema:
           description: The database's schema version.
           type: integer
+        self_check:
+          anyOf:
+            - $ref: "#/components/schemas/SelfCheck"
+            - type: "null"
+          description: The last self-check of the database; null before any.
         session_ttl_seconds:
           type: integer
         shell:
@@ -4353,6 +4507,7 @@ components:
         - notes_url
         - upgradable
         - checked_at
+        - self_check
       type: object
     Stage:
       additionalProperties: false
@@ -4474,6 +4629,384 @@ components:
         - skipped
         - cancelled
       type: string
+    Storage:
+      additionalProperties: false
+      description: What the data directory holds and what to change.
+      properties:
+        at:
+          $ref: "#/components/schemas/Timestamp"
+        compact:
+          $ref: "#/components/schemas/StorageCompact"
+        database:
+          $ref: "#/components/schemas/StorageDatabase"
+        disk:
+          additionalProperties: false
+          properties:
+            floor_bytes:
+              description: The free space under which kipp cleans what is safe to clean, the smaller of 5 GiB and 5% of the disk.
+              type:
+                - integer
+                - "null"
+            free_bytes:
+              description: Free to kipp on the data directory's disk; null when it cannot be read, as are the other two.
+              type:
+                - integer
+                - "null"
+            total_bytes:
+              type:
+                - integer
+                - "null"
+          required:
+            - free_bytes
+            - total_bytes
+            - floor_bytes
+          type: object
+        heal:
+          anyOf:
+            - $ref: "#/components/schemas/StorageHeal"
+            - type: "null"
+          description: The last clean of a disk under its floor since the server started; null when none ran.
+        jobs:
+          description: Every job with a build, a folder of logs or one of artifacts, the largest first.
+          items:
+            $ref: "#/components/schemas/StorageJob"
+          type: array
+        parts:
+          items:
+            $ref: "#/components/schemas/StoragePart"
+          type: array
+        recommendations:
+          description: The changes worth making, the largest saving first.
+          items:
+            $ref: "#/components/schemas/StorageRecommendation"
+          type: array
+        self_check:
+          anyOf:
+            - $ref: "#/components/schemas/SelfCheck"
+            - type: "null"
+      required:
+        - at
+        - disk
+        - parts
+        - database
+        - jobs
+        - recommendations
+        - self_check
+        - heal
+        - compact
+      type: object
+    StorageCompact:
+      additionalProperties: false
+      description: A compact of the database.
+      properties:
+        after_bytes:
+          description: The same, after.
+          type: integer
+        before_bytes:
+          description: The database file and its write-ahead log before.
+          type: integer
+        by:
+          description: Who started it.
+          type: string
+        ended_at:
+          $ref: "#/components/schemas/NullableTimestamp"
+        error:
+          description: Why it failed; empty when it did not.
+          type: string
+        holds_quiet:
+          description: True while it keeps the server quiet.
+          type: boolean
+        incremental:
+          description: True when this compact turned incremental `auto_vacuum` on.
+          type: boolean
+        queued:
+          description: The queued builds it waits for.
+          type: integer
+        running:
+          description: The running builds it waits for.
+          type: integer
+        started_at:
+          $ref: "#/components/schemas/NullableTimestamp"
+        state:
+          description: "`idle` before any since the server started, `waiting` (quiet, for the builds to end), `compacting` (VACUUM runs), `done` or `failed`."
+          enum:
+            - idle
+            - waiting
+            - compacting
+            - done
+            - failed
+          type: string
+      required:
+        - state
+        - by
+        - started_at
+        - ended_at
+        - running
+        - queued
+        - before_bytes
+        - after_bytes
+        - incremental
+        - error
+        - holds_quiet
+      type: object
+    StorageDatabase:
+      additionalProperties: false
+      description: The database file and what is in it.
+      properties:
+        auto_vacuum:
+          description: "`incremental` once a compact has run: the retention then gives the pages it frees back by itself."
+          enum:
+            - none
+            - full
+            - incremental
+          type: string
+        exact:
+          description: True when the tables were measured page by page; false for an estimate by their rows, indexes counted in their table.
+          type: boolean
+        file_bytes:
+          description: db.sqlite on disk.
+          type: integer
+        free_bytes:
+          description: The free pages, which a compact gives back.
+          type: integer
+        measure_error:
+          description: Why the last measure failed; empty when it did not.
+          type: string
+        measuring:
+          description: True while a measure runs.
+          type: boolean
+        page_size:
+          type: integer
+        pages:
+          type: integer
+        tables:
+          description: The tables and indexes, the largest first.
+          items:
+            additionalProperties: false
+            properties:
+              bytes:
+                type: integer
+              index:
+                type: boolean
+              name:
+                type: string
+              table:
+                description: The table an index belongs to; the table itself for a table.
+                type: string
+            required:
+              - name
+              - table
+              - index
+              - bytes
+            type: object
+          type: array
+        tables_measured_at:
+          $ref: "#/components/schemas/NullableTimestamp"
+        used_bytes:
+          type: integer
+        wal_bytes:
+          description: Its write-ahead log on disk.
+          type: integer
+      required:
+        - file_bytes
+        - wal_bytes
+        - page_size
+        - pages
+        - free_bytes
+        - used_bytes
+        - auto_vacuum
+        - exact
+        - tables_measured_at
+        - measuring
+        - measure_error
+        - tables
+      type: object
+    StorageHeal:
+      additionalProperties: false
+      description: A clean of the data directory's disk under its floor.
+      properties:
+        at:
+          $ref: "#/components/schemas/Timestamp"
+        floor_bytes:
+          type: integer
+        floor_met:
+          type: boolean
+        free_after_bytes:
+          type: integer
+        free_before_bytes:
+          type: integer
+        freed_bytes:
+          type: integer
+        steps:
+          description: What it removed, in order.
+          items:
+            additionalProperties: false
+            properties:
+              bytes:
+                type: integer
+              error:
+                type: string
+              kind:
+                enum:
+                  - stage_temp
+                  - workspace
+                  - cache
+                type: string
+              path:
+                type: string
+            required:
+              - kind
+              - path
+              - bytes
+              - error
+            type: object
+          type: array
+      required:
+        - at
+        - floor_bytes
+        - free_before_bytes
+        - free_after_bytes
+        - freed_bytes
+        - floor_met
+        - steps
+      type: object
+    StorageJob:
+      additionalProperties: false
+      description: What one job holds.
+      properties:
+        artifact_bytes:
+          type: integer
+        builds:
+          type: integer
+        db_bytes:
+          description: An estimate of what its rows take in the database, by each table's bytes per row; 0 until the tables are measured.
+          type: integer
+        gone:
+          description: "`removed` when its file is gone, `closed` for a branch or pull request of a multibranch job that is gone; empty while it has a file."
+          enum:
+            - ""
+            - removed
+            - closed
+          type: string
+        keep_builds:
+          description: Its keep rule, or for a job whose file is gone the one for removed jobs (100 builds, 90 days).
+          type: integer
+        keep_days:
+          type: integer
+        kept:
+          description: The builds among them kept by hand.
+          type: integer
+        log_bytes:
+          type: integer
+        metric_rows:
+          type: integer
+        name:
+          type: string
+        parent:
+          description: The multibranch job of a branch or pull request; empty otherwise.
+          type: string
+        test_rows:
+          type: integer
+        until:
+          $ref: "#/components/schemas/NullableTimestamp"
+      required:
+        - name
+        - builds
+        - kept
+        - keep_builds
+        - keep_days
+        - test_rows
+        - metric_rows
+        - db_bytes
+        - log_bytes
+        - artifact_bytes
+        - gone
+        - parent
+        - until
+      type: object
+    StorageJobRemoved:
+      additionalProperties: false
+      description: What "remove now" removed.
+      properties:
+        job:
+          type: string
+        removed:
+          description: The builds removed.
+          type: integer
+      required:
+        - job
+        - removed
+      type: object
+    StoragePart:
+      additionalProperties: false
+      description: A part of the data directory.
+      properties:
+        bytes:
+          type: integer
+        kind:
+          description: One of the kinds kipp keeps, each listed whether there or not, or `other` for any other entry of the top level.
+          enum:
+            - database
+            - logs
+            - artifacts
+            - cache
+            - workspaces
+            - stage_temp
+            - upgrade_backups
+            - schema_copies
+            - upgrade_binaries
+            - small_files
+            - other
+          type: string
+        made_by_kipp:
+          description: False for an entry kipp did not make; kipp only shows it.
+          type: boolean
+        name:
+          description: What it is on disk.
+          type: string
+      required:
+        - kind
+        - name
+        - bytes
+        - made_by_kipp
+      type: object
+    StorageRecommendation:
+      additionalProperties: false
+      description: A change worth making.
+      properties:
+        change:
+          type: string
+        kind:
+          description: |
+            `keep`: a job whose rows pass 10% of the database's bytes in use; the
+            change is the line of YAML for its job file. `remove`: the data of a
+            job whose file is gone; `until` says when the retention removes it by
+            itself. `compact`: free pages over 10% of the file. `stray`: a file in
+            the data directory kipp did not make.
+          enum:
+            - keep
+            - remove
+            - compact
+            - stray
+          type: string
+        reason:
+          type: string
+        saving_bytes:
+          description: An estimate.
+          type: integer
+        target:
+          description: The job or the file; empty for the database.
+          type: string
+        until:
+          $ref: "#/components/schemas/NullableTimestamp"
+      required:
+        - kind
+        - target
+        - reason
+        - saving_bytes
+        - change
+        - until
+      type: object
     TestResult:
       additionalProperties: false
       description: One JUnit case of a build.

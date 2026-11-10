@@ -1,0 +1,32 @@
+get:
+  operationId: getStorage
+  tags: [admin]
+  summary: What the data directory holds and what to change
+  description: |
+    The disk of the data directory; its parts (the database, logs,
+    artifacts, cache, workspaces, stage temp, upgrade backups and the other
+    kinds kipp keeps, then each other entry of its top level, with whether
+    kipp made it); the database's file, write-ahead log and free pages and
+    its tables and indexes as last measured (a measure older than an hour is
+    taken again apart, as the server starts and after each compact); what
+    each job holds, the largest first, with whether its file is gone; the
+    recommendations, each with its reason, its estimated saving and the
+    exact change; the last self-check, the last clean of a disk under its
+    floor, and the compact that runs or ran last. For an admin. kipp never
+    removes a file it did not make and never edits a job file.
+  x-kipp-package: api
+  responses:
+    "200":
+      description: The report.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/Storage.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "403":
+      $ref: ../responses/Forbidden.yaml
+    "409":
+      $ref: ../responses/Conflict.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

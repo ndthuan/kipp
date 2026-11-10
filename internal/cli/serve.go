@@ -41,6 +41,7 @@ import (
 	"github.com/ndthuan/kipp/internal/runnerhub"
 	"github.com/ndthuan/kipp/internal/runnerproto"
 	"github.com/ndthuan/kipp/internal/secretbox"
+	"github.com/ndthuan/kipp/internal/storage"
 	"github.com/ndthuan/kipp/internal/store"
 	"github.com/ndthuan/kipp/internal/update"
 	"github.com/ndthuan/kipp/internal/upgrade/engine"
@@ -415,6 +416,9 @@ type server struct {
 
 	// updates asks for newer releases; nil with --no-update-check.
 	updates *update.Checker
+	// storage is the report of the data directory, the compact, the
+	// self-check and the clean of a disk under its floor.
+	storage *storage.Service
 	// upgrades carries out an upgrade or a rollback. It asks the server to
 	// stop through switchOver, and serve then starts again as the launcher.
 	upgrades *engine.Engine
@@ -503,6 +507,20 @@ func (s *server) newUpgrades() *engine.Engine {
 		Counts: func(ctx context.Context) (engine.Counts, error) { return s.quietCounts(s.d.QuietState(ctx)) },
 		Switch: s.switchOver,
 		Log:    s.log,
+	})
+}
+
+// newStorage makes the storage of this server's data directory.
+func (s *server) newStorage() *storage.Service {
+	counts := func(q dispatch.QuietState, err error) (storage.Counts, error) {
+		return storage.Counts{Quiet: q.On, Running: q.Running, Queued: q.Queued}, err
+	}
+	return storage.New(storage.Options{
+		Store: s.st, Data: s.f.data, Snapshot: s.d.Snapshot,
+		SetQuiet:  func(ctx context.Context, on bool) (storage.Counts, error) { return counts(s.d.SetQuiet(ctx, on)) },
+		Counts:    func(ctx context.Context) (storage.Counts, error) { return counts(s.d.QuietState(ctx)) },
+		TrimCache: func(ctx context.Context) (int, error) { return s.cache.Trim(ctx, 0, cachesrv.IdleDays*24*time.Hour) },
+		Log:       s.log,
 	})
 }
 
@@ -627,6 +645,7 @@ func (s *server) listen(ctx context.Context, snap *config.Snapshot) (net.Listene
 		Status: index.PostStatusFor(s.f.githubAPI, s.secret, s.appClient), PublicURL: s.publicURL,
 	})
 	s.upgrades = s.newUpgrades()
+	s.storage = s.newStorage()
 	// Before anything can ask: the dispatcher has no jobs until it is given some.
 	s.ix = index.New(s.st, s.d.SetSnapshot)
 	if err := s.ix.SetBase(ctx, snap); err != nil {
@@ -879,6 +898,7 @@ func (s *server) deps(au *auth.Service) api.Deps {
 		ServerInfo: s.info, Listen: s.listenAddr,
 		Engines: s.pool.Status, Runners: s.hub.Runners, PlacesChanged: s.loadPlaces,
 		Cache: s.cache, Scanner: s.scanner, Upgrade: s.upgrades, FlakyFlips: s.f.flakyFlips,
+		Storage: s.storage,
 	}
 }
 
@@ -1028,6 +1048,10 @@ func (s *server) startWork(work context.Context, hup <-chan os.Signal, wg *sync.
 	// The sweep's half past three is in the server's zone.
 	zone := s.d.Zone(nil)
 	wg.Go(func() { every(work, func() time.Time { return time.Now().In(zone) }, sleep, sweepAt, s.sweep) })
+	wg.Go(func() { every(work, time.Now, sleep, floorAt, s.floor) })
+	// The tables are measured once at the start, so the Storage page has
+	// them by the time anyone reads it.
+	wg.Go(func() { _ = s.storage.Measure(work) })
 	wg.Go(func() { s.reloadOn(work, hup) })
 	if s.updates != nil {
 		wg.Go(func() { s.updates.Run(work) })
@@ -1093,7 +1117,18 @@ func (s *server) sweep(ctx context.Context, now time.Time) {
 	n, err := retain.Sweep(ctx, s.st, s.d.Snapshot(), s.d.LogsDir(), now)
 	if err != nil {
 		s.log.Error("retention sweep", "deleted", n, "err", err)
-		return
+	} else {
+		s.log.Info("retention sweep", "deleted", n)
 	}
-	s.log.Info("retention sweep", "deleted", n)
+	s.storage.Check(ctx)
+	s.floor(ctx, now)
+	s.storage.MeasureSoon()
+}
+
+// floor cleans what is safe to clean when the data directory's disk is
+// under its floor; it logs what it did itself.
+func (s *server) floor(ctx context.Context, _ time.Time) {
+	if _, err := s.storage.Heal(ctx); err != nil {
+		s.log.Error("cleaning the data directory's disk under its floor", "err", err)
+	}
 }

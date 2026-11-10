@@ -24,6 +24,12 @@ const (
 	CaseSeconds  = MetricPrefix + "case_seconds"  // per JUnit case, item "<suite> / <case>"
 )
 
+// PerCaseMetrics are the metrics whose item is a test case. A suite has
+// thousands of cases and only a case's recent trend is read, so their
+// history is capped (retain.CaseHistoryBuilds) where a job-level metric's
+// is not.
+var PerCaseMetrics = []string{CaseSeconds}
+
 // RememberStatuses are the build statuses a remember rule may name: those
 // of a build whose stages ran to their end. A cancelled, timed out or lost
 // build measured only part of what it would have.

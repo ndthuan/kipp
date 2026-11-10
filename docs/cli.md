@@ -10,6 +10,7 @@ or `--name`.
 | [`kipp migrate`](#kipp-migrate) | Brings the database of a data directory no server runs on up to this kipp's schema. | the data directory |
 | [`kipp reload`](#kipp-reload) | Has a running server read its jobs directory again. | the server |
 | [`kipp quiet`](#kipp-quiet) | Stops a running server taking builds, before a restart. | the server |
+| [`kipp db`](#kipp-db) | Compacts a running server's database. | the server |
 | [`kipp upgrade`](#kipp-upgrade) | Upgrades a running server to the latest release, or back to the version before. | the server |
 | [`kipp run`](#kipp-run) | Starts a build, and optionally waits for it. | the server |
 | [`kipp user`](#kipp-user) | Adds, changes and lists users and their grants. | the data directory |
@@ -21,7 +22,7 @@ or `--name`.
 | [`kipp cache`](#kipp-cache) | A stage's keyed cache; lists and removes entries. | the server, or the data directory |
 | `kipp version` | Prints the version, and on a second line where the binary was installed from. | nothing |
 
-**Talking to a server.** `reload`, `quiet`, `upgrade` and `run` take `--url` (else
+**Talking to a server.** `reload`, `quiet`, `db`, `upgrade` and `run` take `--url` (else
 `$KIPP_URL`, else `http://127.0.0.1:8085`) and `--token` (else
 `$KIPP_TOKEN`, else the file `$XDG_CONFIG_HOME/kipp/token`, mode 600). An
 argument shows in the process list, so prefer either of the others.
@@ -142,6 +143,21 @@ once no build runs or waits, and at `--timeout` (default `2h`) it turns
 quiet off again and exits 1. `off` takes builds again; `status` says
 whether the server is quiet and how many builds run and wait. See
 [Restarting without losing builds](operations.md#restarting-without-losing-builds).
+
+## kipp db
+
+```
+kipp db compact [--url <url>] [--token <token>]
+```
+
+With an admin's token. `compact` asks the running server to compact its
+database and follows it to the end: it waits while quiet holds back new
+builds and the running ones end, then prints `compacted: <before> to
+<after> in <time>`, and says so when it turned on incremental
+`auto_vacuum`. It exits 1 when the compact is refused (no room on the
+disk, one already running) or fails; the server turns quiet off again
+either way. See
+[Compacting the database](operations.md#compacting-the-database).
 
 ## kipp upgrade
 

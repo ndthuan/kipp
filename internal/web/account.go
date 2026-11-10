@@ -13,6 +13,7 @@ import (
 
 	"github.com/ndthuan/kipp/internal/api"
 	"github.com/ndthuan/kipp/internal/auth"
+	"github.com/ndthuan/kipp/internal/config"
 	"github.com/ndthuan/kipp/internal/store"
 )
 
@@ -336,6 +337,8 @@ var notices = map[string]string{
 	"runner-gone":       "The runner is removed, and its token refused.",
 	"cache-gone":        "The cache entry is removed.",
 	"cache-cleared":     "The scope's cache entries are removed.",
+	"compact-started":   "The compact has started. It turns quiet on, waits for the builds to end, compacts, and turns quiet off again.",
+	"storage-removed":   "The job's data is removed.",
 }
 
 func noticeOf(r *http.Request) string { return notices[r.URL.Query().Get("done")] }
@@ -566,18 +569,7 @@ func lasts(days int) string {
 }
 
 // byteSize is a number of bytes as a person reads it.
-func byteSize(n int64) string {
-	const unit = 1024
-	if n < unit {
-		return strconv.FormatInt(n, 10) + " B"
-	}
-	div, exp := int64(unit), 0
-	for m := n / unit; m >= unit; m /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %ciB", float64(n)/float64(div), "KMGTPE"[exp])
-}
+func byteSize(n int64) string { return config.Readable(n) }
 
 // tokensView is a list of tokens with the address of their revoke pages
 // under Base.

@@ -5,13 +5,22 @@ import (
 	"time"
 )
 
-// The server's two clocks: the next time cron is looked at, and the next
-// time old builds are swept. They are variables so that a test of serve
-// waits for neither.
+// The server's clocks: the next time cron is looked at, the next time old
+// builds are swept, and the next look at the free space of the data
+// directory's disk. They are variables so that a test of serve waits for
+// none.
 var (
 	cronAt  = nextMinute
 	sweepAt = nextSweep
+	floorAt = nextFloorLook
 )
+
+// floorEvery is how often the free space of the data directory's disk is
+// looked at: a statfs, cheap, and often enough to clean before a build
+// fills what is left.
+const floorEvery = 10 * time.Minute
+
+func nextFloorLook(now time.Time) time.Time { return now.Truncate(floorEvery).Add(floorEvery) }
 
 // nextMinute is the next whole minute after now.
 func nextMinute(now time.Time) time.Time {

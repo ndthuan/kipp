@@ -87,3 +87,18 @@ func (b *ByteSize) Set(s string) error {
 	*b = v
 	return nil
 }
+
+// Readable is n bytes for people to read, in powers of 1024: "512 B",
+// "1.3 GiB".
+func Readable(n int64) string {
+	const unit = 1024
+	if n < unit {
+		return strconv.FormatInt(n, 10) + " B"
+	}
+	div, exp := int64(unit), 0
+	for m := n / unit; m >= unit; m /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %ciB", float64(n)/float64(div), "KMGTPE"[exp])
+}

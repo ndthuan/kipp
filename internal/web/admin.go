@@ -47,6 +47,7 @@ func (s *Site) adminRoutes(mux *http.ServeMux) {
 	s.appRoutes(mux)
 	s.runnerRoutes(mux)
 	s.cacheRoutes(mux)
+	s.storageRoutes(mux)
 	mux.HandleFunc("GET /admin/server", s.withUser(s.server))
 	mux.HandleFunc("POST /admin/server/reload", s.withUser(s.reload))
 	mux.HandleFunc("POST /admin/server/quiet", s.withUser(s.quietOn))

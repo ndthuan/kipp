@@ -35,7 +35,7 @@
 {{else}}{{template "navmetrics" $.Here}}
 {{end}}{{end}}{{end}}<div class="who">
 {{if .User}}{{with .Queue}}{{$busy := or .Running .Queued}}<a id="queue-badge" class="link-plain queue-badge{{if not $busy}} idle{{end}}" href="/queue" hx-get="/queue" hx-select="#queue-badge" hx-target="this" hx-swap="outerHTML" hx-trigger="kipp-changed from:body"{{if $busy}} aria-label="{{len .Running}} running, {{len .Queued}} queued" title="{{len .Running}} running, {{len .Queued}} queued">{{if .Running}}<span class="qb qb-running"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l13 8-13 8z"/></svg>{{len .Running}}</span>{{end}}{{if .Queued}}<span class="qb qb-queued"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>{{len .Queued}}</span>{{end}}{{else}}>idle{{end}}</a>
-{{end}}{{$mine := or (eq .Here "/account") (eq .Here "/admin/users") (eq .Here "/admin/secrets") (eq .Here "/admin/apps") (eq .Here "/admin/runners") (eq .Here "/admin/cache") (eq .Here "/admin/server")}}<details class="user drop">
+{{end}}{{$mine := or (eq .Here "/account") (eq .Here "/admin/users") (eq .Here "/admin/secrets") (eq .Here "/admin/apps") (eq .Here "/admin/runners") (eq .Here "/admin/cache") (eq .Here "/admin/storage") (eq .Here "/admin/server")}}<details class="user drop">
 <summary{{if $mine}} aria-current="true"{{end}} aria-label="{{.User.Name}}" title="{{.User.Name}}"><svg class="icon icon-user" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span class="who-name">{{.User.Name}}</span></summary>
 <ul class="menu">
 <li class="menu-who">{{.User.Name}}</li>
@@ -47,6 +47,7 @@
 <li><a href="/admin/apps"{{if eq .Here "/admin/apps"}} aria-current="page"{{end}}>GitHub Apps</a></li>
 <li><a href="/admin/runners"{{if eq .Here "/admin/runners"}} aria-current="page"{{end}}>Runners</a></li>
 <li><a href="/admin/cache"{{if eq .Here "/admin/cache"}} aria-current="page"{{end}}>Cache</a></li>
+<li><a href="/admin/storage"{{if eq .Here "/admin/storage"}} aria-current="page"{{end}}>Storage</a></li>
 <li><a href="/admin/server"{{if eq .Here "/admin/server"}} aria-current="page"{{end}}>Server</a></li>
 </ul></li>
 {{end}}<li class="menu-out"><form method="post" action="/logout">
@@ -67,6 +68,7 @@
 </header>
 <main id="main">
 {{with .Banner}}<p class="notice notice-error" role="alert">{{.}}</p>{{end}}
+{{with .SelfCheck}}<p class="notice notice-error" role="alert">The database's self-check failed at {{clock .At}}{{with .Error}}: {{.}}{{else}}{{range $i, $p := .Problems}}{{if eq $i 0}}: {{$p}}{{end}}{{end}}{{end}}. kipp does not restore a backup by itself. <a class="link" href="/admin/storage#self-check">Details</a>, and <a class="link" href="https://github.com/ndthuan/kipp/blob/main/docs/operations.md#restoring-the-database-by-hand" rel="noopener noreferrer">restoring it by hand</a>.</p>{{end}}
 {{with .Upgrade}}<div id="upgrade-watch" data-state="{{.State}}" data-version="{{.Version}}" data-running="{{.Running}}" data-queued="{{.Queued}}">
 {{if .Active}}<p class="notice notice-warn" role="status">kipp is upgrading to {{.Version}}: {{.Label}}. <a class="link" href="/admin/server#upgrade">Details</a></p>
 {{else if .Latest}}<p class="notice" id="upgrade-banner" role="status">kipp {{.Latest}} is available. <a class="link" href="/admin/server#upgrade">See and upgrade</a> <button class="action action-quiet action-small" type="button" data-snooze="{{.Latest}}" hidden>Remind me later</button></p>

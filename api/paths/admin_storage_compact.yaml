@@ -1,0 +1,54 @@
+get:
+  operationId: getCompact
+  tags: [admin]
+  summary: The compact of the database that runs or ran last
+  x-kipp-package: api
+  responses:
+    "200":
+      description: The compact.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/StorageCompact.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "403":
+      $ref: ../responses/Forbidden.yaml
+    "409":
+      $ref: ../responses/Conflict.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml
+post:
+  operationId: startCompact
+  tags: [admin]
+  summary: Compact the database
+  description: |
+    Starts a compact and answers at once. It turns quiet on (unless an
+    admin already had), waits for the running and queued builds to end for
+    up to two hours as a safe restart does, checks that the disks have room
+    for two copies of the database's pages in use (SQLite's temporary copy
+    and the write-ahead log), runs `VACUUM` (turning incremental
+    `auto_vacuum` on the first time), then `PRAGMA optimize`, and turns
+    quiet off again. Follow it with `GET`. A failure turns quiet off too
+    and says why. One row of the audit. 409 when one runs already or when
+    the disk has no room, with the numbers.
+  x-kipp-package: api
+  security:
+    - bearerToken: []
+    - sessionCookie: []
+      csrfToken: []
+  responses:
+    "202":
+      description: The compact, started.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/StorageCompact.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "403":
+      $ref: ../responses/Forbidden.yaml
+    "409":
+      $ref: ../responses/Conflict.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

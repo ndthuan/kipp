@@ -24,6 +24,32 @@ Added:
 - `kipp migrate --data <dir>` brings the database of a data directory no
   server runs on up to this kipp's schema; the dry run runs the new
   release's on a copy.
+- A Storage page for admins (`/admin/storage`) and
+  `GET /api/v1/admin/storage`: the disk, each part of the data directory,
+  each table and index of the database, each job's builds, rows, logs and
+  artifacts, and what to change: the `keep` line for a job over a tenth of
+  the database, removing now the builds of a job whose file is gone
+  (`DELETE /api/v1/admin/storage/jobs/<name>`, a row of the audit), a
+  compact, and files kipp did not make.
+- `kipp db compact`, the button **Compact database** and
+  `POST /api/v1/admin/storage/compact` compact the database: quiet on,
+  wait for the builds, check the disk's room, `VACUUM` (the first one
+  turns on incremental `auto_vacuum`), `PRAGMA optimize`, quiet off, and a
+  row of the audit (`db.compact`).
+- A daily self-check of the database (`PRAGMA quick_check`) after the
+  03:30 sweep, on the Storage page and as `self_check` in
+  `GET /api/v1/admin/server`; a failure is logged at ERROR and shows a
+  banner to admins.
+- Below a floor of free disk (5 GiB or a twentieth of the disk, whichever
+  is less) kipp removes leftover stage temp, the workspaces of jobs whose
+  file is gone, and idle cache, in that order, until the floor is met.
+
+Changed:
+
+- The daily sweep gives the pages it frees back to the disk
+  (`PRAGMA incremental_vacuum`) once a compact has turned incremental
+  `auto_vacuum` on.
+- `kipp.case_seconds` keeps the newest 30 builds of each case per job.
 
 ## [1.3.0] - 2026-11-10
 

@@ -230,13 +230,16 @@ func OpenCurrent(path string) (*Store, error) {
 func (s *Store) Upgrade() Upgrade { return s.upgraded }
 
 func openFile(path string) (*Store, error) {
-	dsn := "file:" + path + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)&_pragma=synchronous(NORMAL)"
-	db, err := sql.Open("sqlite", dsn)
+	db, err := sql.Open("sqlite", writerDSN(path))
 	if err != nil {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
-	return &Store{db: db}, nil
+	return &Store{db: db, path: path}, nil
+}
+
+func writerDSN(path string) string {
+	return "file:" + path + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)&_pragma=synchronous(NORMAL)"
 }
 
 // schemaVersion is the database's schema, 0 for a file that has none yet.

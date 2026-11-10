@@ -67,17 +67,18 @@ type serverJSON struct {
 	DataDir           string   `json:"data_dir"`
 	JobsDir           string   `json:"jobs_dir"`
 	// FreeDiskBytes and DBSizeBytes are null when they could not be read.
-	FreeDiskBytes   *uint64 `json:"free_disk_bytes"`
-	DBSizeBytes     *int64  `json:"db_size_bytes"`
-	LastReloadAt    stamp   `json:"last_reload_at"`
-	LastReloadError string  `json:"last_reload_error"`
-	Jobs            int     `json:"jobs"`
-	Origin          string  `json:"origin"`
-	UpdateCheck     bool    `json:"update_check"`
-	Latest          string  `json:"latest"`
-	NotesURL        string  `json:"notes_url"`
-	Upgradable      bool    `json:"upgradable"`
-	CheckedAt       *stamp  `json:"checked_at"`
+	FreeDiskBytes   *uint64        `json:"free_disk_bytes"`
+	DBSizeBytes     *int64         `json:"db_size_bytes"`
+	LastReloadAt    stamp          `json:"last_reload_at"`
+	LastReloadError string         `json:"last_reload_error"`
+	Jobs            int            `json:"jobs"`
+	Origin          string         `json:"origin"`
+	UpdateCheck     bool           `json:"update_check"`
+	Latest          string         `json:"latest"`
+	NotesURL        string         `json:"notes_url"`
+	Upgradable      bool           `json:"upgradable"`
+	CheckedAt       *stamp         `json:"checked_at"`
+	SelfCheck       *selfCheckJSON `json:"self_check"`
 }
 
 type auditJSON struct {
@@ -125,7 +126,7 @@ func toServerJSON(info *ServerInfo) serverJSON {
 		SessionTTLSeconds: int64(info.SessionTTL / time.Second), TimeZone: info.TimeZone, DataDir: info.DataDir, JobsDir: info.JobsDir,
 		LastReloadAt: stampOf(info.LastReloadAt), LastReloadError: info.LastReloadError, Jobs: info.Jobs,
 		Origin: info.Origin, UpdateCheck: info.UpdateCheck, Latest: info.Latest, NotesURL: info.NotesURL, Upgradable: info.Upgradable,
-		CheckedAt: stampSince(info.CheckedAt)}
+		CheckedAt: stampSince(info.CheckedAt), SelfCheck: toSelfCheckJSON(info.SelfCheck)}
 	if info.FreeDiskKnown {
 		out.FreeDiskBytes = new(info.FreeDisk)
 	}

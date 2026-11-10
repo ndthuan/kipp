@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	_ "modernc.org/sqlite" // the driver, no cgo
@@ -25,10 +26,26 @@ var ErrLastAdmin = errors.New("the last admin")
 type Store struct {
 	db       *sql.DB
 	upgraded Upgrade
+	path     string
+
+	// ro is a read-only connection of its own, opened at the first long
+	// read (see reader): a read that walks the whole file on it does not
+	// hold the one writer connection the builds wait on.
+	roMu sync.Mutex
+	ro   *sql.DB
 }
 
 // Close closes the file.
-func (s *Store) Close() error { return s.db.Close() }
+func (s *Store) Close() error {
+	s.roMu.Lock()
+	ro := s.ro
+	s.ro = nil
+	s.roMu.Unlock()
+	if ro != nil {
+		return errors.Join(ro.Close(), s.db.Close())
+	}
+	return s.db.Close()
+}
 
 // inTx runs fn in one transaction, committed when fn returns nil and
 // rolled back when it fails or panics. A rollback that fails comes back

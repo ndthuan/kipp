@@ -24,6 +24,7 @@ import (
 	"github.com/ndthuan/kipp/internal/index"
 	"github.com/ndthuan/kipp/internal/runnerhub"
 	"github.com/ndthuan/kipp/internal/sched"
+	"github.com/ndthuan/kipp/internal/storage"
 	"github.com/ndthuan/kipp/internal/store"
 	"github.com/ndthuan/kipp/internal/upgrade/engine"
 )
@@ -113,6 +114,9 @@ type Deps struct {
 	// Upgrade upgrades the server; without it the routes answer that this
 	// server does not.
 	Upgrade *engine.Engine
+	// Storage is the report of the data directory, the compact and the
+	// self-check; without it the routes answer that there is none.
+	Storage *storage.Service
 	// FlakyFlips is how many changes of colour in a job's last builds make
 	// it flaky on the overview: 0 for no such section. kipp serve sets it
 	// (default overview.DefaultFlips).
