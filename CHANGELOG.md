@@ -39,8 +39,9 @@ Added:
 Changed:
 
 - On a narrow screen the overview shows Now (running and waiting builds) third,
-  after Failing now and Unstable now and before Flaky. Two columns are as they
-  were.
+  after Failing now and Unstable now and before Flaky, and the markup holds
+  that order, so keyboard and screen reader order is the order seen. Two
+  columns look as they did, placed with grid areas.
 - A job's build list shows a pushed commit as its first 7 characters (the
   full id is the tooltip), the branch or tag the build was for, and under a
   red build's status where it failed, with a link to that stage's log, as

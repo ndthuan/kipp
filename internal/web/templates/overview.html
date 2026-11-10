@@ -20,7 +20,7 @@
 <h1 class="sr-only">Overview</h1>
 <div id="overview" class="stack" hx-get="{{.Data.Self}}" hx-select="#overview" hx-target="this" hx-swap="outerHTML" hx-trigger="kipp-changed from:body, every 60s">
 <div class="columns">
-<div class="col">
+<div class="red-now">
 <section class="sec sec-failing">
 <h2>Failing now</h2>
 {{with $o.Failing}}<div class="scroll">
@@ -55,6 +55,8 @@
 </div>
 {{else}}<p class="sub">Nothing is unstable.</p>
 {{end}}</section>
+</div>
+<div class="sec sec-now">{{template "queue" .Data.Queue}}</div>
 <section class="sec sec-flaky">
 <h2>Flaky</h2>
 {{with $o.Flaky}}<div class="scroll">
@@ -90,9 +92,6 @@
 {{if $o.MoreFailures}}<p class="sub">And {{plural $o.MoreFailures "more failure"}} in the last {{$w.Label}}.</p>
 {{end}}{{else}}<p class="sub">Nothing failed in the last {{$w.Label}}.</p>
 {{end}}</section>
-</div>
-<div class="col">
-<div class="sec sec-now">{{template "queue" .Data.Queue}}</div>
 <section class="sec sec-coming">
 <h2>Coming up</h2>
 {{with $o.Upcoming}}<div class="scroll">
@@ -109,7 +108,6 @@
 </div>
 {{else}}<p class="sub">Nothing is scheduled.</p>
 {{end}}</section>
-</div>
 </div>
 <section class="charts stack" aria-labelledby="charts-heading">
 <div class="charts-head">

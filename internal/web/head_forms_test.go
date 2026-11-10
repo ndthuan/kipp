@@ -1,7 +1,6 @@
 package web
 
 import (
-	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -139,27 +138,4 @@ func TestAUsersPageMakesATokenFromAButtonAndKeepsItsOneButtonForms(t *testing.T)
 	contains(t, body, `action="/admin/users/alice/tokens"`)
 	contains(t, page, `action="/admin/users/alice/admin/on"`, `action="/admin/users/alice/grants"`)
 	eq(t, "one token form", strings.Count(page, "<h3>Make a token</h3>"), 1)
-}
-
-// Under 75rem the overview is one column, and Now (the builds running and
-// waiting) comes third, after what is red and before the long lists.
-func TestOverviewNarrowOrderPutsNowThird(t *testing.T) {
-	css, err := staticFS.ReadFile("static/kipp.css")
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := []string{"failing", "unstable", "now", "flaky", "failed", "coming"}
-	for i, name := range want {
-		rule := fmt.Sprintf(".sec-%s { order: %d; }", name, i+1)
-		at := strings.Index(string(css), rule)
-		if at < 0 {
-			t.Fatalf("kipp.css lacks %q", rule)
-		}
-		if wide := strings.Index(string(css), "@media (min-width: 75rem)"); at > wide {
-			t.Fatalf("%q must come before the 75rem block, which resets the order", rule)
-		}
-	}
-	if !strings.Contains(string(css), "@media (min-width: 75rem) {\n    .columns { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }\n    .col { display: flex; flex-direction: column; gap: calc(var(--space) * 4); }\n    .sec { order: 0; }") {
-		t.Fatal("from 75rem the two columns and the order reset must stay")
-	}
 }

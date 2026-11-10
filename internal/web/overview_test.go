@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"net/http"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -206,22 +207,55 @@ func TestTheUnstableSectionIsBetweenFailingAndFlakyAndHasItsRows(t *testing.T) {
 	contains(t, flaky, "Nothing is flaky.")
 }
 
-func TestTheOverviewHoldsItsSectionsInTwoColumnsAndTheQueueDoesNotRefreshTwice(t *testing.T) {
+// A column wrapper would hold the markup to the wide layout's order; the
+// one wrapper is around Failing now and Unstable now, adjacent in both.
+func TestTheOverviewHasNoColumnWrapperAndTheQueueDoesNotRefreshTwice(t *testing.T) {
 	e := site(t)
 	page := e.overviewAt(t, "")
-	_, right, _ := strings.Cut(page, `<div class="columns">`)
-	cols := strings.Split(right, `<div class="col">`)[1:]
-	if len(cols) != 2 {
-		t.Fatalf("two columns expected in:\n%s", page)
+	_, columns, _ := strings.Cut(page, `<div class="columns">`)
+	columns, _, _ = strings.Cut(columns, `<section class="charts stack"`)
+	lacks(t, columns, `class="col"`)
+	red, _, _ := strings.Cut(columns, `<div class="sec sec-now">`)
+	if !strings.HasPrefix(red, "\n<div class=\"red-now\">\n<section class=\"sec sec-failing\">") || !strings.Contains(red, "Unstable now</h2>") {
+		t.Fatalf("Failing now and Unstable now are one grid item:\n%s", red)
 	}
-	contains(t, cols[1], `<section id="queue" class="stack">`, "<h2>Coming up</h2>")
-	lacks(t, cols[1], "Failing now", "Flaky", "Failed in the last")
-	contains(t, cols[0], "<h2>Failing now</h2>", `Unstable now</h2>`, "<h2>Flaky</h2>", "<h2>Failed in the last 24 hours</h2>")
+	contains(t, columns, `<section id="queue" class="stack">`, "<h2>Coming up</h2>", "<h2>Failing now</h2>", `Unstable now</h2>`, "<h2>Flaky</h2>", "<h2>Failed in the last 24 hours</h2>")
 	lacks(t, page, "<h2>Groups</h2>")
 	// The queue's own page and the job list still refresh it themselves.
 	_, jobs := get(t, e.login(t, "admin"), e.srv.URL+"/jobs")
 	contains(t, jobs, `<section id="queue" class="stack" hx-get="/queue"`)
 	lacks(t, page, `<section id="queue" class="stack" hx-get="/queue"`)
+}
+
+// Visual order never differs from the markup's: no section is moved with
+// order, and the wide layout is placed by grid areas.
+func TestTheOverviewIsPlacedByGridAreasAndNeverReordered(t *testing.T) {
+	b, err := staticFS.ReadFile("static/kipp.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	css := string(b)
+	if regexp.MustCompile(`\.(sec|red-now)[\w-]*\b[^{]*\{[^}]*\border\s*:`).MatchString(css) {
+		t.Error("kipp.css moves an overview section with order")
+	}
+	wide := `@media (min-width: 75rem) {
+    .columns {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-rows: auto auto auto 1fr;
+      grid-template-areas: "red now" "red coming" "flaky coming" "failed coming";
+      align-items: start;
+    }
+    .columns:has(#queue tr:nth-child(2)):not(:has(.red-now table)) {
+      grid-template-rows: auto auto auto auto 1fr;
+      grid-template-areas: "red now" "flaky now" "flaky coming" "flaky coming" "failed coming";
+    }
+    .red-now { grid-area: red; }
+    .sec-now { grid-area: now; }
+    .sec-flaky { grid-area: flaky; }
+    .sec-failed { grid-area: failed; }
+    .sec-coming { grid-area: coming; }
+  }`
+	contains(t, css, wide)
 }
 
 func TestTheGroupsAreInThePassRateGraphWithTheirNeverBuiltAndDisabledCountsAsLinks(t *testing.T) {

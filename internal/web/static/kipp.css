@@ -279,11 +279,10 @@
     .rows td:first-child { min-width: calc(var(--space) * 40); overflow-wrap: anywhere; }
   }
   .rows time { font-variant-numeric: tabular-nums; }
-  /* The overview: two columns, then a strip of graphs. Under
-     75rem the columns are one, and the sections take the order that puts
-     what is red first, then what is running, then the long lists. Tab order
-     follows the markup, where Now stays after Failed, so that the two
-     columns of the wide layout keep their own lists together. */
+  /* The overview: two columns, then a strip of graphs. Under 75rem the
+     columns are one, in the order of the markup: what is red, then what is
+     running, then the long lists. No section is moved with order, so
+     keyboard and screen reader order is the order seen. */
   .charts-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: calc(var(--space) * 2) calc(var(--space) * 4); }
   .charts-head h2 { margin: 0; }
   .seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: var(--radius-m); overflow: hidden; font-size: var(--size-sm); }
@@ -321,19 +320,31 @@
   .swatch-running { background-color: var(--busy); }
   .swatch-wait { background-color: var(--accent); }
   .swatch-limit { height: 0; width: 14px; border-radius: 0; background-color: transparent; border-top: 2px dashed var(--bad); }
-  .columns { display: grid; gap: calc(var(--space) * 4); min-width: 0; }
-  .col { display: contents; }
-  .col > *, .columns > * { min-width: 0; }
-  .sec-failing { order: 1; }
-  .sec-unstable { order: 2; }
-  .sec-now { order: 3; }
-  .sec-flaky { order: 4; }
-  .sec-failed { order: 5; }
-  .sec-coming { order: 6; }
+  .columns, .red-now { display: grid; gap: calc(var(--space) * 4); min-width: 0; }
+  .columns > *, .red-now > * { min-width: 0; }
+  /* From 75rem grid rows are shared by both columns, so the red pair is
+     one item spanning the row where Coming up starts: Coming up sits right
+     under a Now shorter than the pair, and only a taller Now pushes Flaky
+     down. With nothing red and two builds or more running the pair is the
+     shorter, so Flaky spans that row instead, over three rows so that Now,
+     over two, sizes it first. Coming up and Failed end on the one flexible
+     row, so their heights never stretch the rows above. */
   @media (min-width: 75rem) {
-    .columns { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
-    .col { display: flex; flex-direction: column; gap: calc(var(--space) * 4); }
-    .sec { order: 0; }
+    .columns {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-rows: auto auto auto 1fr;
+      grid-template-areas: "red now" "red coming" "flaky coming" "failed coming";
+      align-items: start;
+    }
+    .columns:has(#queue tr:nth-child(2)):not(:has(.red-now table)) {
+      grid-template-rows: auto auto auto auto 1fr;
+      grid-template-areas: "red now" "flaky now" "flaky coming" "flaky coming" "failed coming";
+    }
+    .red-now { grid-area: red; }
+    .sec-now { grid-area: now; }
+    .sec-flaky { grid-area: flaky; }
+    .sec-failed { grid-area: failed; }
+    .sec-coming { grid-area: coming; }
   }
   /* Unstable is green to every count but it is not quite right: its heading
      wears the warning colour, as the badge and the dots do. */
