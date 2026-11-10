@@ -31,6 +31,14 @@ Added:
   started by `build <job>#<number>`, and never one of its own job (403
   `forbidden`). `api/` describes build tokens as bearer tokens.
 
+Changed:
+
+- On a phone (under 48rem) the tables of the overview, the queue, the job
+  list and a job's and a build's pages stack into rows instead of scrolling
+  sideways: the name, its status and its age or duration on the first line,
+  every other cell under it with its column's name. From 48rem up nothing
+  changes.
+
 ## [1.2.0] - 2026-11-09
 
 - A build's log is easier to read: the text is larger, the page scrolls

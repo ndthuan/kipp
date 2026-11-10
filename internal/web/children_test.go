@@ -49,7 +49,7 @@ func TestAParentPageListsItsChildrenApartAndAChildLinksUp(t *testing.T) {
 	eq(t, "the jobs list", code, http.StatusOK)
 	// A parent builds nothing itself: its children's worst status stands
 	// in the Last build column, where every other job has its own.
-	_, site, _ := strings.Cut(page, `<td><a class="link" href="/jobs/site"`)
+	_, site, _ := strings.Cut(page, `<td class="lead" data-label="Job"><a class="link" href="/jobs/site"`)
 	site, _, _ = strings.Cut(site, "</tr>")
 	_, last, _ := strings.Cut(site, "</td>")
 	contains(t, last, `<span class="status failed">failed</span>`, "worst of 3 children")

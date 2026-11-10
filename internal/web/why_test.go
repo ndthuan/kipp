@@ -116,7 +116,7 @@ func TestTheStageTableLinksEachStageToItsLogAndTheLogHeadingCarriesTheStatus(t *
 	_, page := get(t, e.login(t, "admin"), e.srv.URL+e.ended(t, "smoke", store.Failed,
 		stage{"build", store.StageSuccess, nil}, stage{"test", store.StageFailed, new(2)}))
 	contains(t, page,
-		`<td><a class="link" href="#log-build">build</a></td>`, `<td><a class="link" href="#log-test">test</a></td>`,
+		`<td class="lead" data-label="Stage"><a class="link" href="#log-build">build</a></td>`, `<td class="lead" data-label="Stage"><a class="link" href="#log-test">test</a></td>`,
 		`<summary>test<span class="status failed" data-chip>failed</span></summary>`,
 		`<summary>build<span class="status success" data-chip>success</span></summary>`,
 		// The refresh of a live build brings the states, so the headings follow.

@@ -54,10 +54,10 @@
 <h2>Variables</h2>
 {{with .View.VarsErr}}<p class="notice notice-warn">{{.}}</p>{{else}}<p class="sub">What the job files give every stage, none of it secret. A param, a stage's own <code>env</code> or the stages file of the repo can still override one.</p>
 <div class="scroll">
-<table>
+<table class="stacked">
 <thead><tr><th>Name</th><th>Value</th><th>From</th></tr></thead>
 <tbody>
-{{range .View.Vars}}<tr><td><code>{{.Name}}</code></td><td><code>{{.Value}}</code></td><td>{{.Source}}</td></tr>
+{{range .View.Vars}}<tr><td class="lead" data-label="Name"><code>{{.Name}}</code></td><td data-label="Value"><code>{{.Value}}</code></td><td data-label="From">{{.Source}}</td></tr>
 {{end}}</tbody>
 </table>
 </div>{{end}}
@@ -95,14 +95,14 @@
 <button class="action">Scan now</button>
 </form>{{end}}
 {{if $.Data.View.Repos}}<div class="scroll">
-<table>
+<table class="stacked">
 <thead><tr><th>Repo</th><th>Children</th><th>Worst last build</th><th>Webhook</th></tr></thead>
 <tbody>
 {{range $.Data.View.Repos}}<tr>
-<td><a class="link" href="/jobs/{{.Node}}">{{.Repo}}</a>{{if eq .State "gone"}} <span class="tag">gone</span>{{end}}</td>
-<td>{{.Children}}</td>
-<td>{{with .Worst}}<span class="status {{.}}">{{.}}</span>{{else}}<span class="sub">never built</span>{{end}}</td>
-<td>{{if $.Data.View.Owner.App}}<span class="sub">the App's webhook</span>{{else if eq .Hook "ok"}}kept by kipp{{else if eq .Hook "off"}}<span class="sub">scan only: {{.Note}}</span>{{else}}<span class="sub">not looked at yet</span>{{end}}</td>
+<td class="lead" data-label="Repo"><a class="link" href="/jobs/{{.Node}}">{{.Repo}}</a>{{if eq .State "gone"}} <span class="tag">gone</span>{{end}}</td>
+<td data-label="Children">{{.Children}}</td>
+<td class="lead" data-label="Worst last build">{{with .Worst}}<span class="status {{.}}">{{.}}</span>{{else}}<span class="sub">never built</span>{{end}}</td>
+<td data-label="Webhook">{{if $.Data.View.Owner.App}}<span class="sub">the App's webhook</span>{{else if eq .Hook "ok"}}kept by kipp{{else if eq .Hook "off"}}<span class="sub">scan only: {{.Note}}</span>{{else}}<span class="sub">not looked at yet</span>{{end}}</td>
 </tr>
 {{end}}</tbody>
 </table>
@@ -116,15 +116,15 @@
 <h2>Builds</h2>
 {{if .View.Builds}}
 <div class="scroll">
-<table>
+<table class="stacked">
 <thead><tr><th>Build</th><th>Status</th><th>Trigger</th><th>Started</th><th>Took</th></tr></thead>
 <tbody>
 {{range .View.Builds}}<tr>
-<td><a class="link" href="{{buildPath .}}">#{{.Number}}</a>{{if .KeptAt}} <span class="tag">kept</span>{{end}}</td>
-<td><span class="status {{.Status}}">{{.Status}}</span></td>
-<td>{{.Trigger}}{{with .StartedBy}} <span class="sub">by {{.}}</span>{{end}}{{with .TriggerDetail}} <span class="sub">{{.}}</span>{{end}}</td>
-<td>{{clock .StartedAt}}</td>
-<td>{{took .StartedAt .FinishedAt}}</td>
+<td class="lead" data-label="Build"><a class="link" href="{{buildPath .}}">#{{.Number}}</a>{{if .KeptAt}} <span class="tag">kept</span>{{end}}</td>
+<td class="lead" data-label="Status"><span class="status {{.Status}}">{{.Status}}</span></td>
+<td data-label="Trigger">{{.Trigger}}{{with .StartedBy}} <span class="sub">by {{.}}</span>{{end}}{{with .TriggerDetail}} <span class="sub">{{.}}</span>{{end}}</td>
+<td data-label="Started">{{clock .StartedAt}}</td>
+<td class="lead" data-label="Took">{{took .StartedAt .FinishedAt}}</td>
 </tr>
 {{end}}</tbody>
 </table>
@@ -142,13 +142,13 @@
 <p class="sub">{{if .Rows}}One dot for each build, the newest first. {{end}}{{if .All}}<a class="link" href="{{$job}}" hx-get="{{$job}}" hx-select="#results-box" hx-target="#results-box" hx-swap="outerHTML">{{if .Failed}}Show only the {{.Failed}} that failed{{else}}Hide them{{end}}</a>{{else}}<a class="link" href="{{$all}}" hx-get="{{$all}}" hx-select="#results-box" hx-target="#results-box" hx-swap="outerHTML">Show all {{.Total}}</a>{{end}}</p>
 {{if .Rows}}
 <div class="scroll tall">
-<table>
+<table class="stacked">
 <thead><tr><th>Suite</th><th>Case</th><th>History</th></tr></thead>
 <tbody>
 {{range .Rows}}<tr>
-<td>{{.Suite}}</td>
-<td>{{.Name}}</td>
-<td class="dots">{{range .Dots}}{{if .Status}}<span class="dot {{.Status}}" title="#{{.Build}} {{.Status}}"></span>{{else}}<span class="dot none" title="#{{.Build}} did not run"></span>{{end}}{{end}}</td>
+<td data-label="Suite">{{.Suite}}</td>
+<td class="lead" data-label="Case">{{.Name}}</td>
+<td class="dots" data-label="History">{{range .Dots}}{{if .Status}}<span class="dot {{.Status}}" title="#{{.Build}} {{.Status}}"></span>{{else}}<span class="dot none" title="#{{.Build}} did not run"></span>{{end}}{{end}}</td>
 </tr>
 {{end}}</tbody>
 </table>
@@ -167,14 +167,14 @@
 {{end}}
 {{end}}
 {{define "children"}}<div class="scroll">
-<table class="children">
+<table class="children stacked">
 <thead><tr><th>Branch or pull request</th><th>Head</th><th>Last build</th><th>Seen</th></tr></thead>
 <tbody>
 {{range .}}<tr>
-<td><a class="link" href="/jobs/{{.Job}}">{{if .PR}}PR #{{.PR}}{{if eq .Kind "pr-head"}} (head alone){{end}}{{with .Title}} {{.}}{{end}}{{else}}{{.Branch}}{{end}}</a>{{if .PR}} <span class="sub">{{with .Author}}by {{.}}, {{end}}{{.Branch}}{{with .BaseBranch}} into {{.}}{{end}}</span>{{end}}</td>
-<td><code>{{printf "%.7s" .HeadSHA}}</code></td>
-<td>{{with .Last}}<a class="link" href="{{buildPath .}}">#{{.Number}}</a> <span class="status {{.Status}}">{{.Status}}</span>{{else}}<span class="sub">never built</span>{{end}}</td>
-<td>{{template "since" (since .LastSeenAt)}}</td>
+<td class="lead" data-label="Branch or pull request"><a class="link" href="/jobs/{{.Job}}">{{if .PR}}PR #{{.PR}}{{if eq .Kind "pr-head"}} (head alone){{end}}{{with .Title}} {{.}}{{end}}{{else}}{{.Branch}}{{end}}</a>{{if .PR}} <span class="sub">{{with .Author}}by {{.}}, {{end}}{{.Branch}}{{with .BaseBranch}} into {{.}}{{end}}</span>{{end}}</td>
+<td data-label="Head"><code>{{printf "%.7s" .HeadSHA}}</code></td>
+<td class="lead" data-label="Last build">{{with .Last}}<a class="link" href="{{buildPath .}}">#{{.Number}}</a> <span class="status {{.Status}}">{{.Status}}</span>{{else}}<span class="sub">never built</span>{{end}}</td>
+<td data-label="Seen">{{template "since" (since .LastSeenAt)}}</td>
 </tr>
 {{end}}</tbody>
 </table>

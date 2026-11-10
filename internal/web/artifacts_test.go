@@ -31,7 +31,7 @@ stages:
 		`report <a class="link sub" href="/api/v1/builds/`+strconv.FormatInt(id, 10)+`/stages/report/artifacts.zip" download>zip</a>`,
 		`href="/api/v1/builds/`+strconv.FormatInt(id, 10)+`/stages/report/artifacts/out/css/a%20b.css" download><code>out/css/a b.css</code>`,
 		`href="/api/v1/builds/`+strconv.FormatInt(id, 10)+`/stages/report/artifacts/out/x.html" download><code>out/x.html</code>`,
-		`<td class="num">2 B</td>`, `<td class="num">9 B</td>`)
+		`<td class="num" data-label="Size">2 B</td>`, `<td class="num" data-label="Size">9 B</td>`)
 	if strings.Contains(section, "plain") {
 		t.Fatal("a stage that keeps nothing is listed")
 	}

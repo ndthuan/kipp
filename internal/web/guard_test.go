@@ -59,11 +59,11 @@ stages:
 	}
 	_, page := get(t, c, e.srv.URL+e.at(t, id))
 	contains(t, page, `<details class="guards" id="guards" open>`, `<summary><h2>Guards</h2></summary>`,
-		`<td>measure</td>
-<td><span class="status failed">failed</span></td>
-<td><code>`+html.EscapeString(line)+`</code></td>`,
-		`<td><span class="status success">held</span></td>
-<td><code>`+html.EscapeString(held)+`</code></td>`)
+		`<td class="lead" data-label="Stage">measure</td>
+<td class="lead" data-label="Result"><span class="status failed">failed</span></td>
+<td data-label="Guard"><code>`+html.EscapeString(line)+`</code></td>`,
+		`<td class="lead" data-label="Result"><span class="status success">held</span></td>
+<td data-label="Guard"><code>`+html.EscapeString(held)+`</code></td>`)
 	// A build with no guard has no such section.
 	other := e.build(t, c, "smoke", nil)
 	e.wait(t, other)

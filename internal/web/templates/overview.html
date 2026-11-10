@@ -24,14 +24,14 @@
 <section class="sec sec-failing">
 <h2>Failing now</h2>
 {{with $o.Failing}}<div class="scroll">
-<table class="rows">
+<table class="rows stacked">
 <thead><tr><th>Job</th><th>Build</th><th>Red since</th><th>Recent</th></tr></thead>
 <tbody>
 {{range .}}<tr>
-<td><a class="link" href="/jobs/{{.Job}}">{{.Job}}</a>{{if .Flaky}} <span class="tag">flaky</span>{{end}}</td>
-<td><a class="link" href="{{buildPath .Build}}">#{{.Build.Number}}</a> <span class="status {{.Build.Status}}">{{.Build.Status}}</span>{{$b := .Build}}{{with index $why .Build.ID}}<div class="sub why">{{.Verb}}{{if .Stages}} in {{end}}{{range $i, $n := .Stages}}{{if $i}}, {{end}}<a class="link" href="{{buildPath $b}}#log-{{$n}}">{{$n}}</a>{{end}}</div>{{end}}</td>
-<td>{{template "since" (since .Since)}}</td>
-<td>{{template "dots" .Dots}}</td>
+<td class="lead" data-label="Job"><a class="link" href="/jobs/{{.Job}}">{{.Job}}</a>{{if .Flaky}} <span class="tag">flaky</span>{{end}}</td>
+<td class="lead" data-label="Build"><a class="link" href="{{buildPath .Build}}">#{{.Build.Number}}</a> <span class="status {{.Build.Status}}">{{.Build.Status}}</span>{{$b := .Build}}{{with index $why .Build.ID}}<div class="sub why">{{.Verb}}{{if .Stages}} in {{end}}{{range $i, $n := .Stages}}{{if $i}}, {{end}}<a class="link" href="{{buildPath $b}}#log-{{$n}}">{{$n}}</a>{{end}}</div>{{end}}</td>
+<td class="lead" data-label="Red since">{{template "since" (since .Since)}}</td>
+<td data-label="Recent">{{template "dots" .Dots}}</td>
 </tr>
 {{end}}</tbody>
 </table>
@@ -41,14 +41,14 @@
 <section class="sec sec-unstable">
 <h2 class="attn-unstable">Unstable now</h2>
 {{with $o.Unstable}}<div class="scroll">
-<table class="rows">
+<table class="rows stacked">
 <thead><tr><th>Job</th><th>Build</th><th>Unstable since</th><th>Recent</th></tr></thead>
 <tbody>
 {{range .}}<tr>
-<td><a class="link" href="/jobs/{{.Job}}">{{.Job}}</a>{{if .Flaky}} <span class="tag">flaky</span>{{end}}</td>
-<td><a class="link" href="{{buildPath .Build}}">#{{.Build.Number}}</a> <span class="status {{.Build.Status}}">{{.Build.Status}}</span></td>
-<td>{{template "since" (since .Since)}}</td>
-<td>{{template "dots" .Dots}}</td>
+<td class="lead" data-label="Job"><a class="link" href="/jobs/{{.Job}}">{{.Job}}</a>{{if .Flaky}} <span class="tag">flaky</span>{{end}}</td>
+<td class="lead" data-label="Build"><a class="link" href="{{buildPath .Build}}">#{{.Build.Number}}</a> <span class="status {{.Build.Status}}">{{.Build.Status}}</span></td>
+<td class="lead" data-label="Unstable since">{{template "since" (since .Since)}}</td>
+<td data-label="Recent">{{template "dots" .Dots}}</td>
 </tr>
 {{end}}</tbody>
 </table>
@@ -58,14 +58,14 @@
 <section class="sec sec-flaky">
 <h2>Flaky</h2>
 {{with $o.Flaky}}<div class="scroll">
-<table class="rows">
+<table class="rows stacked">
 <thead><tr><th>Job</th><th>Failed</th><th>Flips</th><th>Recent</th></tr></thead>
 <tbody>
 {{range .}}<tr>
-<td><a class="link" href="/jobs/{{.Job}}">{{.Job}}</a></td>
-<td>{{percent .}} failed <span class="sub">({{.Failed}}/{{.Finished}})</span></td>
-<td>{{plural .Flips "flip"}}</td>
-<td>{{template "dots" .Dots}}</td>
+<td class="lead" data-label="Job"><a class="link" href="/jobs/{{.Job}}">{{.Job}}</a></td>
+<td class="lead" data-label="Failed">{{percent .}} failed <span class="sub">({{.Failed}}/{{.Finished}})</span></td>
+<td data-label="Flips">{{plural .Flips "flip"}}</td>
+<td data-label="Recent">{{template "dots" .Dots}}</td>
 </tr>
 {{end}}</tbody>
 </table>
@@ -75,14 +75,14 @@
 <section class="sec sec-failed">
 <h2>Failed in the last {{$w.Label}}</h2>
 {{with $o.RecentFailures}}<div class="scroll">
-<table class="rows">
+<table class="rows stacked">
 <thead><tr><th>Job</th><th>Build</th><th>Ended</th><th>Now</th></tr></thead>
 <tbody>
 {{range .}}<tr>
-<td><a class="link" href="/jobs/{{.Build.Job}}">{{.Build.Job}}</a></td>
-<td><a class="link" href="{{buildPath .Build}}">#{{.Build.Number}}</a> <span class="status {{.Build.Status}}">{{.Build.Status}}</span></td>
-<td>{{template "since" (since .Build.FinishedAt)}}</td>
-<td>{{if .GreenAgain}}<span class="status success">green again</span>{{else}}<span class="sub">still red</span>{{end}}</td>
+<td class="lead" data-label="Job"><a class="link" href="/jobs/{{.Build.Job}}">{{.Build.Job}}</a></td>
+<td class="lead" data-label="Build"><a class="link" href="{{buildPath .Build}}">#{{.Build.Number}}</a> <span class="status {{.Build.Status}}">{{.Build.Status}}</span></td>
+<td class="lead" data-label="Ended">{{template "since" (since .Build.FinishedAt)}}</td>
+<td data-label="Now">{{if .GreenAgain}}<span class="status success">green again</span>{{else}}<span class="sub">still red</span>{{end}}</td>
 </tr>
 {{end}}</tbody>
 </table>
@@ -96,13 +96,13 @@
 <section class="sec sec-coming">
 <h2>Coming up</h2>
 {{with $o.Upcoming}}<div class="scroll">
-<table class="rows">
+<table class="rows stacked">
 <thead><tr><th>When</th><th>Job</th><th>Schedule</th></tr></thead>
 <tbody>
 {{range .}}<tr>
-<td>{{clock .At}}</td>
-<td><a class="link" href="/jobs/{{.Job}}">{{.Job}}</a></td>
-<td><code>{{.Cron}}</code></td>
+<td class="lead" data-label="When">{{clock .At}}</td>
+<td class="lead" data-label="Job"><a class="link" href="/jobs/{{.Job}}">{{.Job}}</a></td>
+<td data-label="Schedule"><code>{{.Cron}}</code></td>
 </tr>
 {{end}}</tbody>
 </table>

@@ -49,7 +49,7 @@ func TestTheFrontPageIsTheOverviewAndSaysSoInEverySectionWhenThereIsNothingToSho
 		`<code>0 3 * * *</code>`, `<a class="link" href="/jobs/nightly">nightly</a>`,
 		// A group that built nothing is a line with what it holds, each count a link to its list.
 		`<a href="/jobs?group=backend"><text class="count"`, `<a href="/jobs?only=ungrouped"><text class="count"`)
-	lacks(t, page, `<table class="jobs">`, `id="jobs"`, "Removed from the job files")
+	lacks(t, page, `<table class="jobs stacked">`, `id="jobs"`, "Removed from the job files")
 }
 
 func TestTheOverviewShowsWhatIsRedAndWhatFlapsAndWhatFailedLately(t *testing.T) {
@@ -120,7 +120,7 @@ func TestTheJobListMovedToJobsAndKeepsEveryGroup(t *testing.T) {
 	e := site(t)
 	code, page := get(t, e.login(t, "admin"), e.srv.URL+"/jobs")
 	eq(t, "the list", code, http.StatusOK)
-	contains(t, page, `<table class="jobs">`, `<h2>backend</h2>`, `<h2>No group</h2>`, `id="jobs"`, `hx-get="/jobs"`)
+	contains(t, page, `<table class="jobs stacked">`, `<h2>backend</h2>`, `<h2>No group</h2>`, `id="jobs"`, `hx-get="/jobs"`)
 	lacks(t, page, "Failing now")
 }
 

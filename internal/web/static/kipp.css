@@ -265,15 +265,19 @@
      width and the last build, the schedule and the next fire share the
      rest, never broken. The same shares in every group's table line their
      columns up down the page. */
-  .jobs th:not(:first-child), .jobs td:not(:first-child) { white-space: nowrap; }
   .jobs th:nth-child(1) { width: 34%; }
   .jobs th:nth-child(2) { width: 28%; }
   .jobs th:nth-child(3) { width: 20%; }
   .jobs th:nth-child(4) { width: 18%; }
-  .jobs td:first-child { min-width: calc(var(--space) * 56); }
-  /* The overview's tables: short rows, none broken, and the ages tick. */
-  .rows td:not(:first-child), .rows th:not(:first-child) { white-space: nowrap; }
-  .rows td:first-child { min-width: calc(var(--space) * 40); overflow-wrap: anywhere; }
+  /* The overview's tables: short rows, none broken, and the ages tick. Under
+     48rem a row is a block instead (see Stacked tables), so these column
+     rules are for a table that is still a table. */
+  @media (min-width: 48rem) {
+    .jobs th:not(:first-child), .jobs td:not(:first-child) { white-space: nowrap; }
+    .jobs td:first-child { min-width: calc(var(--space) * 56); }
+    .rows td:not(:first-child), .rows th:not(:first-child) { white-space: nowrap; }
+    .rows td:first-child { min-width: calc(var(--space) * 40); overflow-wrap: anywhere; }
+  }
   .rows time { font-variant-numeric: tabular-nums; }
   /* The overview: two columns, then a strip of graphs. Under
      75rem the columns are one, and the sections take the order that puts
@@ -337,7 +341,9 @@
   .children th:nth-child(3) { width: 24%; }
   .children th:nth-child(4) { width: 16%; }
   .children td { overflow-wrap: anywhere; }
-  .children td:nth-child(n+2) { white-space: nowrap; }
+  @media (min-width: 48rem) {
+    .children td:nth-child(n+2) { white-space: nowrap; }
+  }
   .children td:last-child { font-variant-numeric: tabular-nums; }
   /* A table scrolls inside its own box, so the page never does at 360px. */
   .scroll { overflow-x: auto; }
@@ -491,7 +497,9 @@
   .results[open] > summary, .guards[open] > summary, .artifacts[open] > summary { margin-bottom: calc(var(--space) * 4); }
   .artifacts code { overflow-wrap: anywhere; }
   .artifacts .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .artifacts td:first-child { white-space: nowrap; }
+  @media (min-width: 48rem) {
+    .artifacts td:first-child { white-space: nowrap; }
+  }
 
   /* A failed dot is square as well as red: colour alone does not say it. */
   .dots { white-space: nowrap; }
@@ -580,4 +588,22 @@
   .grants td.tick { padding: 0; }
   .grants .tick label { display: flex; align-items: center; justify-content: center; padding: calc(var(--space) * 2) calc(var(--space) * 3); cursor: pointer; }
   .grants input[type="checkbox"] { width: calc(var(--space) * 6); height: calc(var(--space) * 6); margin: 0; accent-color: var(--primary); }
+
+  /* Stacked tables. Under 48rem a row of the tables a phone user reads is a
+     block, so nothing scrolls sideways: the cells marked lead (the name, its
+     status and its age or duration) share the first line, and every other
+     cell is a line of its own under it, led by its column's name from its
+     data-label. The markup stays a table for assistive tech, and the header
+     row is only hidden from the eye. */
+  @media (max-width: 47.99rem) {
+    .stacked, .stacked tbody { display: block; }
+    .stacked thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+    .stacked tr { display: flex; flex-wrap: wrap; align-items: baseline; gap: calc(var(--space) * 1) calc(var(--space) * 3); padding: calc(var(--space) * 2) calc(var(--space) * 3); border-bottom: 1px solid var(--line); }
+    .stacked td { display: block; min-width: 0; padding: 0; border-bottom: 0; white-space: normal; overflow-wrap: anywhere; }
+    .stacked td:empty { display: none; }
+    .stacked td.lead { flex: 0 1 auto; }
+    .stacked td:not(.lead) { flex: 0 0 100%; order: 1; }
+    .stacked td:not(.lead)::before { content: attr(data-label) ": "; color: var(--fg-subtle); }
+    .stacked .num { text-align: left; }
+  }
 }

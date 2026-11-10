@@ -30,16 +30,16 @@
 {{if gt (len .View.Stages) 1}}
 <div class="scroll">{{template "dag" (dag .View.Stages .View.Needs)}}</div>
 <div class="scroll">
-<table>
+<table class="stacked">
 <thead><tr><th>Stage</th><th>Status</th><th>Exit</th><th>Started</th><th>Took</th><th>On</th></tr></thead>
 <tbody>
 {{range .View.Stages}}<tr>
-<td><a class="link" href="#log-{{.Name}}">{{.Name}}</a></td>
-<td><span class="status {{.Status}}">{{.Status}}</span>{{if gt .Tries 1}}<span class="sub">, {{.Tries}} tries</span>{{end}}</td>
-<td>{{exitText . $build}}</td>
-<td>{{clock .StartedAt}}</td>
-<td>{{took .StartedAt .FinishedAt}}</td>
-<td>{{with .RanOn}}{{if ne . "local"}}<code>{{.}}</code>{{else}}<span class="sub">the server</span>{{end}}{{end}}</td>
+<td class="lead" data-label="Stage"><a class="link" href="#log-{{.Name}}">{{.Name}}</a></td>
+<td class="lead" data-label="Status"><span class="status {{.Status}}">{{.Status}}</span>{{if gt .Tries 1}}<span class="sub">, {{.Tries}} tries</span>{{end}}</td>
+<td data-label="Exit">{{exitText . $build}}</td>
+<td data-label="Started">{{clock .StartedAt}}</td>
+<td class="lead" data-label="Took">{{took .StartedAt .FinishedAt}}</td>
+<td data-label="On">{{with .RanOn}}{{if ne . "local"}}<code>{{.}}</code>{{else}}<span class="sub">the server</span>{{end}}{{end}}</td>
 </tr>
 {{end}}</tbody>
 </table>
@@ -50,13 +50,13 @@
 <details class="guards" id="guards" open>
 <summary><h2>Guards</h2></summary>
 <div class="scroll">
-<table>
+<table class="stacked">
 <thead><tr><th>Stage</th><th>Result</th><th>Guard</th></tr></thead>
 <tbody>
 {{range .Guards}}<tr>
-<td>{{.Stage}}</td>
-<td><span class="status {{if eq .Outcome "held"}}success{{else}}{{.Outcome}}{{end}}">{{.Outcome}}</span></td>
-<td><code>{{.Line}}</code></td>
+<td class="lead" data-label="Stage">{{.Stage}}</td>
+<td class="lead" data-label="Result"><span class="status {{if eq .Outcome "held"}}success{{else}}{{.Outcome}}{{end}}">{{.Outcome}}</span></td>
+<td data-label="Guard"><code>{{.Line}}</code></td>
 </tr>
 {{end}}</tbody>
 </table>
@@ -68,13 +68,13 @@
 <details class="artifacts" id="artifacts" open>
 <summary><h2>Artifacts</h2></summary>
 <div class="scroll">
-<table>
+<table class="stacked">
 <thead><tr><th>Stage</th><th>File</th><th class="num">Size</th></tr></thead>
 <tbody>
 {{range .Artifacts}}{{$stage := .Stage}}{{$zip := .Zip}}{{range $i, $f := .Files}}<tr>
-<td>{{if eq $i 0}}{{$stage}} <a class="link sub" href="{{$zip}}" download>zip</a>{{end}}</td>
-<td><a class="link" href="{{$f.Href}}" download><code>{{$f.Path}}</code></a></td>
-<td class="num">{{$f.Size}}</td>
+<td data-label="Stage">{{if eq $i 0}}{{$stage}} <a class="link sub" href="{{$zip}}" download>zip</a>{{end}}</td>
+<td class="lead" data-label="File"><a class="link" href="{{$f.Href}}" download><code>{{$f.Path}}</code></a></td>
+<td class="num" data-label="Size">{{$f.Size}}</td>
 </tr>
 {{end}}{{end}}</tbody>
 </table>
@@ -90,15 +90,15 @@
 <p class="sub">{{if .AllTests}}<a class="link" href="{{$page}}" hx-get="{{$page}}" hx-select="#results-box" hx-target="#results-box" hx-swap="outerHTML">{{if $failed}}Show only the {{$failed}} that failed{{else}}Hide them{{end}}</a>{{else}}<a class="link" href="{{$all}}" hx-get="{{$all}}" hx-select="#results-box" hx-target="#results-box" hx-swap="outerHTML">Show all {{.Total}}</a>{{end}}</p>
 {{if .Tests}}
 <div class="scroll tall">
-<table>
+<table class="stacked">
 <thead><tr><th>Stage</th><th>Suite</th><th>Case</th><th>Result</th><th>Took</th></tr></thead>
 <tbody>
 {{range .Tests}}<tr>
-<td>{{.Stage}}</td>
-<td>{{.Suite}}</td>
-<td>{{.Name}}{{with .Message}}<div class="message">{{.}}</div>{{end}}</td>
-<td><span class="dot {{.Status}}"></span> {{.Status}}</td>
-<td>{{millis .DurationMs}}</td>
+<td data-label="Stage">{{.Stage}}</td>
+<td data-label="Suite">{{.Suite}}</td>
+<td class="lead" data-label="Case">{{.Name}}{{with .Message}}<div class="message">{{.}}</div>{{end}}</td>
+<td class="lead" data-label="Result"><span class="dot {{.Status}}"></span> {{.Status}}</td>
+<td class="lead" data-label="Took">{{millis .DurationMs}}</td>
 </tr>
 {{end}}</tbody>
 </table>

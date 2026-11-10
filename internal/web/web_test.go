@@ -871,10 +871,10 @@ func TestBuildPageShowsTestsLogsAndHistory(t *testing.T) {
 		`<details class="log" id="log-hooks">`,
 	)
 	lacks(t, page, "/stages/clone/log", "/stages/prepare/log", `href="`+path+`/cancel"`)
-	lacks(t, page, "<td>fine", "500ms")
+	lacks(t, page, `data-label="Case">fine`, "500ms")
 	_, all := get(t, c, e.srv.URL+path+"?results=all")
-	contains(t, all, `<details class="results" id="results" open>`, "<td>fine", "500ms", `href="`+path+`"`, "Show only the 1 that failed</a>")
-	if strings.Index(all, "&lt;b&gt;bad") > strings.Index(all, "<td>fine") {
+	contains(t, all, `<details class="results" id="results" open>`, `data-label="Case">fine`, "500ms", `href="`+path+`"`, "Show only the 1 that failed</a>")
+	if strings.Index(all, "&lt;b&gt;bad") > strings.Index(all, `data-label="Case">fine`) {
 		t.Fatal("the failed test should come first")
 	}
 
@@ -906,7 +906,7 @@ func TestBuildPageShowsTestsLogsAndHistory(t *testing.T) {
 	// Every row is inside the box the control swaps.
 	_, box, _ := strings.Cut(page, `<div id="results-box"`)
 	box, _, _ = strings.Cut(box, "</details>")
-	eq(t, "rows in the box", strings.Count(box, `<td class="dots">`), 3)
+	eq(t, "rows in the box", strings.Count(box, `<td class="dots" data-label="History">`), 3)
 }
 
 // visibleText is what a person reads of a page: its text and the titles
@@ -974,7 +974,7 @@ func TestAJobWhoseTestsAllPassListsNoneOfThemUntilAsked(t *testing.T) {
 func TestTheJobsTableGivesItsLastThreeColumnsRoomAndKeepsThemWhole(t *testing.T) {
 	e := site(t)
 	_, page := get(t, e.login(t, "admin"), e.srv.URL+"/jobs")
-	contains(t, page, `<table class="jobs">`)
+	contains(t, page, `<table class="jobs stacked">`)
 	css, err := staticFS.ReadFile("static/kipp.css")
 	must(t, err)
 	contains(t, string(css),
@@ -1658,8 +1658,8 @@ func TestAJobsPageListsTheVariablesTheFilesGiveItAndWhereFrom(t *testing.T) {
 	e := site(t)
 	_, page := get(t, e.login(t, "admin"), e.srv.URL+"/jobs/ask")
 	contains(t, page, `<h2>Variables</h2>`,
-		`<tr><td><code>BANNER</code></td><td><code>&lt;b&gt;hi&lt;/b&gt;</code></td><td>_vars.yml jobs ask</td></tr>`,
-		`<tr><td><code>REGION</code></td><td><code>eu</code></td><td>_vars.yml global</td></tr>`)
+		`<tr><td class="lead" data-label="Name"><code>BANNER</code></td><td data-label="Value"><code>&lt;b&gt;hi&lt;/b&gt;</code></td><td data-label="From">_vars.yml jobs ask</td></tr>`,
+		`<tr><td class="lead" data-label="Name"><code>REGION</code></td><td data-label="Value"><code>eu</code></td><td data-label="From">_vars.yml global</td></tr>`)
 	lacks(t, page, "<b>hi</b>")
 }
 
@@ -1889,7 +1889,7 @@ func TestABuildStartedFromTheFormIsRecordedAsTheWebsAndShownSo(t *testing.T) {
 	b := e.wait(t, e.build(t, admin, "smoke", nil))
 	eq(t, "the trigger of a build from the form", b.Trigger, "web")
 	_, page := get(t, admin, e.srv.URL+"/jobs/smoke")
-	contains(t, page, `<td>web <span class="sub">by admin</span></td>`)
+	contains(t, page, `<td data-label="Trigger">web <span class="sub">by admin</span></td>`)
 	_, page = get(t, admin, e.srv.URL+e.at(t, b.ID))
 	contains(t, page, `<p class="meta"><span>web by admin</span>`)
 }
@@ -1905,8 +1905,8 @@ func TestAnUnstableBuildAndStageAreShownAsUnstableOnEveryPage(t *testing.T) {
 	contains(t, page,
 		`<span>#1</span> <span class="status unstable">unstable</span></h1>`,
 		`<g class="stage unstable" data-stage="lint">`, `<g class="stage success" data-stage="unit">`,
-		"<td><a class=\"link\" href=\"#log-lint\">lint</a></td>\n<td><span class=\"status unstable\">unstable</span></td>\n<td>4</td>",
-		"<td><a class=\"link\" href=\"#log-unit\">unit</a></td>\n<td><span class=\"status success\">success</span></td>",
+		"<td class=\"lead\" data-label=\"Stage\"><a class=\"link\" href=\"#log-lint\">lint</a></td>\n<td class=\"lead\" data-label=\"Status\"><span class=\"status unstable\">unstable</span></td>\n<td data-label=\"Exit\">4</td>",
+		"<td class=\"lead\" data-label=\"Stage\"><a class=\"link\" href=\"#log-unit\">unit</a></td>\n<td class=\"lead\" data-label=\"Status\"><span class=\"status success\">success</span></td>",
 		// What made the build unstable is the log a reader came for.
 		`<details class="log" id="log-lint" open>`, `<details class="log" id="log-unit">`,
 		// Nothing failed: the tests are a count, folded, and none is listed.
@@ -1921,7 +1921,7 @@ func TestAnUnstableBuildAndStageAreShownAsUnstableOnEveryPage(t *testing.T) {
 
 	_, page = get(t, c, e.srv.URL+"/jobs/shaky?results=all")
 	contains(t, page,
-		`<td><a class="link" href="`+path+`">#1</a></td>`+"\n"+`<td><span class="status unstable">unstable</span></td>`,
+		`<td class="lead" data-label="Build"><a class="link" href="`+path+`">#1</a></td>`+"\n"+`<td class="lead" data-label="Status"><span class="status unstable">unstable</span></td>`,
 		// A dot is a test's own outcome, whatever its build's was.
 		`<span class="dot passed" title="#1 passed"></span>`,
 	)
@@ -2018,7 +2018,7 @@ func TestAJobsPageLeadsToItsOlderBuildsAPageAtATime(t *testing.T) {
 		must(t, e.st.CreateBuild(context.Background(), &store.Build{Job: "smoke", Status: store.Success, Trigger: "cli"}))
 	}
 	_, page := get(t, c, e.srv.URL+"/jobs/smoke")
-	eq(t, "builds on the first page", strings.Count(page, `<td><a class="link" href="/jobs/smoke/`), 50)
+	eq(t, "builds on the first page", strings.Count(page, `<td class="lead" data-label="Build"><a class="link" href="/jobs/smoke/`), 50)
 	contains(t, page, ">#52</a>", ">#3</a>", `<a class="link" href="/jobs/smoke?before=3">Older builds</a>`)
 	lacks(t, page, ">#2</a>", "Newest builds")
 	code, page := get(t, c, e.srv.URL+"/jobs/smoke?before=3")
