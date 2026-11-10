@@ -4,9 +4,9 @@
 <div class="head">
 <h1 class="crumbs"><a class="link-plain" href="/admin/users">Users</a><span aria-hidden="true">/</span><span>{{.Info.Name}}</span>{{if .Info.Admin}} <span class="tag">admin</span>{{end}}</h1>
 <div class="head-actions">
-<details class="build drop">
+<details class="build drop"{{if $.Fill.Is "token"}} open{{end}}>
 <summary class="action action-main">Make a token</summary>
-{{template "token-form" (tokenForm (printf "%s/tokens" $path) .Days $.CSRF $.Once)}}
+{{template "token-form" (tokenForm (printf "%s/tokens" $path) .Days $.CSRF $.Once $.Fill)}}
 </details>
 </div>
 </div>

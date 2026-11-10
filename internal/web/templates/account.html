@@ -27,9 +27,9 @@
 <div><button class="action action-main">Change the password</button></div>
 </form>
 </details>
-<details class="build drop">
+<details class="build drop"{{if $.Fill.Is "token"}} open{{end}}>
 <summary class="action">Make a token</summary>
-{{template "token-form" (tokenForm "/account/tokens" .Days $.CSRF $.Once)}}
+{{template "token-form" (tokenForm "/account/tokens" .Days $.CSRF $.Once $.Fill)}}
 </details>
 </div>
 </div>

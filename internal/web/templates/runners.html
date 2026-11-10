@@ -3,58 +3,58 @@
 <div class="head">
 <h1>Runners</h1>
 <div class="head-actions">
-<details class="build drop"{{if eq .Refused "engine"}} open{{end}}>
+<details class="build drop"{{if $.Fill.Is "engine"}} open{{end}}>
 <summary class="action action-main">Add an engine</summary>
 <form class="panel stack pop" id="add-engine" method="post" action="/admin/runners/engines">
 <h2>Add an engine</h2>
-{{if eq .Refused "engine"}}{{with $.Error}}<p class="notice notice-error" role="alert">{{.}}</p>{{end}}{{end}}
+{{if $.Fill.Is "engine"}}{{with $.Error}}<p class="notice notice-error" role="alert">{{.}}</p>{{end}}{{end}}
 <input type="hidden" name="csrf" value="{{$.CSRF}}">
 <div>
 <label class="entry-label" for="engine-name">Name</label>
-<input class="entry" id="engine-name" name="name" value="{{.Engine.Name}}" autocomplete="off" autocapitalize="none" spellcheck="false" required>
+<input class="entry" id="engine-name" name="name" value="{{$.Fill.Value "engine" "name"}}" autocomplete="off" autocapitalize="none" spellcheck="false" required>
 </div>
 <div>
 <label class="entry-label" for="engine-url">Docker URL</label>
 <p class="entry-help" id="engine-url-help"><code>unix:///var/run/docker.sock</code>, or <code>ssh://user@host?socket=/path/to/docker.sock</code> to an engine on another machine whose host key is in this server's known_hosts. A tcp:// engine with TLS is added with kipp engine add.</p>
-<input class="entry" id="engine-url" name="url" value="{{.Engine.URL}}" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="engine-url-help" required>
+<input class="entry" id="engine-url" name="url" value="{{$.Fill.Value "engine" "url"}}" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="engine-url-help" required>
 </div>
 <div>
 <label class="entry-label" for="engine-labels">Labels</label>
 <p class="entry-help" id="engine-labels-help">Comma-separated, like linux,arm64: a stage's runs_on chooses the engine by them.</p>
-<input class="entry" id="engine-labels" name="labels" value="{{join .Engine.Labels}}" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="engine-labels-help" required>
+<input class="entry" id="engine-labels" name="labels" value="{{$.Fill.Value "engine" "labels"}}" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="engine-labels-help" required>
 </div>
 <div>
 <label class="entry-label" for="engine-max">Containers at once</label>
-<input class="entry" id="engine-max" name="max" type="number" min="1" value="{{.Engine.Max}}" required>
+<input class="entry" id="engine-max" name="max" type="number" min="1" value="{{with $.Fill.Value "engine" "max"}}{{.}}{{else}}1{{end}}" required>
 </div>
 <div>
 <label class="entry-label" for="engine-key">ssh key</label>
 <p class="entry-help" id="engine-key-help">A file on this server, for an ssh:// engine. Empty is the server's --ssh-key, else its user's own.</p>
-<input class="entry" id="engine-key" name="ssh_key" value="{{.Engine.SSHKey}}" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="engine-key-help">
+<input class="entry" id="engine-key" name="ssh_key" value="{{$.Fill.Value "engine" "ssh_key"}}" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="engine-key-help">
 </div>
 <div><button class="action action-main">Add the engine</button></div>
 </form>
 </details>
-<details class="build drop"{{if eq .Refused "runner"}} open{{end}}>
+<details class="build drop"{{if $.Fill.Is "runner"}} open{{end}}>
 <summary class="action">Add a standing runner</summary>
 <form class="panel stack pop" id="add-runner" method="post" action="/admin/runners/runners">
 <h2>Add a standing runner</h2>
-{{if eq .Refused "runner"}}{{with $.Error}}<p class="notice notice-error" role="alert">{{.}}</p>{{end}}{{end}}
+{{if $.Fill.Is "runner"}}{{with $.Error}}<p class="notice notice-error" role="alert">{{.}}</p>{{end}}{{end}}
 <input type="hidden" name="csrf" value="{{$.CSRF}}">
 {{with $.Once}}<input type="hidden" name="once" value="{{.}}">
 {{end}}
 <div>
 <label class="entry-label" for="runner-name">Name</label>
-<input class="entry" id="runner-name" name="name" value="{{.Runner.Name}}" autocomplete="off" autocapitalize="none" spellcheck="false" required>
+<input class="entry" id="runner-name" name="name" value="{{$.Fill.Value "runner" "name"}}" autocomplete="off" autocapitalize="none" spellcheck="false" required>
 </div>
 <div>
 <label class="entry-label" for="runner-labels">Labels</label>
 <p class="entry-help" id="runner-labels-help">Comma-separated, like linux,amd64.</p>
-<input class="entry" id="runner-labels" name="labels" value="{{join .Runner.Labels}}" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="runner-labels-help" required>
+<input class="entry" id="runner-labels" name="labels" value="{{$.Fill.Value "runner" "labels"}}" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="runner-labels-help" required>
 </div>
 <div>
 <label class="entry-label" for="runner-executors">Stages at once</label>
-<input class="entry" id="runner-executors" name="executors" type="number" min="1" value="{{.Runner.Executors}}" required>
+<input class="entry" id="runner-executors" name="executors" type="number" min="1" value="{{with $.Fill.Value "runner" "executors"}}{{.}}{{else}}1{{end}}" required>
 </div>
 <p class="sub">Its token is made and shown to you once; the runner runs the server's version, kipp {{.ServerVersion}}.</p>
 <div><button class="action action-main">Add the runner</button></div>

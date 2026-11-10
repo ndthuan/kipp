@@ -299,6 +299,8 @@ type page struct {
 	Upgrade *upgradeView
 	Error   string
 	Data    any
+	// Fill is the form of the page that comes back open and filled.
+	Fill filled
 	// Here is the href of the group the page is in, "/jobs" for every job,
 	// or "/" for the overview;
 	// Job is the job it is about. The header marks both.

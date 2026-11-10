@@ -143,12 +143,12 @@
 <div>
 <label class="entry-label" for="token-label">Label</label>
 <p class="entry-help" id="token-label-help">What uses it, to know it by later: up to 100 characters.</p>
-<input class="entry" id="token-label" name="label" maxlength="100" aria-describedby="token-label-help" required>
+<input class="entry" id="token-label" name="label" maxlength="100" value="{{.Fill.Value "token" "label"}}" aria-describedby="token-label-help" required>
 </div>
 <div>
 <label class="entry-label" for="token-days">Lasts</label>
 <select class="entry" id="token-days" name="days">
-{{range .Days}}<option value="{{.}}"{{if eq . 90}} selected{{end}}>{{lasts .}}</option>
+{{range .Days}}<option value="{{.}}"{{if $.Picked .}} selected{{end}}>{{lasts .}}</option>
 {{end}}</select>
 </div>
 <div><button class="action action-main">Make the token</button></div>

@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ndthuan/kipp/internal/api"
@@ -56,7 +57,38 @@ var sudoActions = map[string]sudoAction{
 	"POST /admin/secrets":                         {"set a secret", at("/admin/secrets")},
 	"POST /admin/secrets/{name}/delete":           {"delete a secret", samePath},
 	"POST /admin/secrets/{name}/scopes":           {"change a secret's scopes", at("/admin/secrets")},
+	"POST /admin/runners/engines":                 {"add an engine", at("/admin/runners")},
+	"POST /admin/runners/runners":                 {"add a standing runner", at("/admin/runners")},
 }
+
+// formCarry is what of a form comes back after the password step: the name
+// its page knows the form by, and the fields it comes back filled with.
+// A field is carried only once it is named here, so a field added to a
+// form later stays behind until someone decides it may travel; a secret
+// never may, and a test holds the names a secret goes by out of every list.
+type formCarry struct {
+	form   string
+	fields []string
+	// row: the form is a table row's, the one the change is about.
+	row bool
+}
+
+// sudoCarries are by the route of the change, a key of sudoActions. A
+// change with no field of its own carries nothing and leads back as before.
+var sudoCarries = map[string]formCarry{
+	"POST /account/tokens":              {form: "token", fields: []string{"label", "days"}},
+	"POST /admin/users":                 {form: "user", fields: []string{"name", "admin"}},
+	"POST /admin/users/{name}/tokens":   {form: "token", fields: []string{"label", "days"}},
+	"POST /admin/apps":                  {form: "app", fields: []string{"name", "org"}},
+	"POST /admin/secrets":               {form: "secret", fields: []string{"name", "kind", "scopes"}},
+	"POST /admin/secrets/{name}/scopes": {form: "scopes", fields: []string{"scopes"}, row: true},
+	"POST /admin/runners/engines":       {form: "engine", fields: []string{"name", "url", "labels", "max", "ssh_key"}},
+	"POST /admin/runners/runners":       {form: "runner", fields: []string{"name", "labels", "executors"}},
+}
+
+// carryPrefix keeps a carried field apart from the password form's own
+// fields, one of which is also called name.
+const carryPrefix = "carry."
 
 func at(path string) func(*http.Request) string {
 	return func(*http.Request) string { return path }
@@ -78,11 +110,15 @@ type sudoData struct {
 	// names what it is about, a user or a secret, when it is about one.
 	Action, About string
 	What, Next    string
-	// Carry is the change's own fields, sent again with the password so
-	// that it is made once the password is right, which only the grants
-	// form does: a ticked table is too much to ask an admin to redo.
+	// Carry is the change's own fields, sent again with the password. The
+	// grants form's are made into the change once the password is right: a
+	// ticked table is too much to ask an admin to redo. Any other form's
+	// come back to it, for the admin to send again.
 	Carry []carried
 }
+
+// Refills says the form comes back filled once the password is right.
+func (d sudoData) Refills() bool { return len(d.Carry) > 0 && d.Action != grantsRoute }
 
 // carried is one field of a change held through the password step.
 type carried struct{ Name, Value string }
@@ -91,19 +127,109 @@ type carried struct{ Name, Value string }
 // step makes itself.
 const grantsRoute = "POST /admin/users/{name}/grants"
 
-// carryOf is the fields of form that action's change is made from, when
-// the change is one the password step makes.
-func carryOf(action string, form url.Values) []carried {
-	if action != grantsRoute {
-		return nil
-	}
+// carryOf is the fields of form that action's change carries through the
+// password step, read under prefix: none on the form the change was sent
+// with, carryPrefix on the password form. The grants keep their own names.
+func carryOf(action string, form url.Values, prefix string) []carried {
 	var out []carried
-	for _, field := range slices.Sorted(maps.Keys(permFields)) {
-		for _, job := range form[field] {
-			out = append(out, carried{field, job})
+	if action == grantsRoute {
+		for _, field := range slices.Sorted(maps.Keys(permFields)) {
+			for _, job := range form[field] {
+				out = append(out, carried{field, job})
+			}
+		}
+		return out
+	}
+	for _, field := range sudoCarries[action].fields {
+		for _, v := range form[prefix+field] {
+			out = append(out, carried{carryPrefix + field, v})
 		}
 	}
 	return out
+}
+
+// refilled is next with the carried fields of action's form in its query,
+// for the page there to fill the form from.
+func refilled(next, action, about string, carry []carried) string {
+	c := sudoCarries[action]
+	q := url.Values{"fill": {c.form}}
+	if c.row {
+		q.Set("of", about)
+	}
+	for _, f := range carry {
+		q.Add(strings.TrimPrefix(f.Name, carryPrefix), f.Value)
+	}
+	sep := "?"
+	if strings.Contains(next, "?") {
+		sep = "&"
+	}
+	return next + sep + q.Encode()
+}
+
+// filled is a form that comes back open with its fields as they were
+// sent. It holds only the fields its route carries, whatever else came
+// with them, so a secret is never among them. The zero value fills nothing.
+type filled struct {
+	form, of string
+	values   url.Values
+}
+
+// filledAs is the form of route filled from values.
+func filledAs(route string, values url.Values, of string) filled {
+	c, ok := sudoCarries[route]
+	if !ok {
+		return filled{}
+	}
+	f := filled{form: c.form, values: url.Values{}}
+	if c.row {
+		f.of = of
+	}
+	for _, field := range c.fields {
+		if v, ok := values[field]; ok {
+			f.values[field] = slices.Clone(v)
+		}
+	}
+	return f
+}
+
+// fillOf is the form, of those routes post, that the address r asked for
+// fills, once the password step led back to it.
+func fillOf(r *http.Request, routes ...string) filled {
+	q := r.URL.Query()
+	for _, route := range routes {
+		if c, ok := sudoCarries[route]; ok && q.Get("fill") == c.form {
+			return filledAs(route, q, q.Get("of"))
+		}
+	}
+	return filled{}
+}
+
+// Is says the form called form is the one filled.
+func (f filled) Is(form string) bool { return f.form != "" && f.form == form }
+
+// IsRow says the form called form, of the row of, is the one filled.
+func (f filled) IsRow(form, of string) bool { return f.Is(form) && f.of == of }
+
+// Value is a field of the form called form, "" when another is filled.
+func (f filled) Value(form, field string) string {
+	if !f.Is(form) {
+		return ""
+	}
+	return f.values.Get(field)
+}
+
+// Values are every value a field of the form called form was sent with.
+func (f filled) Values(form, field string) []string {
+	if !f.Is(form) {
+		return nil
+	}
+	return f.values[field]
+}
+
+// Picks says the field of the form called form was sent with value: a
+// ticked box, a chosen option.
+func (f filled) Picks(form, field, value string) bool {
+	return slices.Contains(f.Values(form, field), value)
 }
 
 // sudoFor is what the password form says to a user whose change, sent
@@ -121,7 +247,7 @@ func sudoFor(action, about string) sudoData {
 // that asks for it.
 func (s *Site) askSudo(w http.ResponseWriter, r *http.Request) {
 	d := sudoFor(r.Pattern, r.PathValue("name"))
-	d.Carry = carryOf(r.Pattern, r.PostForm)
+	d.Carry = carryOf(r.Pattern, r.PostForm, "")
 	if a, ok := sudoActions[r.Pattern]; ok {
 		d.Next = localPath(a.back(r))
 	}
@@ -134,14 +260,17 @@ func (s *Site) askSudo(w http.ResponseWriter, r *http.Request) {
 func (s *Site) sudo(w http.ResponseWriter, r *http.Request, u *store.User) {
 	d := sudoFor(r.PostFormValue("action"), r.PostFormValue("about"))
 	d.Next = localPath(r.PostFormValue("next"))
-	d.Carry = carryOf(d.Action, r.PostForm)
+	d.Carry = carryOf(d.Action, r.PostForm, carryPrefix)
 	err := s.api.Service().Sudo(r.Context(), u, api.SessionFrom(r.Context()), r.PostFormValue("password"), s.api.Attempt(r))
 	if err == nil {
-		if d.Action == grantsRoute {
+		switch {
+		case d.Action == grantsRoute:
 			s.applyGrants(w, r, u, d.About, r.PostForm)
-			return
+		case d.Refills():
+			redirect(w, r, refilled(d.Next, d.Action, d.About, d.Carry), http.StatusSeeOther)
+		default:
+			redirect(w, r, d.Next, http.StatusSeeOther)
 		}
-		redirect(w, r, d.Next, http.StatusSeeOther)
 		return
 	}
 	var throttled *auth.ThrottledError
@@ -232,7 +361,7 @@ func (s *Site) accountPage(w http.ResponseWriter, r *http.Request, u *store.User
 	if code == http.StatusOK {
 		d.Notice = noticeOf(r)
 	}
-	s.render(w, r, "account", code, page{Title: "Account", Here: "/account", Data: d, oneTime: true})
+	s.render(w, r, "account", code, page{Title: "Account", Here: "/account", Data: d, Fill: fillOf(r, "POST /account/tokens"), oneTime: true})
 }
 
 // changePassword replaces the user's password, and this browser's session
@@ -433,10 +562,21 @@ type tokenFormView struct {
 	Days   []int
 	CSRF   string
 	Once   string
+	Fill   filled
 }
 
-func tokenForm(action string, days []int, csrf, once string) tokenFormView {
-	return tokenFormView{action, days, csrf, once}
+func tokenForm(action string, days []int, csrf, once string, fill filled) tokenFormView {
+	return tokenFormView{action, days, csrf, once, fill}
+}
+
+// Picked says the lifetime is the one the form shows chosen: the one it
+// was filled with when that is one of its own, else 90 days.
+func (v tokenFormView) Picked(days int) bool {
+	sent := v.Fill.Value("token", "days")
+	if slices.ContainsFunc(v.Days, func(d int) bool { return strconv.Itoa(d) == sent }) {
+		return strconv.Itoa(days) == sent
+	}
+	return days == 90
 }
 
 // expired reports whether a token's end has passed.

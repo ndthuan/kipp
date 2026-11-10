@@ -4,7 +4,8 @@
 <h1>Confirm your password</h1>
 {{with $.Error}}<p class="notice notice-error" role="alert">{{.}}</p>{{end}}
 <p>You were about to {{.What}}{{with .About}} (<strong>{{.}}</strong>){{end}}. Changes to logins, tokens and secrets need your password once more; then for 10 minutes they do not.</p>
-{{if .Carry}}<p class="sub">Nothing was changed yet: once the password is right the change is made as you ticked it.</p>
+{{if .Refills}}<p class="sub">Nothing was changed yet: once the password is right the form comes back as you filled it, without its secret fields, to send again.</p>
+{{else if .Carry}}<p class="sub">Nothing was changed yet: once the password is right the change is made as you ticked it.</p>
 {{else}}<p class="sub">Nothing was changed yet: once the password is right you are back on the page you came from, to send the change again.</p>{{end}}
 {{range .Carry}}<input type="hidden" name="{{.Name}}" value="{{.Value}}">
 {{end}}

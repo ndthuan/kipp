@@ -3,7 +3,7 @@
 <div class="head">
 <h1>Users</h1>
 <div class="head-actions">
-<details class="build drop">
+<details class="build drop"{{if $.Fill.Is "user"}} open{{end}}>
 <summary class="action action-main">Add a user</summary>
 <form class="panel stack pop" method="post" action="/admin/users">
 <h2>Add a user</h2>
@@ -13,9 +13,9 @@
 <div>
 <label class="entry-label" for="user-name">Name</label>
 <p class="entry-help" id="user-name-help">1 to 64 lower-case letters, digits, dots, hyphens and underscores, starting with a letter or a digit: the rule of a job's name.</p>
-<input class="entry" id="user-name" name="name" maxlength="64" autocomplete="off" autocapitalize="none" aria-describedby="user-name-help" required>
+<input class="entry" id="user-name" name="name" maxlength="64" value="{{$.Fill.Value "user" "name"}}" autocomplete="off" autocapitalize="none" aria-describedby="user-name-help" required>
 </div>
-<label class="check"><input type="checkbox" name="admin"> An admin: sees and does everything, and manages users and secrets</label>
+<label class="check"><input type="checkbox" name="admin"{{if $.Fill.Picks "user" "admin" "on"}} checked{{end}}> An admin: sees and does everything, and manages users and secrets</label>
 <p class="sub">A password is made for them and shown to you once. They change it on their Account page; what they may do is set on their page.</p>
 <div><button class="action action-main">Add the user</button></div>
 </form>

@@ -33,6 +33,13 @@ Added:
 
 Changed:
 
+- After the password step an admin form comes back open and filled as it
+  was sent, for the admin to send once more: add a user, make a token (own
+  and for a user), set a secret (name, kind and scopes), change a secret's
+  scopes, make a GitHub App, add an engine and add a standing runner. A
+  secret's value, file, user and password and every password field are
+  never carried. Adding an engine or a standing runner now leads back to
+  the runners page after the password, not to the overview.
 - On a phone (under 48rem) the tables of the overview, the queue, the job
   list and a job's and a build's pages stack into rows instead of scrolling
   sideways: the name, its status and its age or duration on the first line,

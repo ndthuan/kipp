@@ -84,6 +84,8 @@ type env struct {
 	st   *store.Store
 	d    *dispatch.Dispatcher
 	site *Site
+	// dir holds the job files and the database.
+	dir string
 	// reloadErr is why the last reload was refused, as serve would say it.
 	reloadErr atomic.Pointer[string]
 }
@@ -117,7 +119,7 @@ func site(t *testing.T, tune ...func(*api.Deps)) *env {
 	stopped := make(chan struct{})
 	go func() { d.Run(ctx); close(stopped) }()
 	au := auth.New(st, time.Hour, []byte("an obvious test device key 32 b."))
-	e := &env{st: st, d: d}
+	e := &env{st: st, d: d, dir: dir}
 	e.reloadErr.Store(new(""))
 	deps := api.Deps{Auth: au, Dispatch: d, Store: st, Version: "t", Logger: quiet, Listen: "127.0.0.1:0", FlakyFlips: overview.DefaultFlips,
 		Reload: func(context.Context) error { return nil }, ReloadError: func() string { return *e.reloadErr.Load() },

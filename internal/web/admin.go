@@ -64,7 +64,7 @@ func (s *Site) users(w http.ResponseWriter, r *http.Request, u *store.User) {
 		s.fail(w, r, err)
 		return
 	}
-	s.render(w, r, "users", http.StatusOK, page{Title: "Users", Here: "/admin/users", Data: usersData{Users: all, Notice: noticeOf(r)}, oneTime: true})
+	s.render(w, r, "users", http.StatusOK, page{Title: "Users", Here: "/admin/users", Data: usersData{Users: all, Notice: noticeOf(r)}, Fill: fillOf(r, "POST /admin/users"), oneTime: true})
 }
 
 func (s *Site) addUser(w http.ResponseWriter, r *http.Request, u *store.User) {
@@ -150,7 +150,7 @@ func (s *Site) showUser(w http.ResponseWriter, r *http.Request, u *store.User, n
 		}
 		d.Groups = append(d.Groups, gg)
 	}
-	s.render(w, r, "user", status, page{Title: info.Name, Here: "/admin/users", Data: d, oneTime: true})
+	s.render(w, r, "user", status, page{Title: info.Name, Here: "/admin/users", Data: d, Fill: fillOf(r, "POST /admin/users/{name}/tokens"), oneTime: true})
 }
 
 // grantRowOf is a job's row of the grants form. Grants stored as build or
@@ -376,9 +376,6 @@ func (s *Site) deleteUser(w http.ResponseWriter, r *http.Request, u *store.User)
 
 type secretsData struct {
 	*api.Secrets
-	// Name is what the set form's name holds: the one a "set" link
-	// picked, or the one a refused form sent.
-	Name    string
 	Notice  string
 	Choices *api.ScopeChoices
 }
@@ -433,11 +430,20 @@ func scopeOptions(c *api.ScopeChoices, have []string) []scopeOptionGroup {
 	return out
 }
 
+// setFormRoute is the route of the form that sets a secret.
+const setFormRoute = "POST /admin/secrets"
+
 func (s *Site) secrets(w http.ResponseWriter, r *http.Request, u *store.User) {
-	s.secretsPage(w, r, u, http.StatusOK, r.URL.Query().Get("name"), "")
+	fill := fillOf(r, setFormRoute, "POST /admin/secrets/{name}/scopes")
+	if name := r.URL.Query().Get("name"); fill.form == "" && name != "" {
+		// A "set" link picks only the secret's name.
+		fill = filledAs(setFormRoute, url.Values{"name": {name}}, "")
+	}
+	s.secretsPage(w, r, u, http.StatusOK, fill, "")
 }
 
-func (s *Site) secretsPage(w http.ResponseWriter, r *http.Request, u *store.User, code int, name, msg string) {
+// secretsPage is the secrets page with fill's form open and filled.
+func (s *Site) secretsPage(w http.ResponseWriter, r *http.Request, u *store.User, code int, fill filled, msg string) {
 	all, err := s.api.Service().Secrets(r.Context(), u)
 	if err != nil {
 		s.fail(w, r, err)
@@ -448,16 +454,16 @@ func (s *Site) secretsPage(w http.ResponseWriter, r *http.Request, u *store.User
 		s.fail(w, r, err)
 		return
 	}
-	d := secretsData{Secrets: all, Name: name, Choices: choices}
+	d := secretsData{Secrets: all, Choices: choices}
 	if code == http.StatusOK {
 		d.Notice = noticeOf(r)
 	}
-	s.render(w, r, "secrets", code, page{Title: "Secrets", Here: "/admin/secrets", Error: msg, Data: d})
+	s.render(w, r, "secrets", code, page{Title: "Secrets", Here: "/admin/secrets", Error: msg, Data: d, Fill: fill})
 }
 
 // setSecret stores a secret of the kind the form names, a value when it
 // names none. A value that is refused is not sent back: the form comes
-// back with the name and empty values.
+// back with the fields that are not secret and empty values.
 func (s *Site) setSecret(w http.ResponseWriter, r *http.Request, u *store.User) {
 	in, err := secretForm(r)
 	if err == nil {
@@ -467,7 +473,7 @@ func (s *Site) setSecret(w http.ResponseWriter, r *http.Request, u *store.User) 
 	case err == nil:
 		done(w, r, "/admin/secrets", "secret-set")
 	case errors.Is(err, api.ErrBadInput):
-		s.secretsPage(w, r, u, http.StatusBadRequest, in.Name, plainly(err))
+		s.secretsPage(w, r, u, http.StatusBadRequest, filledAs(setFormRoute, r.PostForm, ""), plainly(err))
 	default:
 		s.fail(w, r, err)
 	}
@@ -480,7 +486,7 @@ func (s *Site) scopeSecret(w http.ResponseWriter, r *http.Request, u *store.User
 	case err == nil:
 		done(w, r, "/admin/secrets", "scoped")
 	case errors.Is(err, api.ErrBadInput):
-		s.secretsPage(w, r, u, http.StatusBadRequest, "", plainly(err))
+		s.secretsPage(w, r, u, http.StatusBadRequest, filled{}, plainly(err))
 	default:
 		s.fail(w, r, err)
 	}

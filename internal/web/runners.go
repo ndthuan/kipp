@@ -33,14 +33,14 @@ type runnersData struct {
 	// ServerVersion is the server's: a runner of another is refused, and
 	// its row says so.
 	ServerVersion string
-	// Engine and Runner are what a refused form sent, to fill it again.
-	Engine store.Engine
-	Runner api.RunnerInfo
-	// Refused names the form that was refused, "engine" or "runner": it comes
-	// back open, with the error inside it.
-	Refused string
-	Notice  string
+	Notice        string
 }
+
+// The routes of the runners page's two forms.
+const (
+	addEngineRoute = "POST /admin/runners/engines"
+	addRunnerRoute = "POST /admin/runners/runners"
+)
 
 // OSArch is where a runner said it runs, as os/arch.
 func (runnersData) OSArch(a api.RunnerInfo) string {
@@ -51,10 +51,13 @@ func (runnersData) OSArch(a api.RunnerInfo) string {
 }
 
 func (s *Site) runners(w http.ResponseWriter, r *http.Request, u *store.User) {
-	s.runnersPage(w, r, u, http.StatusOK, runnersData{Engine: store.Engine{Max: 1}, Runner: api.RunnerInfo{Executors: 1}}, "")
+	s.runnersPage(w, r, u, http.StatusOK, fillOf(r, addEngineRoute, addRunnerRoute), "")
 }
 
-func (s *Site) runnersPage(w http.ResponseWriter, r *http.Request, u *store.User, code int, d runnersData, msg string) {
+// runnersPage is the runners page with fill's form open and filled; a
+// refusal's msg is shown inside that form.
+func (s *Site) runnersPage(w http.ResponseWriter, r *http.Request, u *store.User, code int, fill filled, msg string) {
+	var d runnersData
 	var err error
 	if d.Engines, err = s.api.Service().Engines(r.Context(), u); err != nil {
 		s.fail(w, r, err)
@@ -68,14 +71,14 @@ func (s *Site) runnersPage(w http.ResponseWriter, r *http.Request, u *store.User
 	if code == http.StatusOK {
 		d.Notice = noticeOf(r)
 	}
-	s.render(w, r, "runners", code, page{Title: "Runners", Here: "/admin/runners", Error: msg, Data: d, oneTime: true})
+	s.render(w, r, "runners", code, page{Title: "Runners", Here: "/admin/runners", Error: msg, Data: d, Fill: fill, oneTime: true})
 }
 
-// refusedForm is the page again with what was refused, or the error page
-// for anything else.
-func (s *Site) refusedForm(w http.ResponseWriter, r *http.Request, u *store.User, d runnersData, err error) {
+// refusedForm is the page again with the form of route as it was sent, or
+// the error page for anything else.
+func (s *Site) refusedForm(w http.ResponseWriter, r *http.Request, u *store.User, route string, err error) {
 	if errors.Is(err, api.ErrBadInput) || errors.Is(err, api.ErrConflict) {
-		s.runnersPage(w, r, u, http.StatusBadRequest, d, plainly(err))
+		s.runnersPage(w, r, u, http.StatusBadRequest, filledAs(route, r.PostForm, ""), plainly(err))
 		return
 	}
 	s.fail(w, r, err)
@@ -83,21 +86,18 @@ func (s *Site) refusedForm(w http.ResponseWriter, r *http.Request, u *store.User
 
 func (s *Site) addEngine(w http.ResponseWriter, r *http.Request, u *store.User) {
 	e := store.Engine{Name: r.PostFormValue("name"), URL: r.PostFormValue("url"), SSHKey: r.PostFormValue("ssh_key")}
-	d := runnersData{Engine: e, Runner: api.RunnerInfo{Executors: 1}, Refused: "engine"}
 	max, err := strconv.Atoi(r.PostFormValue("max"))
 	if err != nil {
-		s.refusedForm(w, r, u, d, errors.Join(api.ErrBadInput, errors.New("max: a whole number")))
+		s.refusedForm(w, r, u, addEngineRoute, errors.Join(api.ErrBadInput, errors.New("max: a whole number")))
 		return
 	}
-	d.Engine.Max = max
 	if e.Labels, err = api.ParseLabels(r.PostFormValue("labels")); err != nil {
-		s.refusedForm(w, r, u, d, err)
+		s.refusedForm(w, r, u, addEngineRoute, err)
 		return
 	}
 	e.Max = max
 	if err := s.api.Service().AddEngine(r.Context(), u, api.SessionFrom(r.Context()), e); err != nil {
-		d.Engine.Labels = e.Labels
-		s.refusedForm(w, r, u, d, err)
+		s.refusedForm(w, r, u, addEngineRoute, err)
 		return
 	}
 	done(w, r, "/admin/runners", "engine-added")
@@ -151,22 +151,19 @@ func (s *Site) deleteEngine(w http.ResponseWriter, r *http.Request, u *store.Use
 
 func (s *Site) addRunner(w http.ResponseWriter, r *http.Request, u *store.User) {
 	name := r.PostFormValue("name")
-	d := runnersData{Engine: store.Engine{Max: 1}, Runner: api.RunnerInfo{Name: name, Executors: 1}, Refused: "runner"}
 	executors, err := strconv.Atoi(r.PostFormValue("executors"))
 	if err != nil {
-		s.refusedForm(w, r, u, d, errors.Join(api.ErrBadInput, errors.New("executors: a whole number")))
+		s.refusedForm(w, r, u, addRunnerRoute, errors.Join(api.ErrBadInput, errors.New("executors: a whole number")))
 		return
 	}
-	d.Runner.Executors = executors
 	labels, err := api.ParseLabels(r.PostFormValue("labels"))
 	if err != nil {
-		s.refusedForm(w, r, u, d, err)
+		s.refusedForm(w, r, u, addRunnerRoute, err)
 		return
 	}
-	d.Runner.Labels = labels
 	plain, err := s.api.Service().AddRunner(r.Context(), u, api.SessionFrom(r.Context()), name, labels, executors)
 	if err != nil {
-		s.refusedForm(w, r, u, d, err)
+		s.refusedForm(w, r, u, addRunnerRoute, err)
 		return
 	}
 	s.once(w, r, "/admin/runners", onceData{
