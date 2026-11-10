@@ -110,6 +110,8 @@ paths:
     $ref: paths/admin_upgrade.yaml
   /admin/upgrade/rollback:
     $ref: paths/admin_upgrade_rollback.yaml
+  /admin/upgrade/dry-run:
+    $ref: paths/admin_upgrade_dry_run.yaml
   /admin/users:
     $ref: paths/admin_users.yaml
   /admin/users/{name}:

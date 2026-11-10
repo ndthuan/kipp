@@ -77,7 +77,7 @@ func Take(ctx context.Context, data, from string, now time.Time) (name string, e
 			name = ""
 		}
 	}()
-	if err = copyDatabase(ctx, data, dir); err != nil {
+	if err = CopyDatabase(ctx, data, dir); err != nil {
 		return "", fmt.Errorf("backing up the database: %w", err)
 	}
 	if err = copyFile(data, dir, KeyFile); err != nil && !errors.Is(err, fs.ErrNotExist) {
@@ -86,10 +86,10 @@ func Take(ctx context.Context, data, from string, now time.Time) (name string, e
 	return name, syncDir(dir)
 }
 
-// copyDatabase writes a consistent copy of the live database to dst with
-// VACUUM INTO, which wants an empty file that is already there, and then
-// checks the copy.
-func copyDatabase(ctx context.Context, srcDir, dstDir string) error {
+// CopyDatabase writes a consistent copy of the live database of srcDir into
+// dstDir with VACUUM INTO, which wants an empty file that is already there,
+// and then checks the copy.
+func CopyDatabase(ctx context.Context, srcDir, dstDir string) error {
 	src, dst := filepath.Join(srcDir, DBFile), filepath.Join(dstDir, DBFile)
 	if _, err := os.Stat(src); err != nil {
 		return err
@@ -104,7 +104,7 @@ func copyDatabase(ctx context.Context, srcDir, dstDir string) error {
 	if err := vacuumInto(ctx, src, dst); err != nil {
 		return err
 	}
-	if err := checkDatabase(ctx, dst); err != nil {
+	if err := CheckDatabase(ctx, dst); err != nil {
 		return err
 	}
 	return syncFile(dstDir, DBFile)
@@ -129,8 +129,8 @@ func vacuumInto(ctx context.Context, src, dst string) error {
 	return errors.Join(err, db.Close())
 }
 
-// checkDatabase opens the copy and has SQLite check it.
-func checkDatabase(ctx context.Context, path string) error {
+// CheckDatabase opens a copy and has SQLite check it.
+func CheckDatabase(ctx context.Context, path string) error {
 	db, err := openDB(path)
 	if err != nil {
 		return err

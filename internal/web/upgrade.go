@@ -1,6 +1,7 @@
 package web
 
 import (
+	"cmp"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -30,6 +31,7 @@ func (s *Site) upgradeRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin/server/upgrade/rollback", s.withUser(s.confirmRollback))
 	mux.HandleFunc("POST /admin/server/upgrade/rollback", s.withUser(s.rollback))
 	mux.HandleFunc("GET /admin/server/upgrade/log", s.withUser(s.upgradeLog))
+	mux.HandleFunc("POST /admin/server/upgrade/dry-run", s.withUser(s.upgradeDryRun))
 }
 
 // upgradeView is what the banner and the Server page's card say about the
@@ -61,6 +63,45 @@ type upgradeView struct {
 	From     string
 	// ManualLines are what to type where the engine cannot upgrade.
 	ManualLines []string
+	// DryRun is the report of the dry run the admin just asked for.
+	DryRun *dryRunView
+}
+
+// dryRunView is a dry run's report on the card.
+type dryRunView struct {
+	engine.DryRun
+	Steps []dryStepView
+}
+
+// dryStepView is one check of a dry run; Mark is its class in the list.
+type dryStepView struct {
+	engine.DryStep
+	Mark, Label string
+}
+
+// dryLabels are what the card calls each check.
+var dryLabels = map[string]string{
+	engine.CheckRelease:  "Release",
+	engine.CheckSpace:    "Disk space",
+	engine.CheckDownload: "Download and signature",
+	engine.CheckJobs:     "Job files",
+	engine.CheckMigrate:  "Database migration",
+	engine.CheckBuilds:   "Builds to wait for",
+}
+
+func newDryRunView(d engine.DryRun) *dryRunView {
+	v := &dryRunView{DryRun: d}
+	for _, st := range d.Steps {
+		mark := "next"
+		switch st.Result {
+		case engine.Passed:
+			mark = "done"
+		case engine.Failed:
+			mark = "failed"
+		}
+		v.Steps = append(v.Steps, dryStepView{DryStep: st, Mark: mark, Label: cmp.Or(dryLabels[st.Name], st.Name)})
+	}
+	return v
 }
 
 func activeState(st string) bool {
@@ -300,4 +341,16 @@ func (s *Site) upgradeLog(w http.ResponseWriter, r *http.Request, u *store.User)
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	_, _ = w.Write([]byte(info.Failure.LogTail))
+}
+
+// upgradeDryRun makes every check of the upgrade but the restart and shows
+// the Server page with what each found. It waits for the answer: there is
+// nothing to follow, as nothing on the server changes.
+func (s *Site) upgradeDryRun(w http.ResponseWriter, r *http.Request, u *store.User) {
+	d, err := s.api.Service().DryRunUpgrade(r.Context(), u, r.PostFormValue("version"))
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.renderServer(w, r, u, http.StatusOK, "", &d)
 }

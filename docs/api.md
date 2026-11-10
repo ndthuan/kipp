@@ -221,7 +221,7 @@ An admin's token, or an admin's browser session, upgrades the server to the
 latest release or returns it to the version before, as the Upgrade card on
 the Server page and `kipp upgrade` do ([Upgrading](install.md#upgrading)).
 Each start or cancel is a row of the audit (`upgrade`, `upgrade.rollback`,
-`upgrade.cancel`). Only one upgrade runs at a time.
+`upgrade.cancel`, and `upgrade.dry-run` for a dry run). Only one upgrade runs at a time.
 
 | Route | Does |
 |---|---|
@@ -229,6 +229,7 @@ Each start or cancel is a row of the audit (`upgrade`, `upgrade.rollback`,
 | `POST /api/v1/admin/upgrade` | Starts an upgrade to the latest release. 202 with the first status; poll `GET` for the rest. |
 | `DELETE /api/v1/admin/upgrade` | Cancels it, until its backup begins. 200 with the status. |
 | `POST /api/v1/admin/upgrade/rollback` | Starts the return to the version before the last upgrade. 202 with the first status. |
+| `POST /api/v1/admin/upgrade/dry-run` | Makes every check of an upgrade but the restart and changes nothing ([Checking an upgrade first](install.md#checking-an-upgrade-first)). 200 with `version`, `from`, `ok`, `running`, `queued` and `steps`, each with `name`, `result` (`passed`, `failed`, `skipped`) and `detail`, once every check has ended. The optional body is `{"version": "vX.Y.Z"}`, which must be the latest release. 409 while another dry run runs. |
 
 The body of a `POST` is optional; none is a safe restart with the default
 wait. Its keys are `safe_restart` (default true: quiet mode, wait until no

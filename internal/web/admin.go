@@ -16,6 +16,7 @@ import (
 	"github.com/ndthuan/kipp/internal/config"
 	"github.com/ndthuan/kipp/internal/dispatch"
 	"github.com/ndthuan/kipp/internal/store"
+	"github.com/ndthuan/kipp/internal/upgrade/engine"
 	"github.com/ndthuan/kipp/internal/webhook"
 )
 
@@ -620,6 +621,12 @@ func (s *Site) server(w http.ResponseWriter, r *http.Request, u *store.User) {
 }
 
 func (s *Site) serverPage(w http.ResponseWriter, r *http.Request, u *store.User, code int, msg string) {
+	s.renderServer(w, r, u, code, msg, nil)
+}
+
+// renderServer draws the Server page, with the report of a dry run on its
+// Upgrade card when there is one.
+func (s *Site) renderServer(w http.ResponseWriter, r *http.Request, u *store.User, code int, msg string, dry *engine.DryRun) {
 	d, err := s.serverData(r, u)
 	if err != nil {
 		s.fail(w, r, err)
@@ -627,6 +634,9 @@ func (s *Site) serverPage(w http.ResponseWriter, r *http.Request, u *store.User,
 	}
 	if code == http.StatusOK {
 		d.Notice = noticeOf(r)
+	}
+	if d.Upgrade != nil && dry != nil {
+		d.Upgrade.DryRun = newDryRunView(*dry)
 	}
 	s.render(w, r, "server", code, page{Title: "Server", Here: "/admin/server", Error: msg, Data: d, Upgrade: d.Upgrade})
 }

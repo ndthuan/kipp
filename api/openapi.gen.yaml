@@ -372,6 +372,51 @@ paths:
       tags:
         - admin
       x-kipp-package: api
+  /admin/upgrade/dry-run:
+    post:
+      description: |
+        Finds the release as an upgrade would (the latest, or the version named,
+        which must be the latest), checks the room on the data directory's disk,
+        downloads the release into a temporary directory there and checks its
+        signature and checksum, has the new binary check the server's jobs
+        directory and migrate a copy of the database (then checked with
+        `PRAGMA integrity_check`), and counts the builds a safe restart would
+        wait for. It changes nothing on the server: no quiet mode, no backup,
+        nothing in the data directory's `bin/` or `upgrade/`, no restart, and its
+        temporary files are removed before it answers, which may take minutes.
+        The answer is 200 whether the checks passed or not; `ok` says which. One
+        dry run runs at a time.
+      operationId: dryRunUpgrade
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpgradeDryRunRequest"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpgradeDryRun"
+          description: What each check found.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - bearerToken: []
+        - csrfToken: []
+          sessionCookie: []
+      summary: Make every check of an upgrade but the restart
+      tags:
+        - admin
+      x-kipp-package: api
   /admin/upgrade/rollback:
     post:
       description: |
@@ -4588,6 +4633,74 @@ components:
         - unavailable
         - rollback_to
         - last_failure
+      type: object
+    UpgradeDryRun:
+      additionalProperties: false
+      description: What an upgrade would meet, found without changing the server.
+      properties:
+        from:
+          description: The version the server runs.
+          type: string
+        ok:
+          description: Every check passed.
+          type: boolean
+        queued:
+          description: The builds that wait now, which a safe restart would wait for too.
+          type: integer
+        running:
+          description: The builds that run now, which a safe restart would wait for.
+          type: integer
+        steps:
+          description: The checks in the order they are made.
+          items:
+            $ref: "#/components/schemas/UpgradeDryRunStep"
+          type: array
+        version:
+          description: The release checked, empty when none was found.
+          type: string
+      required:
+        - version
+        - from
+        - ok
+        - running
+        - queued
+        - steps
+      type: object
+    UpgradeDryRunRequest:
+      additionalProperties: false
+      description: The body of a dry run. No body at all checks the latest release.
+      properties:
+        version:
+          description: The release to check; it must be the latest one.
+          type: string
+      type: object
+    UpgradeDryRunStep:
+      additionalProperties: false
+      description: One check of a dry run.
+      properties:
+        detail:
+          description: What it found, or why it failed, in a sentence.
+          type: string
+        name:
+          enum:
+            - release
+            - space
+            - download
+            - jobs
+            - migrate
+            - builds
+          type: string
+        result:
+          description: A check is skipped when one it needs failed.
+          enum:
+            - passed
+            - failed
+            - skipped
+          type: string
+      required:
+        - name
+        - result
+        - detail
       type: object
     UpgradeFailure:
       additionalProperties: false

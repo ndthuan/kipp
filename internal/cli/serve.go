@@ -496,7 +496,7 @@ func (s *server) quietCounts(q dispatch.QuietState, err error) (engine.Counts, e
 // newUpgrades makes the engine for this server's data directory.
 func (s *server) newUpgrades() *engine.Engine {
 	return engine.New(engine.Options{
-		Data: s.f.data, Version: version.Version, Checker: s.updates, Key: releaseKey(), Poll: upgradeWaitPoll,
+		Data: s.f.data, Jobs: s.f.jobs, Version: version.Version, Checker: s.updates, Key: releaseKey(), Poll: upgradeWaitPoll,
 		SetQuiet: func(ctx context.Context, on bool) (engine.Counts, error) {
 			return s.quietCounts(s.d.SetQuiet(ctx, on))
 		},

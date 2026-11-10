@@ -1,6 +1,7 @@
 package api
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -174,19 +175,8 @@ func upgradeRequest(r *http.Request) (engine.Request, error) {
 		Version     string `json:"version"`
 		WaitTimeout string `json:"wait_timeout"`
 	}
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	err := dec.Decode(&body)
-	if errors.Is(err, io.EOF) {
-		return engine.Request{Safe: true}, nil
-	}
-	if err == nil {
-		if _, more := dec.Token(); !errors.Is(more, io.EOF) {
-			err = errors.New("more than one JSON value in the body")
-		}
-	}
-	if err != nil {
-		return engine.Request{}, fmt.Errorf("%w: %w", ErrBadInput, err)
+	if empty, err := optionalBody(r, &body); empty || err != nil {
+		return engine.Request{Safe: true}, err
 	}
 	req := engine.Request{Safe: body.SafeRestart == nil || *body.SafeRestart, ConfirmLost: body.ConfirmLost, Version: body.Version}
 	if body.WaitTimeout != "" {
@@ -197,4 +187,83 @@ func upgradeRequest(r *http.Request) (engine.Request, error) {
 		req.WaitTimeout = d
 	}
 	return req, nil
+}
+
+// optionalBody decodes a JSON body of one value into out, refusing a field
+// out has not; empty is a request with no body at all.
+func optionalBody(r *http.Request, out any) (empty bool, err error) {
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	err = dec.Decode(out)
+	if errors.Is(err, io.EOF) {
+		return true, nil
+	}
+	if err == nil {
+		if _, more := dec.Token(); !errors.Is(more, io.EOF) {
+			err = errors.New("more than one JSON value in the body")
+		}
+	}
+	if err != nil {
+		return false, fmt.Errorf("%w: %w", ErrBadInput, err)
+	}
+	return false, nil
+}
+
+// DryRunUpgrade makes every check of an upgrade to version (the latest
+// when empty) but the restart, and changes nothing. It is an admin's, as
+// the upgrade is.
+func (s *Service) DryRunUpgrade(ctx context.Context, u *store.User, version string) (engine.DryRun, error) {
+	if !u.Admin {
+		return engine.DryRun{}, ErrForbidden
+	}
+	if s.deps.Upgrade == nil {
+		return engine.DryRun{}, errNoUpgrades
+	}
+	d, err := s.deps.Upgrade.DryRunUpgrade(ctx, version)
+	if err != nil {
+		s.record(ctx, u.Name, "upgrade.dry-run", version, "refused")
+		return d, upgradeErr(err)
+	}
+	detail := "passed"
+	if !d.OK {
+		detail = "failed"
+	}
+	s.record(ctx, u.Name, "upgrade.dry-run", cmp.Or(d.Version, version), detail)
+	return d, nil
+}
+
+// dryRunJSON is a dry run as the API answers it.
+type dryRunJSON struct {
+	Version string        `json:"version"`
+	From    string        `json:"from"`
+	OK      bool          `json:"ok"`
+	Running int           `json:"running"`
+	Queued  int           `json:"queued"`
+	Steps   []dryStepJSON `json:"steps"`
+}
+
+type dryStepJSON struct {
+	Name   string `json:"name"`
+	Result string `json:"result"`
+	Detail string `json:"detail"`
+}
+
+func (a *API) upgradeDryRun(w http.ResponseWriter, r *http.Request, u *store.User) {
+	var body struct {
+		Version string `json:"version"`
+	}
+	if _, err := optionalBody(r, &body); err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	d, err := a.svc.DryRunUpgrade(r.Context(), u, body.Version)
+	if err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	out := dryRunJSON{Version: d.Version, From: d.From, OK: d.OK, Running: d.Running, Queued: d.Queued, Steps: []dryStepJSON{}}
+	for _, s := range d.Steps {
+		out.Steps = append(out.Steps, dryStepJSON(s))
+	}
+	writeJSON(w, http.StatusOK, out)
 }

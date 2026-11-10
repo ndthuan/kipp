@@ -7,6 +7,7 @@ or `--name`.
 |---|---|---|
 | [`kipp serve`](#kipp-serve) | Runs the server: web, API, scheduler and runner. | |
 | [`kipp check`](#kipp-check) | Checks a jobs directory. | nothing |
+| [`kipp migrate`](#kipp-migrate) | Brings the database of a data directory no server runs on up to this kipp's schema. | the data directory |
 | [`kipp reload`](#kipp-reload) | Has a running server read its jobs directory again. | the server |
 | [`kipp quiet`](#kipp-quiet) | Stops a running server taking builds, before a restart. | the server |
 | [`kipp upgrade`](#kipp-upgrade) | Upgrades a running server to the latest release, or back to the version before. | the server |
@@ -106,6 +107,20 @@ Exits 0 when the directory would be taken, 1 when not, 2 on a wrong
 command line. Secret scopes and a repo's stages file are not read: they
 are checked when a build runs.
 
+## kipp migrate
+
+```
+kipp migrate --data <dir>
+```
+
+Brings the database in `--data` up to the schema of this kipp, as
+`kipp serve` does when it starts, and prints `ok:` with the schema it went
+from and to. It takes the data directory's lock first, so it refuses one a
+server runs on, and it refuses a directory with no database (exit 2). Like
+`serve`, it keeps the database as it was beside it before it changes it.
+`kipp upgrade --dry-run` runs the new release's `migrate` on a copy of the
+database, to find a migration that fails before the real upgrade does.
+
 ## kipp reload
 
 ```
@@ -131,7 +146,7 @@ whether the server is quiet and how many builds run and wait. See
 ## kipp upgrade
 
 ```
-kipp upgrade [status] [--check] [--cancel] [--rollback] [--no-safe [--yes]] [--wait-timeout <duration>] [--url <url>] [--token <token>]
+kipp upgrade [status] [--check] [--dry-run [<version>] [--json]] [--cancel] [--rollback] [--no-safe [--yes]] [--wait-timeout <duration>] [--url <url>] [--token <token>]
 ```
 
 With an admin's token, upgrades the running server to the latest release,
@@ -145,6 +160,8 @@ releases and its signature and checksum are checked first.
 | Flag | Does |
 |---|---|
 | `--check` | Says whether a newer release can be upgraded to, and does nothing. |
+| `--dry-run [<version>]` | Makes every check of the upgrade but the restart, and changes nothing: see below. The version, when given, must be the latest release. |
+| `--json` | With `--dry-run`, prints the server's report as JSON (the answer of `POST /api/v1/admin/upgrade/dry-run`). |
 | `status` | Says where an upgrade is: `upgrade: idle`, or the step, the two versions and, while it waits, how many builds run and queue. |
 | `--cancel` | Cancels an upgrade that has not reached its backup; quiet is turned off again. |
 | `--rollback` | Returns to the version before the last upgrade, with the data as the backup of that upgrade had it. Everything written since is lost. |
@@ -160,6 +177,35 @@ build, with the update check off, when there is nothing newer or the release
 has no signature file, and where the data directory cannot be written; the
 last says the lines that upgrade that kind of install by hand. It waits up
 to 35 minutes after the restart for the server to answer.
+
+`--dry-run` has the server find the release as the upgrade would, check
+the room on the data directory's disk, download the release into a
+temporary directory there and check its signature and checksum, run the
+new binary's `kipp check` on the server's jobs directory and its
+`kipp migrate` on a copy of the database (then `PRAGMA integrity_check` on
+the copy), and count the builds a safe restart would wait for. It prints a
+line per check, `passed`, `failed` with the reason, or `skipped` when a
+check it needs failed:
+
+```sh
+kipp upgrade --dry-run
+# dry run of the upgrade from v1.3.0 to v1.4.0, nothing was changed:
+#   passed   release   v1.4.0 is the latest release and kipp can upgrade to it
+#   passed   space     2048.0 MiB free in /var/lib/kipp, 180.3 MiB needed
+#   passed   download  SHA256SUMS is signed by the release key, the archive matches it, ...
+#   failed   jobs      the new version refuses the job files in /etc/kipp: exit status 1: ...
+#   passed   migrate   a copy of the database migrated and passes its integrity check: ...
+#   passed   builds    2 running and 0 queued: a safe restart waits for them in quiet mode first
+# the upgrade would not go through: fix what failed and run the dry run again
+```
+
+Nothing on the server changes: no quiet mode, no backup, nothing in
+`bin/` or `upgrade/` of the data directory, no restart, and its temporary
+files are removed before it answers. It exits 0 when every check passed
+and 1 otherwise, and waits up to an hour for the answer. One dry run runs
+at a time. It needs both versions to know the dry run: the running server
+drives it, and the new release's binary does the job check and the
+migration.
 
 ## kipp run
 

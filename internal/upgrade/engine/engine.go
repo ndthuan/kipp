@@ -64,6 +64,9 @@ type Counts struct {
 type Options struct {
 	// Data is the data directory, Version the running server's.
 	Data, Version string
+	// Jobs is the server's jobs directory, which a dry run has the new
+	// version check.
+	Jobs string
 	// Checker knows the latest release and fetches its files; without
 	// one there is nothing to upgrade to.
 	Checker *update.Checker
@@ -98,6 +101,8 @@ type Engine struct {
 
 	changeMu sync.Mutex
 	changes  chan struct{} // closed and replaced at every status written
+
+	dryMu sync.Mutex // one dry run at a time: each takes a copy's room
 }
 
 // active is the run in progress.
@@ -235,8 +240,10 @@ func (e *Engine) rollbackTarget() (to, bk string) {
 
 // Resume is called when a server starts. An upgrade that was switching to
 // this version has come up, which is "done"; one that was still at an
-// earlier step when the process ended did not finish.
+// earlier step when the process ended did not finish. What a dry run that
+// the process ended in the middle of left is removed.
 func (e *Engine) Resume() {
+	e.clearDryRuns()
 	st, err := state.ReadStatus(e.o.Data)
 	if err != nil || st == nil {
 		return

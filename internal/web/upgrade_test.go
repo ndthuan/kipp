@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -29,9 +30,15 @@ type upgradeEnv struct {
 
 func upgradeSite(t *testing.T) *upgradeEnv {
 	t.Helper()
-	rel := et.NewRelease(t, et.GoodBinary(et.Newer))
+	return upgradeSiteOf(t, et.GoodBinary(et.Newer), nil)
+}
+
+// upgradeSiteOf is upgradeSite with a release whose binary is script.
+func upgradeSiteOf(t *testing.T, script string, tweak func(*engine.Options)) *upgradeEnv {
+	t.Helper()
+	rel := et.NewRelease(t, script)
 	fake := et.NewServer()
-	eng, data := et.Engine(t, rel, fake, nil)
+	eng, data := et.Engine(t, rel, fake, tweak)
 	e := site(t, func(d *api.Deps) {
 		d.Version, d.Upgrade = et.Running, eng
 		d.ServerInfo = func() api.ServerInfo {
@@ -311,4 +318,37 @@ func TestAPinnedServersCardShowsTheManualLinesAndNoUpgradeOrRollback(t *testing.
 	lacks(t, page, "Upgrade to ", `name="safe"`, "Roll back to")
 	code, _ := get(t, u.login(t, "admin"), u.srv.URL+"/admin/server/upgrade/rollback")
 	eq(t, "rollback page", code, http.StatusConflict)
+}
+
+func TestCheckThisUpgradeShowsEveryStepOnTheCardAndChangesNothing(t *testing.T) {
+	jobs := t.TempDir()
+	calls := filepath.Join(t.TempDir(), "calls")
+	u := upgradeSiteOf(t, et.DryRunBinary(et.Newer, calls, false, false, false), func(o *engine.Options) { o.Jobs = jobs })
+	page := u.server(t)
+	contains(t, page, `action="/admin/server/upgrade/dry-run"`, "Check this upgrade", "changes nothing here")
+	lacks(t, page, `id="dry-run"`)
+
+	admin := u.login(t, "admin")
+	res, page := u.form(t, admin, "/admin/server/upgrade/dry-run", url.Values{"version": {et.Newer}})
+	eq(t, "status", res.StatusCode, http.StatusOK)
+	contains(t, page, `id="dry-run"`, "Every check of the upgrade to "+et.Newer+" passed. Nothing was changed.",
+		`<li class="done"><strong>Release</strong>, passed`, "<strong>Disk space</strong>", "<strong>Download and signature</strong>",
+		"<strong>Job files</strong>", "<strong>Database migration</strong>", "<strong>Builds to wait for</strong>")
+	contains(t, u.audit(t), "admin upgrade.dry-run")
+	eq(t, "restarts", u.fake.Switched.Load(), int32(0))
+	if p, _ := state.ReadPending(u.data); p != nil {
+		t.Fatal("a pending record")
+	}
+
+	res, _ = u.form(t, u.login(t, "bob"), "/admin/server/upgrade/dry-run", url.Values{"version": {et.Newer}})
+	eq(t, "a non-admin", res.StatusCode, http.StatusForbidden)
+}
+
+func TestACheckThatFailsSaysTheUpgradeWouldNotGoThroughAndMarksTheStep(t *testing.T) {
+	jobs := t.TempDir()
+	calls := filepath.Join(t.TempDir(), "calls")
+	u := upgradeSiteOf(t, et.DryRunBinary(et.Newer, calls, true, false, false), func(o *engine.Options) { o.Jobs = jobs })
+	_, page := u.form(t, u.login(t, "admin"), "/admin/server/upgrade/dry-run", url.Values{"version": {et.Newer}})
+	contains(t, page, `role="alert">The upgrade to `+et.Newer+" would not go through. Nothing was changed.",
+		`<li class="failed"><strong>Job files</strong>, failed`, "unknown field shell")
 }

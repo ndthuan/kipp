@@ -2,7 +2,9 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"io/fs"
 	"log/slog"
 	"net"
 	"net/url"
@@ -34,7 +36,13 @@ type upgradeFixture struct {
 
 func fakeUpgrade(t *testing.T) *upgradeFixture {
 	t.Helper()
-	fx := &upgradeFixture{rel: et.NewRelease(t, et.GoodBinary(et.Newer)), execed: make(chan []string, 4)}
+	return fakeUpgradeOf(t, et.GoodBinary(et.Newer))
+}
+
+// fakeUpgradeOf is fakeUpgrade with a release whose binary is script.
+func fakeUpgradeOf(t *testing.T, script string) *upgradeFixture {
+	t.Helper()
+	fx := &upgradeFixture{rel: et.NewRelease(t, script), execed: make(chan []string, 4)}
 	u, _ := url.Parse(fx.rel.Srv.URL)
 	realOptions, realVersion, realKey, realExec := updateOptions, version.Version, releaseKey, execve
 	realWait, realPoll, realAway := upgradeWaitPoll, upgradePoll, upgradeAway
@@ -402,4 +410,70 @@ func TestTheCommandSaysInWordsWhatTheServerKnows(t *testing.T) {
 	eq(t, "a done upgrade does not repeat it", st.statusText(), "upgrade: done")
 	eq(t, "a default", orDefault("", "x"), "x")
 	eq(t, "a default kept", orDefault("y", "x"), "y")
+}
+
+func TestUpgradeDryRunPrintsEveryStepChangesNothingAndExitsNonZeroWhenOneFails(t *testing.T) {
+	calls := filepath.Join(t.TempDir(), "calls")
+	fx := fakeUpgradeOf(t, et.DryRunBinary(et.Newer, calls, false, false, false))
+	s := fx.serving(t, map[string]string{"busy.yml": busyJob})
+	before, err := os.ReadDir(s.data)
+	must(t, err)
+
+	code, out, errOut := s.kipp("upgrade", "--dry-run")
+	eq(t, "exit "+errOut, code, 0)
+	contains(t, out, "dry run of the upgrade from "+et.Running+" to "+et.Newer, "passed   release", "passed   space",
+		"passed   download", "passed   jobs", "passed   migrate", "passed   builds", "every check passed")
+	logged, err := fs.ReadFile(os.DirFS(filepath.Dir(calls)), filepath.Base(calls))
+	must(t, err)
+	contains(t, string(logged), "check "+s.jobs, "migrate --data "+filepath.Join(s.data, ".upgrade-dry-run-"))
+
+	code, out, _ = s.kipp("upgrade", "--dry-run", et.Newer, "--json")
+	eq(t, "exit", code, 0)
+	var report struct {
+		OK    bool `json:"ok"`
+		Steps []struct {
+			Name, Result string
+		} `json:"steps"`
+	}
+	must(t, json.Unmarshal([]byte(out), &report))
+	eq(t, "ok", report.OK, true)
+	eq(t, "steps", len(report.Steps), 6)
+
+	code, out, _ = s.kipp("upgrade", "--dry-run", "v1.1.0")
+	eq(t, "another version", code, 1)
+	contains(t, out, "failed   release", "skipped  download", "would not go through")
+
+	after, err := os.ReadDir(s.data)
+	must(t, err)
+	eq(t, "the data directory's entries", len(after), len(before))
+	for _, name := range []string{state.BinDir(s.data), backup.Dir(s.data)} {
+		if des, err := os.ReadDir(name); err == nil && len(des) != 0 {
+			t.Fatalf("%s holds %v", name, des)
+		}
+	}
+	_, out, _ = s.kipp("upgrade", "status")
+	eq(t, "status", out, "upgrade: idle\n")
+	_, out, _ = s.kipp("quiet", "status")
+	contains(t, out, "quiet off")
+	for _, bad := range [][]string{{"--json"}, {"--dry-run", "--check"}, {"--check", et.Newer}, {"--dry-run", "a", "b"}} {
+		code, _, _ = s.kipp(append([]string{"upgrade"}, bad...)...)
+		eq(t, strings.Join(bad, " "), code, 2)
+	}
+}
+
+func TestMigrateBringsADataDirectoryUpToThisSchemaAndRefusesOneAServerHolds(t *testing.T) {
+	data, _, _ := dataAndJobs(t, nil)
+	out := ok(t, "", "migrate", "--data", data)
+	contains(t, out, "ok: the database is at schema")
+	code, _, errOut := kipp("", "migrate", "--data", t.TempDir())
+	eq(t, "no database", code, 2)
+	contains(t, errOut, "holds no kipp database")
+	code, _, _ = kipp("", "migrate")
+	eq(t, "no --data", code, 2)
+	lock, err := lockData(data)
+	must(t, err)
+	defer func() { _ = lock.Close() }()
+	code, _, errOut = kipp("", "migrate", "--data", data)
+	eq(t, "held", code, 1)
+	contains(t, errOut, "another kipp serve is running")
 }

@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -47,7 +49,7 @@ func TestUpgradeIsAnAdminsAndAServerWithoutAnEngineSaysItDoesNotUpgrade(t *testi
 	eq(t, "state", got["state"], "idle")
 	eq(t, "unavailable", got["unavailable"], "this server does not upgrade itself")
 	e.asProblem(t, 403, "forbidden", e.viewer, "GET", "/api/v1/admin/upgrade", "")
-	for _, c := range [][2]string{{"POST", "/api/v1/admin/upgrade"}, {"DELETE", "/api/v1/admin/upgrade"}, {"POST", "/api/v1/admin/upgrade/rollback"}} {
+	for _, c := range [][2]string{{"POST", "/api/v1/admin/upgrade"}, {"DELETE", "/api/v1/admin/upgrade"}, {"POST", "/api/v1/admin/upgrade/rollback"}, {"POST", "/api/v1/admin/upgrade/dry-run"}} {
 		e.asProblem(t, 403, "forbidden", e.viewer, c[0], c[1], "")
 		e.asProblem(t, 409, "conflict", e.admin, c[0], c[1], "")
 	}
@@ -172,4 +174,41 @@ func TestAnUpgradeOrRollbackOfAPinnedServerIsRefusedBeforeAnythingIsDone(t *test
 		contains(t, d.Detail, "pinned to its own executable")
 	}
 	eq(t, "state", e.object(t, 200, e.admin, "GET", "/api/v1/admin/upgrade", "")["state"], "idle")
+}
+
+func TestADryRunIsAnAdminsAnswersEveryStepAndChangesNothing(t *testing.T) {
+	e := newEnv(t)
+	f := et.NewServer()
+	jobs := t.TempDir()
+	rel := et.NewRelease(t, et.DryRunBinary(et.Newer, filepath.Join(t.TempDir(), "calls"), false, false, false))
+	eng, data := et.Engine(t, rel, f, func(o *engine.Options) { o.Jobs = jobs })
+	e.api.deps.Upgrade = eng
+	f.SetBusy(1)
+
+	e.asProblem(t, 403, "forbidden", e.viewer, "POST", "/api/v1/admin/upgrade/dry-run", "")
+	got := e.object(t, 200, e.admin, "POST", "/api/v1/admin/upgrade/dry-run", `{"version":"`+et.Newer+`"}`)
+	eq(t, "ok", got["ok"], true)
+	eq(t, "version", got["version"], et.Newer)
+	eq(t, "from", got["from"], et.Running)
+	eq(t, "running", got["running"], any(float64(1)))
+	steps, _ := got["steps"].([]any)
+	var names []string
+	for _, s := range steps {
+		st := s.(map[string]any)
+		names = append(names, st["name"].(string))
+		eq(t, st["name"].(string), st["result"], "passed")
+	}
+	eq(t, "steps", strings.Join(names, " "), "release space download jobs migrate builds")
+	eq(t, "audit", e.lastAudit(t), "admin upgrade.dry-run "+et.Newer+": passed")
+	eq(t, "the state", e.object(t, 200, e.admin, "GET", "/api/v1/admin/upgrade", "")["state"], "idle")
+	eq(t, "restarts", f.Switched.Load(), int32(0))
+	eq(t, "quiet calls", len(f.QuietCalls()), 0)
+	if des, _ := os.ReadDir(state.BinDir(data)); len(des) != 0 {
+		t.Fatalf("bin/ holds %v", des)
+	}
+
+	failed := e.object(t, 200, e.admin, "POST", "/api/v1/admin/upgrade/dry-run", `{"version":"v9.9.9"}`)
+	eq(t, "ok", failed["ok"], false)
+	eq(t, "audit", e.lastAudit(t), "admin upgrade.dry-run v9.9.9: failed")
+	e.asProblem(t, 400, "bad_input", e.admin, "POST", "/api/v1/admin/upgrade/dry-run", `{"safe_restart":true}`)
 }

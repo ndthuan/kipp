@@ -137,6 +137,10 @@ bin/           kipp-<version> binaries an upgrade downloaded and the files
 upgrade/       the backups of upgrades, their progress (`status.json`) and
                the last version put back (`last-failure.json`); see
                Upgrading
+.upgrade-dry-run-*
+               the download and the database copy of a dry run of an
+               upgrade, there while it runs (`kipp upgrade --dry-run`);
+               the next start removes one a stopped server left
 update-check.json
                the newest release the update check found, and when
 secret.key     the key the secrets are sealed with (mode 600)

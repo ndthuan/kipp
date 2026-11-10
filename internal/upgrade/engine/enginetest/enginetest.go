@@ -57,6 +57,30 @@ func GoodBinary(ver string) string {
 	return "#!/bin/sh\n[ \"$1\" = version ] && echo 'kipp " + ver + "'\n"
 }
 
+// DryRunBinary is a script that says it is kipp ver and does what a dry run
+// asks of the new version: check a jobs directory, and migrate the database
+// of a data directory. It appends each command line to the file log. With
+// refuseJobs its check fails, with failMigrate its migration does, and with
+// breakDB the migration leaves a file that is not a database.
+func DryRunBinary(ver, log string, refuseJobs, failMigrate, breakDB bool) string {
+	jobs, migrate := `echo "ok: 1 job"`, `echo "migrated to schema 40"`
+	if refuseJobs {
+		jobs = `echo "$2/a.yaml: unknown field shell" >&2; exit 1`
+	}
+	if failMigrate {
+		migrate = `echo "migration 40: no such column" >&2; exit 1`
+	}
+	if breakDB {
+		migrate = `echo garbage > "$3/db.sqlite"`
+	}
+	return "#!/bin/sh\necho \"$*\" >> '" + log + "'\n" +
+		"case \"$1\" in\n" +
+		"version) echo 'kipp " + ver + "' ;;\n" +
+		"check) [ -d \"$2\" ] || exit 2; " + jobs + " ;;\n" +
+		"migrate) [ \"$2\" = --data ] && [ -f \"$3/db.sqlite\" ] || exit 2; " + migrate + " ;;\n" +
+		"*) exit 2 ;;\nesac\n"
+}
+
 // ArchiveOf is a release archive for this platform holding script as kipp.
 func ArchiveOf(t *testing.T, ver, script string) []byte {
 	t.Helper()

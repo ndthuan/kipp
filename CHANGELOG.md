@@ -8,6 +8,23 @@ lines and the data directory are the public surface.
 
 ## Unreleased
 
+Added:
+
+- `kipp upgrade --dry-run [vX.Y.Z]` (and `--json`), the button **Check this
+  upgrade** on the Server page's Upgrade card and
+  `POST /api/v1/admin/upgrade/dry-run` make every check of an upgrade but
+  the restart, and change nothing on the server: they find the release,
+  check the room on the data directory's disk, download the release into a
+  temporary directory there and check its signature and checksum, have the
+  new binary check the jobs directory and migrate a copy of the database
+  (then `PRAGMA integrity_check`), and count the builds a safe restart would
+  wait for. Each check is reported as passed, failed with the reason, or
+  skipped; the command exits non-zero when one did not pass. An admin's,
+  and a row of the audit (`upgrade.dry-run`).
+- `kipp migrate --data <dir>` brings the database of a data directory no
+  server runs on up to this kipp's schema; the dry run runs the new
+  release's on a copy.
+
 ## [1.3.0] - 2026-11-10
 
 Added:

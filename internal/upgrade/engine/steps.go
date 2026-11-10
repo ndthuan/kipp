@@ -93,31 +93,40 @@ func (e *Engine) hand(ctx context.Context, r *active, st state.Status, p state.P
 func (e *Engine) download(ctx context.Context, st state.Status) (string, error) {
 	st.State = state.StateDownloading
 	e.writeStatus(st)
-	goos, goarch := cmpOr(e.o.OS, runtime.GOOS), cmpOr(e.o.Arch, runtime.GOARCH)
-	name := update.ArchiveName(st.Version, goos, goarch)
-	get := func(file string, max int64) ([]byte, error) { return e.o.Checker.Fetch(ctx, st.Version, file, max) }
-	sums, err := get(update.SumsFile, update.MaxSmall)
-	if err != nil {
-		return "", err
-	}
-	sig, err := get(update.SigFile, update.MaxSmall)
-	if err != nil {
-		return "", err
-	}
-	archive, err := get(name, update.MaxArchive)
-	if err != nil {
-		return "", err
-	}
-	st.State = state.StateVerifying
-	e.writeStatus(st)
-	if err := update.Verify(e.o.Key, archive, sums, sig, name); err != nil {
-		return "", err
-	}
-	bin, err := update.ExtractBinary(archive, update.ArchiveDir(st.Version, goos, goarch), update.MaxArchive)
+	bin, err := e.fetch(ctx, st.Version, func() {
+		st.State = state.StateVerifying
+		e.writeStatus(st)
+	})
 	if err != nil {
 		return "", err
 	}
 	return e.install(bin, st.Version)
+}
+
+// fetch downloads the files of release ver, checks the signature and the
+// checksum, and returns the binary unpacked from the archive. verifying is
+// called once the files are in, before they are checked.
+func (e *Engine) fetch(ctx context.Context, ver string, verifying func()) ([]byte, error) {
+	goos, goarch := cmpOr(e.o.OS, runtime.GOOS), cmpOr(e.o.Arch, runtime.GOARCH)
+	name := update.ArchiveName(ver, goos, goarch)
+	get := func(file string, max int64) ([]byte, error) { return e.o.Checker.Fetch(ctx, ver, file, max) }
+	sums, err := get(update.SumsFile, update.MaxSmall)
+	if err != nil {
+		return nil, err
+	}
+	sig, err := get(update.SigFile, update.MaxSmall)
+	if err != nil {
+		return nil, err
+	}
+	archive, err := get(name, update.MaxArchive)
+	if err != nil {
+		return nil, err
+	}
+	verifying()
+	if err := update.Verify(e.o.Key, archive, sums, sig, name); err != nil {
+		return nil, err
+	}
+	return update.ExtractBinary(archive, update.ArchiveDir(ver, goos, goarch), update.MaxArchive)
 }
 
 func cmpOr(a, b string) string {
@@ -130,22 +139,7 @@ func cmpOr(a, b string) string {
 // install writes the binary beside its place, runs it once, and renames it
 // there. A binary that does not run is not left behind.
 func (e *Engine) install(bin []byte, ver string) (string, error) {
-	dir := state.BinDir(e.o.Data)
-	f, err := os.CreateTemp(dir, ".kipp-"+ver+".*")
-	if err != nil {
-		return "", err
-	}
-	tmp := f.Name()
-	_, err = f.Write(bin)
-	if err == nil {
-		err = f.Chmod(0o755)
-	}
-	if err == nil {
-		err = f.Sync()
-	}
-	if cerr := f.Close(); err == nil {
-		err = cerr
-	}
+	tmp, err := writeExecutable(state.BinDir(e.o.Data), ".kipp-"+ver+".*", bin)
 	if err == nil {
 		err = probe(tmp, ver)
 	}
@@ -154,7 +148,9 @@ func (e *Engine) install(bin []byte, ver string) (string, error) {
 		err = os.Rename(tmp, dst)
 	}
 	if err != nil {
-		_ = os.Remove(tmp)
+		if tmp != "" {
+			_ = os.Remove(tmp)
+		}
 		return "", fmt.Errorf("the downloaded kipp %s does not run here: %w", ver, err)
 	}
 	return dst, nil

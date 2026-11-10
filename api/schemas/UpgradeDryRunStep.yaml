@@ -1,0 +1,15 @@
+type: object
+additionalProperties: false
+description: One check of a dry run.
+required: [name, result, detail]
+properties:
+  name:
+    type: string
+    enum: [release, space, download, jobs, migrate, builds]
+  result:
+    type: string
+    enum: [passed, failed, skipped]
+    description: A check is skipped when one it needs failed.
+  detail:
+    type: string
+    description: What it found, or why it failed, in a sentence.

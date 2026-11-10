@@ -446,6 +446,8 @@
   .steps li.now { font-weight: var(--weight-medium); }
   .steps li.now::before { content: ">"; color: var(--accent-text); }
   .steps li.next { color: var(--fg-subtle); }
+  .steps li.failed::before { content: "\2717"; color: var(--bad); }
+  .steps li { overflow-wrap: anywhere; white-space: pre-line; }
   .facts dt { font-size: var(--size-xs); color: var(--fg-subtle); }
 
   .dag { display: block; overflow: visible; margin: 1px; }

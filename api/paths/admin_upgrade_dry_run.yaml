@@ -1,0 +1,44 @@
+post:
+  operationId: dryRunUpgrade
+  tags: [admin]
+  summary: Make every check of an upgrade but the restart
+  description: |
+    Finds the release as an upgrade would (the latest, or the version named,
+    which must be the latest), checks the room on the data directory's disk,
+    downloads the release into a temporary directory there and checks its
+    signature and checksum, has the new binary check the server's jobs
+    directory and migrate a copy of the database (then checked with
+    `PRAGMA integrity_check`), and counts the builds a safe restart would
+    wait for. It changes nothing on the server: no quiet mode, no backup,
+    nothing in the data directory's `bin/` or `upgrade/`, no restart, and its
+    temporary files are removed before it answers, which may take minutes.
+    The answer is 200 whether the checks passed or not; `ok` says which. One
+    dry run runs at a time.
+  x-kipp-package: api
+  security:
+    - bearerToken: []
+    - sessionCookie: []
+      csrfToken: []
+  requestBody:
+    required: false
+    content:
+      application/json:
+        schema:
+          $ref: ../schemas/UpgradeDryRunRequest.yaml
+  responses:
+    "200":
+      description: What each check found.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/UpgradeDryRun.yaml
+    "400":
+      $ref: ../responses/BadRequest.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "403":
+      $ref: ../responses/Forbidden.yaml
+    "409":
+      $ref: ../responses/Conflict.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

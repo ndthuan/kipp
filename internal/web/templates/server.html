@@ -31,7 +31,20 @@
 <label class="check"><input type="checkbox" name="safe" checked> Wait for builds to end, then restart (safe restart)</label>
 <div><button class="action action-main">Upgrade to {{.Info.Latest}}</button></div>
 </form>
-{{else if .Manual}}<p>{{.Info.Latest}} is available (<a href="{{$.Data.Info.NotesURL}}" rel="noopener noreferrer">release notes</a>), but kipp cannot install it from here: {{.Info.Unavailable}}.</p>
+<form class="stack" method="post" action="/admin/server/upgrade/dry-run">
+<input type="hidden" name="csrf" value="{{$.CSRF}}">
+<input type="hidden" name="version" value="{{.Info.Latest}}">
+<p class="sub">A check makes every step of the upgrade but the restart: it downloads {{.Info.Latest}}, has it read the job files and migrate a copy of the database, and changes nothing here. It can take a few minutes.</p>
+<div><button class="action">Check this upgrade</button></div>
+</form>
+{{with .DryRun}}<div id="dry-run" class="stack">
+{{if .OK}}<p class="notice" role="status">Every check of the upgrade to {{.Version}} passed. Nothing was changed.</p>
+{{else}}<p class="notice notice-error" role="alert">The upgrade{{with .Version}} to {{.}}{{end}} would not go through. Nothing was changed.</p>
+{{end}}<ol class="steps">
+{{range .Steps}}<li class="{{.Mark}}"><strong>{{.Label}}</strong>, {{.Result}}: {{.Detail}}</li>
+{{end}}</ol>
+</div>
+{{end}}{{else if .Manual}}<p>{{.Info.Latest}} is available (<a href="{{$.Data.Info.NotesURL}}" rel="noopener noreferrer">release notes</a>), but kipp cannot install it from here: {{.Info.Unavailable}}.</p>
 <p class="sub">Install it by hand:</p>
 <ul>
 {{range .ManualLines}}<li><code>{{.}}</code></li>

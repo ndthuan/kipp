@@ -175,6 +175,7 @@ server with the update check off.
 
 - [From the app](#from-the-app)
 - [With kipp upgrade](#with-kipp-upgrade)
+- [Checking an upgrade first](#checking-an-upgrade-first)
 - [Upgrading by hand](#upgrading-by-hand)
 - [A pinned image](#a-pinned-image)
 - [Rolling back](#rolling-back)
@@ -243,8 +244,9 @@ nothing has been changed.
 ### With kipp upgrade
 
 ```
-kipp upgrade [status] [--check] [--cancel] [--rollback] [--no-safe [--yes]]
-             [--wait-timeout <duration>] [--url <url>] [--token <token>]
+kipp upgrade [status] [--check] [--dry-run [<version>] [--json]] [--cancel]
+             [--rollback] [--no-safe [--yes]] [--wait-timeout <duration>]
+             [--url <url>] [--token <token>]
 ```
 
 With an admin's token, the same as the card ([Commands](cli.md#kipp-upgrade)):
@@ -267,7 +269,50 @@ It prints a line each time the step changes (a quick one, such as
 restart, and exits 0 when the new version runs, 1 when the upgrade failed
 or was cancelled. `--no-safe --yes` restarts at once and ends the running
 builds as `lost`; `--wait-timeout` is how long the safe restart waits
-(default 2 hours); `--rollback` is [below](#rolling-back).
+(default 2 hours); `--rollback` is [below](#rolling-back);
+`--dry-run` is the next section.
+
+### Checking an upgrade first
+
+What can stop an upgrade is mostly seen only after the server has gone
+quiet and restarted: a job file the new version refuses (every reload then
+fails), a schema migration that fails, a disk without room. A dry run finds
+these first, and changes nothing on the server: no quiet mode, no backup,
+nothing in `bin/` or `upgrade/` of the data directory, no restart, no
+pending record.
+
+```sh
+kipp upgrade --dry-run          # or --dry-run v1.4.0, which must be the latest
+kipp upgrade --dry-run --json   # the same report as JSON
+```
+
+On the card, **Check this upgrade**, beside **Upgrade to vX.Y.Z**, does the
+same and shows the report on the card. Each check says `passed`, `failed`
+with the reason, or `skipped` when one it needs failed, in this order:
+
+1. **release**: the release, found as the upgrade would find it (the same
+   refusals: a dev build, the update check off, nothing newer, no
+   signature file).
+2. **space**: the room the upgrade asks for on the data directory's disk,
+   and then the room for the dry run's own copy of the database beside it.
+   It comes before anything is written.
+3. **download**: the release downloaded into a temporary directory of the
+   data directory, its `SHA256SUMS` signature and the archive's checksum
+   checked with the same code as the upgrade, and the binary run once.
+4. **jobs**: the new binary's `kipp check` on the server's jobs directory.
+5. **migrate**: a copy of the database, made through SQLite as the
+   upgrade's backup is, migrated by the new binary's `kipp migrate`, then
+   checked with `PRAGMA integrity_check`.
+6. **builds**: how many builds run and wait now, which a safe restart would
+   wait for, so you know how long the real one's quiet would last.
+
+The command exits 0 when every check passed and 1 otherwise; the temporary
+files are removed at the end, pass or fail. The new binary runs as a
+process of its own on the copies alone, never on the live data directory.
+The running server drives the dry run and the new binary does the job
+check and the migration, so it needs a server and a release that both know
+it. It is an admin's, as the upgrade is, and a row of the audit
+(`upgrade.dry-run`, with `passed` or `failed`).
 
 ### Upgrading by hand
 

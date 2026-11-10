@@ -1,0 +1,7 @@
+type: object
+additionalProperties: false
+description: The body of a dry run. No body at all checks the latest release.
+properties:
+  version:
+    type: string
+    description: The release to check; it must be the latest one.

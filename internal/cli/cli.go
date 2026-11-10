@@ -19,6 +19,7 @@ const usage = `usage: kipp <command> [flags]
 
   serve     run the server: web, API, scheduler and runner
   check     validate a jobs directory and exit non-zero on any error
+  migrate   bring the database of a data directory no server runs on up to this kipp's schema
   reload    ask a running server to re-read its jobs directory
   quiet     on, off, status: stop a running server taking builds, before a restart
   upgrade   upgrade a running server to the latest release, or return it to the version before
@@ -36,6 +37,7 @@ const usage = `usage: kipp <command> [flags]
 var commands = map[string]Command{
 	"serve":   cmdServe,
 	"check":   cmdCheck,
+	"migrate": cmdMigrate,
 	"reload":  cmdReload,
 	"quiet":   cmdQuiet,
 	"upgrade": cmdUpgrade,

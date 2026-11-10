@@ -162,17 +162,17 @@ func TestNoCommandOrAskingForHelpPrintsTheUsageAndIsNotAFailure(t *testing.T) {
 }
 
 func TestEveryCommandInTheUsageExists(t *testing.T) {
-	for _, name := range []string{"serve", "check", "reload", "quiet", "upgrade", "run", "user", "token", "secret", "engine", "runner", "metrics", "cache", "version"} {
+	for _, name := range []string{"serve", "check", "migrate", "reload", "quiet", "upgrade", "run", "user", "token", "secret", "engine", "runner", "metrics", "cache", "version"} {
 		if commands[name] == nil {
 			t.Errorf("no command %q", name)
 		}
 		contains(t, usage, "\n  "+name+" ")
 	}
-	eq(t, "commands", len(commands), 14)
+	eq(t, "commands", len(commands), 15)
 }
 
 func TestHelpIsNotAFailureAndABadFlagIs(t *testing.T) {
-	for _, cmd := range []string{"serve", "check", "run", "reload", "quiet", "upgrade", "user", "token", "secret", "metrics", "cache", "version"} {
+	for _, cmd := range []string{"serve", "check", "migrate", "run", "reload", "quiet", "upgrade", "user", "token", "secret", "metrics", "cache", "version"} {
 		code, out, errOut := kipp("", cmd, "-h")
 		eq(t, cmd+" -h", code, 0)
 		contains(t, out+errOut, "usage: kipp "+cmd)

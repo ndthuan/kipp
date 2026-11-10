@@ -1,14 +1,16 @@
 package cli
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
-const upgradeUsage = `upgrade [status] [--check] [--cancel] [--rollback] [--no-safe [--yes]] [--wait-timeout <duration>] [--url <url>] [--token <token>]`
+const upgradeUsage = `upgrade [status] [--check] [--dry-run [<version>] [--json]] [--cancel] [--rollback] [--no-safe [--yes]] [--wait-timeout <duration>] [--url <url>] [--token <token>]`
 
 // upgradePoll is how often the command looks at the upgrade, and
 // upgradeAway how long it waits for a server that has stopped answering: the
@@ -17,6 +19,11 @@ var (
 	upgradePoll = 2 * time.Second
 	upgradeAway = 35 * time.Minute
 )
+
+// dryRunWait is how long the command waits for the answer of a dry run:
+// the server downloads the release and migrates a copy of the database
+// before it answers.
+const dryRunWait = time.Hour
 
 // upgradeState is the server's answer to /api/v1/admin/upgrade.
 type upgradeState struct {
@@ -52,6 +59,8 @@ func cmdUpgrade(args []string, _ io.Reader, stdout, stderr io.Writer) int {
 	fs := newFlags(upgradeUsage, stderr)
 	o := upgradeFlags{
 		check:    fs.Bool("check", false, "say whether a newer release can be upgraded to, and do nothing"),
+		dryRun:   fs.Bool("dry-run", false, "make every check of the upgrade but the restart, and change nothing; exits non-zero when one fails"),
+		json:     fs.Bool("json", false, "with --dry-run, print the report as JSON"),
 		cancel:   fs.Bool("cancel", false, "cancel the upgrade that waits, before its backup begins"),
 		rollback: fs.Bool("rollback", false, "return to the version before the last upgrade, with the data as it was then: anything written since is lost"),
 		noSafe:   fs.Bool("no-safe", false, "do not wait for the builds to end: they end as lost"),
@@ -64,6 +73,9 @@ func cmdUpgrade(args []string, _ io.Reader, stdout, stderr io.Writer) int {
 		return exitFor(err)
 	}
 	o.status = len(positional) == 1 && positional[0] == "status"
+	if *o.dryRun && len(positional) == 1 {
+		o.version = positional[0]
+	}
 	if !o.valid(positional) {
 		fs.Usage()
 		return 2
@@ -77,24 +89,26 @@ func cmdUpgrade(args []string, _ io.Reader, stdout, stderr io.Writer) int {
 
 // upgradeFlags are what `kipp upgrade` was asked.
 type upgradeFlags struct {
-	check, cancel, rollback, noSafe, yes *bool
-	status                               bool
-	timeout                              *time.Duration
+	check, dryRun, json, cancel, rollback, noSafe, yes *bool
+	status                                             bool
+	version                                            string
+	timeout                                            *time.Duration
 }
 
-// valid: at most one of the things to do, and --yes only with --no-safe.
+// valid: at most one of the things to do, --yes only with --no-safe, and
+// --json and a version only with --dry-run.
 func (o upgradeFlags) valid(positional []string) bool {
 	modes := 0
-	for _, on := range []bool{*o.check, *o.cancel, *o.rollback, o.status} {
+	for _, on := range []bool{*o.check, *o.dryRun, *o.cancel, *o.rollback, o.status} {
 		if on {
 			modes++
 		}
 	}
 	words := 0
-	if o.status {
+	if o.status || o.version != "" {
 		words = 1
 	}
-	return len(positional) == words && modes <= 1 && (!*o.yes || *o.noSafe) && *o.timeout > 0
+	return len(positional) == words && modes <= 1 && (!*o.yes || *o.noSafe) && *o.timeout > 0 && (!*o.json || *o.dryRun)
 }
 
 func (o upgradeFlags) run(c *client, stdout, stderr io.Writer) int {
@@ -106,6 +120,8 @@ func (o upgradeFlags) run(c *client, stdout, stderr io.Writer) int {
 		}
 	}
 	switch {
+	case *o.dryRun:
+		return dryRun(c, o.version, *o.json, stdout, stderr)
 	case *o.check:
 		err = c.call(http.MethodGet, "/admin/upgrade", nil, &st)
 		show(st.checkText)
@@ -238,4 +254,53 @@ func orDefault(v, d string) string {
 		return d
 	}
 	return v
+}
+
+// dryRunReport is the server's answer to /api/v1/admin/upgrade/dry-run.
+type dryRunReport struct {
+	Version string `json:"version"`
+	From    string `json:"from"`
+	OK      bool   `json:"ok"`
+	Running int    `json:"running"`
+	Queued  int    `json:"queued"`
+	Steps   []struct {
+		Name   string `json:"name"`
+		Result string `json:"result"`
+		Detail string `json:"detail"`
+	} `json:"steps"`
+}
+
+// dryRun asks the server for every check of an upgrade but the restart and
+// prints what each found; the exit code is 1 when one did not pass.
+func dryRun(c *client, version string, asJSON bool, stdout, stderr io.Writer) int {
+	c.http.Timeout = dryRunWait
+	var body any
+	if version != "" {
+		body = map[string]string{"version": version}
+	}
+	var raw json.RawMessage
+	if err := c.call(http.MethodPost, "/admin/upgrade/dry-run", body, &raw); err != nil {
+		return fail(stderr, "upgrade", err)
+	}
+	var r dryRunReport
+	if err := json.Unmarshal(raw, &r); err != nil {
+		return fail(stderr, "upgrade", err)
+	}
+	if asJSON {
+		say(stdout, "%s", raw)
+	} else {
+		say(stdout, "dry run of the upgrade from %s to %s, nothing was changed:", orUnknown(r.From), orUnknown(r.Version))
+		for _, s := range r.Steps {
+			say(stdout, "  %-7s  %-8s  %s", s.Result, s.Name, strings.ReplaceAll(s.Detail, "\n", "\n"+strings.Repeat(" ", 21)))
+		}
+		if r.OK {
+			say(stdout, "every check passed: kipp upgrade")
+		} else {
+			say(stdout, "the upgrade would not go through: fix what failed and run the dry run again")
+		}
+	}
+	if !r.OK {
+		return 1
+	}
+	return 0
 }
