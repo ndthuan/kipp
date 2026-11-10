@@ -1,7 +1,7 @@
 package web
 
 import (
-	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -86,7 +86,7 @@ func (s *Site) addEngine(w http.ResponseWriter, r *http.Request, u *store.User) 
 	e := store.Engine{Name: r.PostFormValue("name"), URL: r.PostFormValue("url"), SSHKey: r.PostFormValue("ssh_key")}
 	max, err := strconv.Atoi(r.PostFormValue("max"))
 	if err != nil {
-		s.refusedForm(w, r, u, addEngineRoute, errors.Join(api.ErrBadInput, errors.New("max: a whole number")))
+		s.refusedForm(w, r, u, addEngineRoute, fmt.Errorf("%w: max: a whole number", api.ErrBadInput))
 		return
 	}
 	if e.Labels, err = api.ParseLabels(r.PostFormValue("labels")); err != nil {
@@ -151,7 +151,7 @@ func (s *Site) addRunner(w http.ResponseWriter, r *http.Request, u *store.User) 
 	name := r.PostFormValue("name")
 	executors, err := strconv.Atoi(r.PostFormValue("executors"))
 	if err != nil {
-		s.refusedForm(w, r, u, addRunnerRoute, errors.Join(api.ErrBadInput, errors.New("executors: a whole number")))
+		s.refusedForm(w, r, u, addRunnerRoute, fmt.Errorf("%w: executors: a whole number", api.ErrBadInput))
 		return
 	}
 	labels, err := api.ParseLabels(r.PostFormValue("labels"))

@@ -120,6 +120,7 @@ func TestARefusedFormComesBackOpenWithItsFieldsAndWhy(t *testing.T) {
 			lacks(t, page, "Back to the jobs")
 			body := wantPopAny(t, page, c.button, true)
 			contains(t, body, c.filled...)
+			lacks(t, body, "bad input", "conflict")
 			_, form, _ := strings.Cut(body, "<form")
 			if !strings.HasPrefix(strings.TrimSpace(afterHeading(form)), refusedAlert) {
 				t.Errorf("the reason is not at the top of the form:\n%s", body)
