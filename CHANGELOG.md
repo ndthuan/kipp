@@ -75,6 +75,12 @@ Changed:
   `auto_vacuum` on.
 - `kipp.case_seconds` keeps the newest 30 builds of each case per job.
 
+Fixed:
+
+- On a narrow screen a build row's "failed in" line takes a line of its own
+  under the build, status and duration, and the group, slash and name in a
+  page's heading share one baseline.
+
 ## [1.3.0] - 2026-11-10
 
 Added:

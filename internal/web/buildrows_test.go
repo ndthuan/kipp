@@ -70,3 +70,28 @@ func TestAnUnstableRowHasNoReason(t *testing.T) {
 	_, page := get(t, e.login(t, "admin"), e.srv.URL+"/jobs/smoke")
 	lacks(t, page, `class="sub why"`)
 }
+
+func TestTheWhyLineIsADirectChildOfItsCellSoTheStackedRowCanBreakItOut(t *testing.T) {
+	e := site(t)
+	e.ended(t, "smoke", store.Failed, stage{"test", store.StageFailed, new(2)})
+	_, page := get(t, e.login(t, "admin"), e.srv.URL+"/jobs/smoke")
+	contains(t, page, `</span><div class="sub why">failed in `)
+	css, err := staticFS.ReadFile("static/kipp.css")
+	must(t, err)
+	if !strings.Contains(string(css), ".stacked td:has(> .why) { display: contents; }") ||
+		!strings.Contains(string(css), ".stacked .why { flex: 0 0 100%; order: 1; }") {
+		t.Fatal("the stacked layout does not give the why line a line of its own")
+	}
+}
+
+func TestTheHeadingCrumbsShareOneBaselineSoAWrappedTitleKeepsTheGroupBesideItsFirstLine(t *testing.T) {
+	e := site(t)
+	e.ended(t, "smoke", store.Success)
+	_, page := get(t, e.login(t, "admin"), e.srv.URL+"/jobs/smoke")
+	contains(t, page, `<h1 class="crumbs"><a class="link-plain"`, `<span aria-hidden="true">/</span><span>smoke</span>`)
+	css, err := staticFS.ReadFile("static/kipp.css")
+	must(t, err)
+	if !strings.Contains(string(css), ".crumbs { align-items: baseline;") {
+		t.Fatal("the crumbs row is not aligned on a baseline")
+	}
+}

@@ -223,7 +223,7 @@
   .head .drop { position: static; }
   .head-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: calc(var(--space) * 2); margin-left: auto; }
   .head-actions .build { margin-left: 0; }
-  .crumbs { gap: 0 calc(var(--space) * 2); min-width: 0; overflow-wrap: anywhere; }
+  .crumbs { align-items: baseline; gap: 0 calc(var(--space) * 2); min-width: 0; overflow-wrap: anywhere; }
   .crumbs > [aria-hidden] { color: var(--fg-subtle); font-weight: var(--weight-normal); }
   .build { flex: none; margin-left: auto; }
   .build > summary::after { content: ""; border: 4px solid transparent; border-top-color: currentColor; border-bottom-width: 0; }
@@ -649,6 +649,8 @@
     .stacked td:empty { display: none; }
     .stacked td.lead { flex: 0 1 auto; }
     .stacked td:not(.lead) { flex: 0 0 100%; order: 1; }
+    .stacked td:has(> .why) { display: contents; }
+    .stacked .why { flex: 0 0 100%; order: 1; }
     .stacked td:not(.lead)::before { content: attr(data-label) ": "; color: var(--fg-subtle); }
     .stacked .num { text-align: left; }
   }
