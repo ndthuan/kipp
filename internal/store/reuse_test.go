@@ -115,11 +115,13 @@ func TestTheBuildsOfAnEarlierSchemaHaveNoTreeAndNoReuse(t *testing.T) {
 	withMigrations(t, migrations[:5], func() {
 		s, err := Open(path)
 		must(t, err)
-		b := &Build{Job: "deploy", Status: Success, Trigger: "cli"}
-		must(t, s.CreateBuild(ctx, b))
-		_, err = s.db.ExecContext(ctx, `INSERT INTO stages (build_id, seq, name, status) VALUES (?, 0, 'gate', 'success')`, b.ID)
+		// Not CreateBuild: it writes the columns of the newest schema.
+		res, err := s.db.ExecContext(ctx, `INSERT INTO builds (job, number, status, trigger, queued_at) VALUES ('deploy', 1, 'success', 'cli', ?)`, ts(time.Now()))
 		must(t, err)
-		id = b.ID
+		id, err = res.LastInsertId()
+		must(t, err)
+		_, err = s.db.ExecContext(ctx, `INSERT INTO stages (build_id, seq, name, status) VALUES (?, 0, 'gate', 'success')`, id)
+		must(t, err)
 		must(t, s.Close())
 	})
 	s, err := Open(path)

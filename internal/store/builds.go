@@ -104,6 +104,10 @@ type Build struct {
 	// empty and nil for a build that is under the job's rules.
 	KeptBy string
 	KeptAt *time.Time
+	// RerunOf is the number of the build of the same job this one runs
+	// again, stopped for a restart; RerunAs is the number of the build
+	// that runs a stopped one again. Both are 0 on any other build.
+	RerunOf, RerunAs int
 }
 
 // Stage is one row of stages. Needs is what the stage waited for in this
@@ -141,7 +145,7 @@ func (b *Build) Commit() string {
 // webhook's, or one made again from it.
 func (b *Build) Pushed() bool { return b.Trigger == "webhook" || b.PushedCommit != "" }
 
-const buildCols = `id, job, number, status, trigger, trigger_detail, params, started_by, queued_at, started_at, finished_at, config_hash, upstream_status, trigger_branch, trigger_default_branch, parent, built_commit, pr, base_branch, base_commit, pushed_commit, kept_by, kept_at, trigger_tag`
+const buildCols = `id, job, number, status, trigger, trigger_detail, params, started_by, queued_at, started_at, finished_at, config_hash, upstream_status, trigger_branch, trigger_default_branch, parent, built_commit, pr, base_branch, base_commit, pushed_commit, kept_by, kept_at, trigger_tag, rerun_of, rerun_as`
 
 // CreateBuild inserts b with the job's next number and fills ID, Number and QueuedAt.
 func (s *Store) CreateBuild(ctx context.Context, b *Build) error {
@@ -160,10 +164,10 @@ func (s *Store) CreateBuild(ctx context.Context, b *Build) error {
 		ON CONFLICT(job) DO UPDATE SET last_number = last_number + 1 RETURNING last_number`, b.Job).Scan(&b.Number); err != nil {
 			return err
 		}
-		res, err := tx.ExecContext(ctx, `INSERT INTO builds (job, number, status, trigger, trigger_detail, params, started_by, queued_at, config_hash, upstream_status, trigger_branch, trigger_default_branch, parent, built_commit, pr, base_branch, base_commit, pushed_commit, trigger_tag)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		res, err := tx.ExecContext(ctx, `INSERT INTO builds (job, number, status, trigger, trigger_detail, params, started_by, queued_at, config_hash, upstream_status, trigger_branch, trigger_default_branch, parent, built_commit, pr, base_branch, base_commit, pushed_commit, trigger_tag, rerun_of)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			b.Job, b.Number, b.Status, b.Trigger, b.TriggerDetail, string(params), b.StartedBy, ts(b.QueuedAt), b.ConfigHash, b.UpstreamStatus, b.TriggerBranch, b.TriggerDefaultBranch,
-			b.Parent, b.BuiltCommit, b.PR, b.BaseBranch, b.BaseCommit, b.PushedCommit, b.TriggerTag)
+			b.Parent, b.BuiltCommit, b.PR, b.BaseBranch, b.BaseCommit, b.PushedCommit, b.TriggerTag, b.RerunOf)
 		if err != nil {
 			return err
 		}
@@ -178,7 +182,7 @@ func scanBuild(row scanner) (*Build, error) {
 	var started, finished, kept sql.NullString
 	var queued string
 	if err := row.Scan(&b.ID, &b.Job, &b.Number, &b.Status, &b.Trigger, &b.TriggerDetail, &params, &b.StartedBy, &queued, &started, &finished, &b.ConfigHash, &b.UpstreamStatus, &b.TriggerBranch, &b.TriggerDefaultBranch,
-		&b.Parent, &b.BuiltCommit, &b.PR, &b.BaseBranch, &b.BaseCommit, &b.PushedCommit, &b.KeptBy, &kept, &b.TriggerTag); err != nil {
+		&b.Parent, &b.BuiltCommit, &b.PR, &b.BaseBranch, &b.BaseCommit, &b.PushedCommit, &b.KeptBy, &kept, &b.TriggerTag, &b.RerunOf, &b.RerunAs); err != nil {
 		return nil, notFound(err)
 	}
 	if err := json.Unmarshal([]byte(params), &b.Params); err != nil {

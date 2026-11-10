@@ -80,7 +80,7 @@ func TestTheAdminPagesAndChangesAreForAnAdminOnly(t *testing.T) {
 		"/admin/users/alice/tokens/" + id + "/revoke", "/admin/users/alice/delete", "/admin/secrets", "/admin/secrets/DEPLOY_KEY/delete", "/admin/server"}
 	posts := []string{"/admin/users", "/admin/users/alice/admin/on", "/admin/users/bob/admin/on", "/admin/users/alice/password",
 		"/admin/users/alice/grants", "/admin/users/alice/tokens", "/admin/users/alice/tokens/" + id + "/revoke",
-		"/admin/users/alice/delete", "/admin/secrets", "/admin/secrets/DEPLOY_KEY/delete", "/admin/server/reload", "/admin/server/quiet", "/admin/server/quiet/off"}
+		"/admin/users/alice/delete", "/admin/secrets", "/admin/secrets/DEPLOY_KEY/delete", "/admin/server/reload", "/admin/server/quiet", "/admin/server/quiet/off", "/admin/server/quiet/rerun"}
 	check := func(when string) {
 		for _, path := range gets {
 			code, page := get(t, bob, e.srv.URL+path)

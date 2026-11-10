@@ -84,6 +84,10 @@ type buildSummaryV1 struct {
 	// Kept says who kept the build out of retention and when, null for a
 	// build under its job's rules.
 	Kept *keptV1 `json:"kept"`
+	// RerunOf and RerunAs link a build stopped for a restart and the one
+	// that runs it again, by number; null on any other build.
+	RerunOf *int `json:"rerun_of"`
+	RerunAs *int `json:"rerun_as"`
 }
 
 type keptV1 struct {
@@ -110,6 +114,7 @@ func toBuildSummaryV1(b *store.Build) buildSummaryV1 {
 	if b.KeptAt != nil {
 		out.Kept = &keptV1{By: b.KeptBy, At: stampOf(*b.KeptAt)}
 	}
+	out.RerunOf, out.RerunAs = numOrNil(b.RerunOf), numOrNil(b.RerunAs)
 	return out
 }
 

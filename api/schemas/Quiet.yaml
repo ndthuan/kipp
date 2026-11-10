@@ -1,7 +1,7 @@
 type: object
 additionalProperties: false
 description: The server's quiet mode, in which it takes no new builds.
-required: [quiet, since, running, queued, idle]
+required: [quiet, since, running, queued, rerun, idle, holding, hint]
 properties:
   quiet:
     type: boolean
@@ -9,10 +9,30 @@ properties:
     $ref: NullableTimestamp.yaml
   running:
     type: integer
-    description: Builds with something running.
+    description: |
+      Builds with something running. While quiet it leaves out the builds
+      in rerun.
   queued:
     type: integer
     description: Builds waiting to start.
+  rerun:
+    type: integer
+    description: |
+      While quiet, the running builds the restart stops and queues again
+      after the start (rerun_on_restart, or chosen with
+      POST /admin/quiet/rerun): a safe restart does not wait for them.
+      0 when quiet is off.
   idle:
     type: boolean
     description: True when nothing runs or waits, so the server may be restarted.
+  holding:
+    type: array
+    description: |
+      Once quiet has waited 10 minutes with nothing queued, the builds
+      still running that started before it: one may be waiting on
+      something quiet holds back. Empty in any other case.
+    items:
+      $ref: BuildName.yaml
+  hint:
+    type: string
+    description: The sentence that says so, empty when holding is.

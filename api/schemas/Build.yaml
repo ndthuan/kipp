@@ -5,7 +5,7 @@ description: |
   value in `parent` to `base_commit`, but `built_commit`, which a build of a
   `source` job has too: the commit its clone checked out. Any other has
   null.
-required: [id, job, number, status, trigger, trigger_detail, params, started_by, queued_at, started_at, finished_at, parent, branch, built_commit, pr, base_branch, base_commit, kept, stages, complete]
+required: [id, job, number, status, trigger, trigger_detail, params, started_by, queued_at, started_at, finished_at, parent, branch, built_commit, pr, base_branch, base_commit, kept, rerun_of, rerun_as, stages, complete]
 properties:
   id:
     type: integer
@@ -52,6 +52,12 @@ properties:
       - $ref: Kept.yaml
       - type: "null"
     description: Who kept the build out of retention and when, null for a build under its job's rules.
+  rerun_of:
+    type: [integer, "null"]
+    description: The number of the build of the same job, stopped for a restart, that this one runs again; null for any other build.
+  rerun_as:
+    type: [integer, "null"]
+    description: For a build stopped for a restart, the number of the build of the same job that runs it again; null for any other build.
   stages:
     type: array
     items:

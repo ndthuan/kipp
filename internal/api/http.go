@@ -79,6 +79,7 @@ func (a *API) Routes() []Route {
 		row("GET", "/admin/quiet", user(a.quiet)),
 		row("POST", "/admin/quiet", user(a.quietOn)),
 		row("DELETE", "/admin/quiet", user(a.quietOff)),
+		row("POST", "/admin/quiet/rerun", user(a.quietRerun)),
 		row("GET", "/admin/upgrade", user(a.upgrade)),
 		row("POST", "/admin/upgrade", user(a.upgradeStart)),
 		row("DELETE", "/admin/upgrade", user(a.upgradeCancel)),
@@ -689,15 +690,32 @@ type quietJSON struct {
 	Since   *stamp `json:"since"`
 	Running int    `json:"running"`
 	Queued  int    `json:"queued"`
+	// Rerun is the running builds the restart stops and runs again after
+	// the start, which Running leaves out.
+	Rerun int `json:"rerun"`
 	// Idle is true when nothing runs or waits: the server may be restarted.
 	Idle bool `json:"idle"`
+	// Holding and Hint name the builds that may be holding quiet back;
+	// empty when none is.
+	Holding []buildNameJSON `json:"holding"`
+	Hint    string          `json:"hint"`
+}
+
+// buildNameJSON is a build by its job and number.
+type buildNameJSON struct {
+	Job    string `json:"job"`
+	Number int    `json:"number"`
 }
 
 func toQuietJSON(q dispatch.QuietState) quietJSON {
-	out := quietJSON{Quiet: q.On, Running: q.Running, Queued: q.Queued, Idle: q.Running+q.Queued == 0}
+	out := quietJSON{Quiet: q.On, Running: q.Running, Queued: q.Queued, Rerun: q.Rerun, Idle: q.Running+q.Queued == 0,
+		Holding: []buildNameJSON{}, Hint: q.Hint()}
 	if q.On {
 		t := stampOf(q.Since)
 		out.Since = &t
+	}
+	for _, b := range q.Holding {
+		out.Holding = append(out.Holding, buildNameJSON{Job: b.Job, Number: b.Number})
 	}
 	return out
 }
@@ -714,6 +732,25 @@ func (a *API) quietOn(w http.ResponseWriter, r *http.Request, u *store.User) {
 
 func (a *API) quietOff(w http.ResponseWriter, r *http.Request, u *store.User) {
 	q, err := a.svc.SetQuiet(r.Context(), u, false)
+	a.answerQuiet(w, r, q, err)
+}
+
+// quietRerun has the restart stop the builds named and run them again
+// after the start, and restarts now when asked to.
+func (a *API) quietRerun(w http.ResponseWriter, r *http.Request, u *store.User) {
+	var body struct {
+		Builds  []buildNameJSON `json:"builds"`
+		Restart bool            `json:"restart"`
+	}
+	if _, err := optionalBody(r, &body); err != nil {
+		a.fail(w, r, err)
+		return
+	}
+	req := RerunRequest{Restart: body.Restart}
+	for _, b := range body.Builds {
+		req.Builds = append(req.Builds, BuildName(b))
+	}
+	q, err := a.svc.RerunAfterRestart(r.Context(), u, req)
 	a.answerQuiet(w, r, q, err)
 }
 

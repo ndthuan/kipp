@@ -97,8 +97,17 @@
 </form>
 
 <h2>Restart</h2>
-{{with .Quiet}}{{if .On}}<p class="sub">Quiet since {{clock .Since}}: no build starts, and a trigger is refused with a message. {{.Running}} running, {{.Queued}} queued{{if and (not .Running) (not .Queued)}}: nothing is left, so kipp may be restarted{{end}}.</p>
-<form method="post" action="/admin/server/quiet/off">
+{{with .Quiet}}{{if .On}}<p class="sub">Quiet since {{clock .Since}}: no build starts, and a trigger is refused with a message. {{.Counts}}{{if and (not .Running) (not .Queued)}}: nothing is left, so kipp may be restarted{{end}}.</p>
+{{with .Hint}}<div id="holding" class="panel stack">
+<p>{{.}}.</p>
+<form method="post" action="/admin/server/quiet/rerun">
+<input type="hidden" name="csrf" value="{{$.CSRF}}">
+{{range $.Data.Quiet.Holding}}<input type="hidden" name="build" value="{{.Job}}#{{.Number}}">
+{{end}}<button class="action">Run {{$.Data.Quiet.HoldingNames}} again after the restart, and restart now</button>
+</form>
+<p class="sub">To have a job always run again after a restart, add this line to its job file: <code>rerun_on_restart: true</code></p>
+</div>
+{{end}}<form method="post" action="/admin/server/quiet/off">
 <input type="hidden" name="csrf" value="{{$.CSRF}}">
 <button class="action">Take builds again</button>
 </form>

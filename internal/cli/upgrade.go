@@ -33,6 +33,7 @@ type upgradeState struct {
 	Backup      string `json:"backup"`
 	Running     int    `json:"running"`
 	Queued      int    `json:"queued"`
+	Rerun       int    `json:"rerun"`
 	Error       string `json:"error"`
 	Latest      string `json:"latest"`
 	Upgradable  bool   `json:"upgradable"`
@@ -164,6 +165,9 @@ func (u upgradeState) statusText() string {
 	}
 	if u.State == "waiting" {
 		text += fmt.Sprintf(": %d running, %d queued", u.Running, u.Queued)
+		if u.Rerun > 0 {
+			text += fmt.Sprintf(", %d will run again after the restart", u.Rerun)
+		}
 	}
 	if reason := u.failure(); reason != "" && (u.State == "failed" || u.Error != "") {
 		text += ": " + reason

@@ -116,6 +116,10 @@ const (
 	// drainGrace is how long requests still open may take to end once the
 	// builds have.
 	drainGrace = 5 * time.Second
+	// rerunStopGrace is how long a stop waits for the builds it stops to
+	// run again after the restart (their hooks included); past it the
+	// rest ends with the other builds, and still runs again.
+	rerunStopGrace = time.Minute
 )
 
 func cmdServe(args []string, _ io.Reader, stdout, stderr io.Writer) int {
@@ -425,7 +429,9 @@ type server struct {
 	// args are serve's own arguments, which the restart is given again.
 	args      []string
 	switching atomic.Bool
-	stopRun   context.CancelFunc
+	// restarting is a switch with no upgrade: the restart an admin asked for.
+	restarting atomic.Bool
+	stopRun    context.CancelFunc
 
 	// startedAt is when the server began to open its data directory.
 	startedAt time.Time
@@ -493,8 +499,15 @@ func (s *server) switchOver() {
 	s.stopRun()
 }
 
+// restartNow stops the server and starts it again, the way an upgrade's
+// switch does but with no record to carry out.
+func (s *server) restartNow() {
+	s.restarting.Store(true)
+	s.switchOver()
+}
+
 func (s *server) quietCounts(q dispatch.QuietState, err error) (engine.Counts, error) {
-	return engine.Counts{Quiet: q.On, Running: q.Running, Queued: q.Queued}, err
+	return engine.Counts{Quiet: q.On, Running: q.Running, Queued: q.Queued, Rerun: q.Rerun}, err
 }
 
 // newUpgrades makes the engine for this server's data directory.
@@ -513,7 +526,9 @@ func (s *server) newUpgrades() *engine.Engine {
 // newStorage makes the storage of this server's data directory.
 func (s *server) newStorage() *storage.Service {
 	counts := func(q dispatch.QuietState, err error) (storage.Counts, error) {
-		return storage.Counts{Quiet: q.On, Running: q.Running, Queued: q.Queued}, err
+		// A compact restarts nothing, so it waits for the builds a restart
+		// would run again as for any other.
+		return storage.Counts{Quiet: q.On, Running: q.Running + q.Rerun, Queued: q.Queued}, err
 	}
 	return storage.New(storage.Options{
 		Store: s.st, Data: s.f.data, Snapshot: s.d.Snapshot,
@@ -659,6 +674,9 @@ func (s *server) listen(ctx context.Context, snap *config.Snapshot) (net.Listene
 		}
 		return nil, err
 	}
+	// Before the kept webhooks are handled (run), so that the builds the
+	// last restart stopped are queued ahead of them.
+	s.d.Rerun(ctx)
 	return ln, nil
 }
 
@@ -898,7 +916,7 @@ func (s *server) deps(au *auth.Service) api.Deps {
 		ServerInfo: s.info, Listen: s.listenAddr,
 		Engines: s.pool.Status, Runners: s.hub.Runners, PlacesChanged: s.loadPlaces,
 		Cache: s.cache, Scanner: s.scanner, Upgrade: s.upgrades, FlakyFlips: s.f.flakyFlips,
-		Storage: s.storage,
+		Storage: s.storage, Restart: s.restartNow,
 	}
 }
 
@@ -1004,9 +1022,12 @@ func (s *server) run(ctx context.Context, ln net.Listener, stdout io.Writer) int
 		s.log.Error("the HTTP server stopped", "err", err)
 		code = 1
 	case <-ctx.Done():
-		if s.switching.Load() {
+		switch {
+		case s.restarting.Load():
+			s.log.Info("shutting down to start again")
+		case s.switching.Load():
 			s.log.Info("shutting down to start the other version")
-		} else {
+		default:
 			s.log.Info("shutting down")
 		}
 	}
@@ -1065,6 +1086,11 @@ func (s *server) startWork(work context.Context, hup <-chan os.Signal, wg *sync.
 // those requests are open, not after, so that whoever waits on a build is
 // told it was lost instead of being cut off.
 func (s *server) stop(stopWork context.CancelFunc, wg *sync.WaitGroup, srvs ...*http.Server) {
+	// While the runners can still be told: a stage on one is stopped
+	// through its connection.
+	stopping, stopped := context.WithTimeout(context.Background(), rerunStopGrace)
+	s.d.StopForRestart(stopping)
+	stopped()
 	ctx, giveUp := context.WithCancel(context.Background())
 	defer giveUp()
 	var drained sync.WaitGroup

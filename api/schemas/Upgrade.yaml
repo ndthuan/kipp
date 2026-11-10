@@ -11,6 +11,7 @@ required:
   - backup
   - running
   - queued
+  - rerun
   - updated_at
   - error
   - latest
@@ -42,6 +43,11 @@ properties:
   queued:
     type: integer
     description: Builds waiting to start, while the upgrade waits for them.
+  rerun:
+    type: integer
+    description: |
+      Builds the restart stops and runs again after the start
+      (rerun_on_restart), which the upgrade does not wait for.
   updated_at:
     $ref: NullableTimestamp.yaml
   error:

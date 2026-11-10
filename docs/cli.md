@@ -135,13 +135,20 @@ that was refused (the server keeps the jobs it had) and exits 1.
 ## kipp quiet
 
 ```
-kipp quiet on [--wait [--timeout <duration>]] | off | status [--url <url>] [--token <token>]
+kipp quiet on [--wait [--timeout <duration>]] | off | status | rerun <job> <number> [--restart] [--url <url>] [--token <token>]
 ```
 
 With an admin's token. `on` refuses new builds; with `--wait` it returns
 once no build runs or waits, and at `--timeout` (default `2h`) it turns
-quiet off again and exits 1. `off` takes builds again; `status` says
-whether the server is quiet and how many builds run and wait. See
+quiet off again and exits 1. A running build of a job with
+`rerun_on_restart: true` is not waited for: the counts say how many will
+run again after the restart. `off` takes builds again; `status` says
+whether the server is quiet and how many builds run and wait, and, once
+quiet has waited 10 minutes for builds that may be waiting on something it
+holds back, names them and the command that runs each again. `rerun` has
+the restart stop the running build of `<job>` numbered `<number>` and run
+it again after the start, for this quiet only; with `--restart` the server
+restarts now, which it refuses while any other build runs or waits. See
 [Restarting without losing builds](operations.md#restarting-without-losing-builds).
 
 ## kipp db

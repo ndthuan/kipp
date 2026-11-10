@@ -98,6 +98,7 @@ type Status struct {
 	Backup    string    `json:"backup,omitempty"`
 	Running   int       `json:"running"`
 	Queued    int       `json:"queued"`
+	Rerun     int       `json:"rerun,omitempty"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
 

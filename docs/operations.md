@@ -97,10 +97,53 @@ once nothing runs or waits; at `--timeout` (default 2 hours) it turns
 quiet off again and exits 1, so a restart that waited too long never
 leaves the server refusing builds.
 
+### Jobs that wait for other builds
+
+A job that runs and waits for another build (a flow that polls for a pull
+request's check, a deploy that waits for a gate) can hold a safe restart
+for ever: the build it waits for is held back by quiet (its webhook is kept
+until quiet ends), so it never ends, and quiet never gets idle. Mark such a
+job in its file:
+
+```yaml
+rerun_on_restart: true
+```
+
+While quiet waits (`kipp quiet on --wait`, the Server page, `kipp
+upgrade`), a running build of such a job does not count as running: the
+counts say `0 running, 0 queued, 1 will run again after the restart`. When
+the server stops while quiet, it stops each of them as a cancel does (the
+build ends `cancelled`, its stage's log says `kipp: stopped for a restart,
+runs again after it`, and its job's activity says so), and records it. At
+the next start, before the stored webhooks are handled, each is queued
+again, in the order they were first queued, with the same parameters,
+commit and cause (trigger, detail, who started it). The stopped build's
+page and its API answer (`rerun_as`) link to the new build, and the new
+build's (`rerun_of`) link back. Quiet turned off without a restart stops
+nothing. A build of a job without the key is always waited for: kipp never
+stops a deploy halfway on a guess. A compact (which restarts nothing)
+waits for these builds as for any other.
+
+When quiet has waited 10 minutes, nothing is queued, and every build still
+running had started before quiet began, kipp says what may hold it:
+`Only flow #3 still runs; it may be waiting on something quiet holds back`.
+`kipp quiet status`, `quiet on --wait` and `GET /api/v1/admin/quiet`
+(`holding`, `hint`) say it, and the Server page offers **Run flow #3 again
+after the restart, and restart now**, which asks first, then does the above
+for the builds named, once and in the audit (`quiet.rerun`, then
+`restart`), and restarts kipp, but only when nothing else runs or waits;
+the page also shows the line that makes it permanent. From the command
+line it is `kipp quiet rerun <job> <number> [--restart]`. A choice holds for
+the quiet it was made in: turning quiet off forgets it.
+
 The same is `POST /api/v1/admin/quiet` (on), `DELETE /api/v1/admin/quiet`
 (off) and `GET /api/v1/admin/quiet`, which answer `quiet`, `since`,
-`running`, `queued` and `idle` (true when nothing runs or waits); an
-admin's token or session only, and each change is in the audit. The
+`running`, `queued`, `rerun` (the builds that will run again after the
+restart, not in `running`), `idle` (true when nothing runs or waits),
+`holding` and `hint`; `POST /api/v1/admin/quiet/rerun` with
+`{"builds": [{"job": "flow", "number": 3}], "restart": true}` chooses
+builds to run again. An admin's token or session only, and each change is
+in the audit. The
 Server page has the same switch, and every page says so while the server
 is quiet. An upgrade does this, and the restart, for you
 ([Upgrading](install.md#upgrading)).

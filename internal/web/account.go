@@ -328,6 +328,7 @@ var notices = map[string]string{
 	"reloaded":          "The job files are reloaded.",
 	"quiet-on":          "kipp is quiet: no build starts, and the running ones end by themselves.",
 	"quiet-off":         "kipp takes builds again.",
+	"restarting":        "kipp is restarting. The builds chosen run again once it is back; reload this page in a moment.",
 	"upgrade-started":   "The upgrade is on its way. This page shows how far it is.",
 	"upgrade-cancelled": "The upgrade is cancelled. kipp takes builds again and nothing was changed.",
 	"engine-added":      "The engine is added. A stage that waits for its labels is placed on it once it is reached.",

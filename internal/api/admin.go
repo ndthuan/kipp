@@ -437,6 +437,83 @@ func (s *Service) SetQuiet(ctx context.Context, u *store.User, on bool) (dispatc
 	return st, nil
 }
 
+// RerunRequest names the running builds a restart is to stop and run
+// again after the start, and whether to restart now.
+type RerunRequest struct {
+	Builds  []BuildName
+	Restart bool
+}
+
+// BuildName is a build by its job and number.
+type BuildName struct {
+	Job    string
+	Number int
+}
+
+// RerunAfterRestart has the restart quiet waits for stop the named running
+// builds and run them again after the start (dispatch.ChooseRerun), each
+// recorded in the audit, and builds not named are left as they are. With
+// Restart the server restarts now, but only once nothing else runs or
+// waits, so that no build is lost by it. An admin's, as quiet is.
+func (s *Service) RerunAfterRestart(ctx context.Context, u *store.User, req RerunRequest) (dispatch.QuietState, error) {
+	if !u.Admin {
+		return dispatch.QuietState{}, ErrForbidden
+	}
+	ids, err := s.runningIDs(ctx, req.Builds)
+	if err != nil {
+		return dispatch.QuietState{}, err
+	}
+	for i, id := range ids {
+		ref, err := s.deps.Dispatch.ChooseRerun(id)
+		if errors.Is(err, dispatch.ErrNotQuiet) || errors.Is(err, dispatch.ErrNotRunning) {
+			n := req.Builds[i]
+			return dispatch.QuietState{}, fmt.Errorf("%w: %s #%d: %w", ErrConflict, n.Job, n.Number, err)
+		}
+		if err != nil {
+			return dispatch.QuietState{}, err
+		}
+		s.record(ctx, u.Name, "quiet.rerun", fmt.Sprintf("%s #%d", ref.Job, ref.Number), "runs again after the restart")
+	}
+	st, err := s.deps.Dispatch.QuietState(ctx)
+	if err != nil || !req.Restart {
+		return st, err
+	}
+	return st, s.restart(ctx, u, st)
+}
+
+// runningIDs are the ids of the builds named, all of them found first so
+// that none is chosen when another is not there.
+func (s *Service) runningIDs(ctx context.Context, names []BuildName) ([]int64, error) {
+	if len(names) == 0 {
+		return nil, fmt.Errorf("%w: name at least one build", ErrBadInput)
+	}
+	ids := make([]int64, len(names))
+	for i, n := range names {
+		b, err := s.deps.Store.BuildByNumber(ctx, n.Job, n.Number)
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, ErrNotFound
+		}
+		if err != nil {
+			return nil, err
+		}
+		ids[i] = b.ID
+	}
+	return ids, nil
+}
+
+// restart restarts the server now, unless a build would be lost by it.
+func (s *Service) restart(ctx context.Context, u *store.User, st dispatch.QuietState) error {
+	switch {
+	case st.Running+st.Queued > 0:
+		return fmt.Errorf("%w: not restarted: %s, and a restart now would lose them", ErrConflict, st.Counts())
+	case s.deps.Restart == nil:
+		return fmt.Errorf("%w: this server cannot restart itself; restart it as you started it", ErrConflict)
+	}
+	s.record(ctx, u.Name, "restart", "", st.Counts())
+	s.deps.Restart()
+	return nil
+}
+
 // AdministersApps is nil when u may set up a GitHub App: an admin in sudo
 // mode, as for a secret, because the App's webhook secret is stored.
 func (s *Service) AdministersApps(u *store.User, sess *store.Session) error {

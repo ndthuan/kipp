@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -57,4 +58,32 @@ func TestQuietOnWaitReturnsWhenIdleAndTurnsQuietOffAtTheTimeout(t *testing.T) {
 	code, out, _ = s.kipp("quiet", "on", "--wait", "--timeout", "30s")
 	eq(t, "the build ends", code, 0)
 	eq(t, "what it ends with", out[len(out)-len("quiet on: 0 running, 0 queued\n"):], "quiet on: 0 running, 0 queued\n")
+}
+
+func TestQuietRerunChoosesARunningBuildAndTheCountsSayItRunsAgain(t *testing.T) {
+	s := start(t, map[string]string{"slow.yml": slowJob})
+	eq(t, "start", func() int { c, _, _ := s.kipp("run", "slow"); return c }(), 0)
+	code, _, errOut := s.kipp("quiet", "rerun", "slow", "1")
+	eq(t, "rerun while not quiet", code, 1)
+	contains(t, errOut, "not quiet")
+	ok(t, "", "quiet", "on", "--url", s.url, "--token", s.token)
+	code, out, _ := s.kipp("quiet", "rerun", "slow", "1")
+	eq(t, "rerun", code, 0)
+	eq(t, "what it says", out, "quiet on: 0 running, 0 queued, 1 will run again after the restart\n")
+	for _, bad := range [][]string{{"rerun", "slow"}, {"rerun", "slow", "x"}, {"rerun", "slow", "0"}, {"on", "--restart"}, {"status", "x"}} {
+		code, _, _ = s.kipp(append([]string{"quiet"}, bad...)...)
+		eq(t, "quiet "+strings.Join(bad, " "), code, 2)
+	}
+	ok(t, "", "quiet", "off", "--url", s.url, "--token", s.token)
+}
+
+func TestTheQuietTextNamesTheBuildsHoldingItAndHowToRunThemAgain(t *testing.T) {
+	q := quietState{Quiet: true, Running: 2, Hint: "Only a #1 and b #2 still run; they may be waiting on something quiet holds back"}
+	q.Holding = []quietBuild{{"a", 1}, {"b", 2}}
+	eq(t, "text", q.text(), `quiet on: 2 running, 0 queued
+Only a #1 and b #2 still run; they may be waiting on something quiet holds back.
+To run it again after the restart and restart now:
+  kipp quiet rerun a 1
+  kipp quiet rerun b 2 --restart
+To have its job always run again after a restart, add to its job file: rerun_on_restart: true`)
 }

@@ -206,8 +206,8 @@ func (e *Engine) wait(ctx context.Context, req Request, st state.Status) (*quiet
 	}
 	deadline := e.o.Now().Add(timeout)
 	for c.Running+c.Queued > 0 {
-		if st.Running != c.Running || st.Queued != c.Queued {
-			st.Running, st.Queued = c.Running, c.Queued
+		if st.Running != c.Running || st.Queued != c.Queued || st.Rerun != c.Rerun {
+			st.Running, st.Queued, st.Rerun = c.Running, c.Queued, c.Rerun
 			e.writeStatus(st)
 		}
 		if !e.o.Now().Before(deadline) {

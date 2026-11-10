@@ -26,8 +26,21 @@ func (d *Dispatcher) Again(ctx context.Context, id int64, kind, by string) (*sto
 	if !o.Status.Terminal() {
 		return nil, fmt.Errorf("build #%d %w: it is %s", o.Number, ErrNotEnded, o.Status)
 	}
+	b, err := d.Trigger(ctx, d.againRequest(o, kind, fmt.Sprintf("again #%d", o.Number), by))
+	if err != nil {
+		return nil, err
+	}
+	line := fmt.Sprintf("#%d built again from #%d by %s", b.Number, o.Number, by)
+	if err := d.st.AddActivity(ctx, b.Job, line, time.Now()); err != nil {
+		d.log.Error("recording a build made again", "job", b.Job, "number", b.Number, "err", err)
+	}
+	return b, nil
+}
+
+// againRequest asks for build o once more, as Again describes.
+func (d *Dispatcher) againRequest(o *store.Build, kind, detail, by string) TriggerRequest {
 	req := TriggerRequest{
-		Job: o.Job, Kind: kind, Detail: fmt.Sprintf("again #%d", o.Number), By: by,
+		Job: o.Job, Kind: kind, Detail: detail, By: by,
 		Branch: o.TriggerBranch, DefaultBranch: o.TriggerDefaultBranch, Tag: o.TriggerTag,
 		Commit: o.Commit(), BaseCommit: o.BaseCommit,
 	}
@@ -42,13 +55,5 @@ func (d *Dispatcher) Again(ctx context.Context, id int64, kind, by string) (*sto
 			}
 		}
 	}
-	b, err := d.Trigger(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-	line := fmt.Sprintf("#%d built again from #%d by %s", b.Number, o.Number, by)
-	if err := d.st.AddActivity(ctx, b.Job, line, time.Now()); err != nil {
-		d.log.Error("recording a build made again", "job", b.Job, "number", b.Number, "err", err)
-	}
-	return b, nil
+	return req
 }

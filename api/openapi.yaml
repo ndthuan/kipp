@@ -106,6 +106,8 @@ paths:
     $ref: paths/admin_reload.yaml
   /admin/quiet:
     $ref: paths/admin_quiet.yaml
+  /admin/quiet/rerun:
+    $ref: paths/admin_quiet_rerun.yaml
   /admin/upgrade:
     $ref: paths/admin_upgrade.yaml
   /admin/upgrade/rollback:

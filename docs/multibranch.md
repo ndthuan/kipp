@@ -177,7 +177,9 @@ listed on the parent's page as not built.
   `pr-<n>`, and `pr-<n>-head` for its head alone under `both`. A job file
   whose name starts with a multibranch job's name and a dot is refused.
 - A child has everything of its parent but its cron, `after` and webhook,
-  and has its own build numbers, history and concurrency. `locks` are
+  and has its own build numbers, history and concurrency. So
+  `rerun_on_restart: true` on the parent holds for the build of every
+  branch and pull request. `locks` are
   shared by name as always, so builds that must take turns across
   branches name a lock.
 - `cron` and `after` belong to the parent and build the default branch's

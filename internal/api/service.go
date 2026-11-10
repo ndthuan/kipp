@@ -117,6 +117,9 @@ type Deps struct {
 	// Storage is the report of the data directory, the compact and the
 	// self-check; without it the routes answer that there is none.
 	Storage *storage.Service
+	// Restart has the server stop and start again, as an upgrade does
+	// once its record is written; nil refuses a restart from the API.
+	Restart func()
 	// FlakyFlips is how many changes of colour in a job's last builds make
 	// it flaky on the overview: 0 for no such section. kipp serve sets it
 	// (default overview.DefaultFlips).

@@ -23,6 +23,7 @@ var migrationSums = []string{
 	"dd3565eb5e8cb8146c64b25071e70587a09f5aee5310f5cad240098efc277fc2",
 	"d9c619e2b4b12b76b732fa60e472f9c8dc181aa72e59de7859784707f13e8bb5",
 	"eb3dc6d00cc0d3828545171c13e9ffa66cc18e43820ea3b4d79e4d7737be4e5e",
+	"1354826ffc7a018014b62a2885dd0dd3aca064accaf76b44977e5cfbb83bb730",
 }
 
 func TestMigrationsAreAppendOnly(t *testing.T) {
@@ -326,5 +327,30 @@ func TestTheRowsOfTheAgentsTableAreTheRunnersAfterTheUpgrade(t *testing.T) {
 	must(t, err)
 	if len(rows) != 1 || rows[0].Action != "agent.add" {
 		t.Fatalf("the audit reads %+v", rows)
+	}
+}
+
+func TestABuildOfAnEarlierSchemaIsNoRerunAfterTheUpgrade(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "db.sqlite")
+	withMigrations(t, migrations[:6], func() {
+		s, err := Open(path)
+		must(t, err)
+		_, err = s.db.ExecContext(ctx, `INSERT INTO builds (job, number, status, trigger, queued_at) VALUES ('a', 1, 'cancelled', 'cli', ?)`, ts(time.Now()))
+		must(t, err)
+		must(t, s.Close())
+	})
+
+	s, err := Open(path)
+	must(t, err)
+	defer func() { must(t, s.Close()) }()
+	b, err := s.BuildByNumber(ctx, "a", 1)
+	must(t, err)
+	if b.RerunOf != 0 || b.RerunAs != 0 {
+		t.Fatalf("an old build reads rerun of #%d, as #%d", b.RerunOf, b.RerunAs)
+	}
+	pending, err := s.PendingReruns(ctx)
+	must(t, err)
+	if len(pending) != 0 {
+		t.Fatalf("an old build is waiting to run again: %+v", pending)
 	}
 }

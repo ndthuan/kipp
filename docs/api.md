@@ -155,6 +155,7 @@ an admin may read is below `/admin/`.
 | `GET /queue/events` | login | A `changed` event each time the caller's queue changes. |
 | `POST /admin/reload` | admin | Reads the job files again; a refused set is a 422 `jobs_refused` with the errors. |
 | `GET`, `POST`, `DELETE /admin/quiet` | admin | Quiet mode ([Restarting without losing builds](operations.md#restarting-without-losing-builds)). |
+| `POST /admin/quiet/rerun` | admin | Run running builds again after the restart, and restart now ([Jobs that wait for other builds](operations.md#jobs-that-wait-for-other-builds)). |
 | `GET`, `POST`, `DELETE /admin/upgrade`, `POST /admin/upgrade/rollback` | admin | Upgrading the server ([Upgrade](#upgrade)). |
 | `GET /admin/users`, `/admin/users/<name>`, `/admin/secrets`, `/admin/server`, `/admin/engines`, `/admin/runners`, `/admin/cache`, `/admin/audit` | admin | [Admin reads](#admin-reads). |
 | `POST /hooks/github/<job>` | a signature | A GitHub delivery for a job ([webhook](jobs.md#webhook)). |
@@ -213,8 +214,17 @@ and none answers a password, a token, a hash or a secret's value.
   `last_restored_at`.
 - `GET /api/v1/admin/audit`: the audit, newest first, paged: `id`, `at`,
   `actor` (a user's name, `cli` or `kipp`), `action`, `target`, `detail`.
-- `GET /api/v1/admin/quiet`: `quiet`, `since`, `running`, `queued` and
-  `idle`.
+- `GET /api/v1/admin/quiet`: `quiet`, `since`, `running`, `queued`,
+  `rerun` (the running builds the restart stops and runs again after the
+  start, not in `running`), `idle`, `holding` (once quiet has waited 10
+  minutes, the builds that may hold it, as `job` and `number`) and `hint`
+  (the sentence that says so, empty without one).
+- `POST /api/v1/admin/quiet/rerun`: `{"builds": [{"job", "number"}],
+  "restart"}` has the restart stop those running builds and run them again
+  after the start, each a row of the audit (`quiet.rerun`); with
+  `"restart": true` the server restarts now, and answers 409 without
+  restarting while any other build runs or waits. 409 too when the server
+  is not quiet or a build does not run. The answer is the quiet as above.
 
 ## Storage
 

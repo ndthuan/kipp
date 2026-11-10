@@ -1,0 +1,9 @@
+type: object
+additionalProperties: false
+description: A build by its job and number.
+required: [job, number]
+properties:
+  job:
+    type: string
+  number:
+    type: integer

@@ -76,6 +76,10 @@ type Job struct {
 	// default namespace, which all builds read: its owner vouches that each
 	// build runs default-branch code.
 	CacheWritesDefault bool
+	// RerunOnRestart says a build of the job may be stopped midway and run
+	// again from the start: a safe restart does not wait for it, stops it
+	// and queues it again after the start. A child keeps its parent's.
+	RerunOnRestart bool
 	// Permissions is what the build's KIPP_TOKEN may reach; nil is the
 	// default, view on the job itself. MaxPermissions is the ceiling the
 	// permissions: of a stages file in a repo must stay within; nil is the
@@ -304,6 +308,7 @@ type file struct {
 	Fingerprint yaml.Node         `yaml:"fingerprint"`
 
 	CacheWritesDefault bool         `yaml:"cache_writes_default"`
+	RerunOnRestart     bool         `yaml:"rerun_on_restart"`
 	Permissions        *Permissions `yaml:"permissions"`
 	MaxPermissions     *Permissions `yaml:"max_permissions"`
 }
@@ -385,7 +390,7 @@ func ParseJob(filename string, data []byte) (*Job, error) {
 		Concurrency: Concurrency(f.Concurrency), Locks: f.Locks, Env: f.Env, Secrets: f.Secrets,
 		Workdir: f.Workdir, Source: f.Source, OnFailure: f.OnFailure, OnSuccess: f.OnSuccess,
 		Metrics: f.Metrics, Keep: Keep{Builds: DefaultKeepBuilds}, CacheWritesDefault: f.CacheWritesDefault,
-		Permissions: f.Permissions, MaxPermissions: f.MaxPermissions,
+		Permissions: f.Permissions, MaxPermissions: f.MaxPermissions, RerunOnRestart: f.RerunOnRestart,
 	}
 	if j.Concurrency == "" {
 		j.Concurrency = Queue

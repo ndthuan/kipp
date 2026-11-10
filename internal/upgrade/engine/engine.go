@@ -58,6 +58,9 @@ const (
 type Counts struct {
 	Quiet           bool
 	Running, Queued int
+	// Rerun is the builds the restart stops and runs again after the
+	// start, which Running leaves out and the wait does not wait for.
+	Rerun int
 }
 
 // Options are what an Engine needs of the server around it.
@@ -187,7 +190,7 @@ func (e *Engine) Info(ctx context.Context) (Info, error) {
 	e.mu.Unlock()
 	if in.Status.State == state.StateWaiting && e.o.Counts != nil {
 		if c, err := e.o.Counts(ctx); err == nil {
-			in.Status.Running, in.Status.Queued = c.Running, c.Queued
+			in.Status.Running, in.Status.Queued, in.Status.Rerun = c.Running, c.Queued, c.Rerun
 		}
 	}
 	if e.o.Checker != nil {

@@ -113,6 +113,9 @@ type Options struct {
 	// status then carries no link to the build.
 	Status    func(ctx context.Context, job *config.Job, s CommitStatus) error
 	PublicURL string
+	// Now is the clock the quiet's hint reads (QuietState.Holding); nil is
+	// time.Now.
+	Now func() time.Time
 }
 
 // TriggerRequest asks for a build.
@@ -132,6 +135,9 @@ type TriggerRequest struct {
 	// build it repeats: the commit a push named, the commit that build
 	// checked out, and the base a pull request was merged into.
 	Commit, BuiltCommit, BaseCommit string
+	// RerunOf is the number of the build of the job, stopped for a
+	// restart, that this one runs again; 0 for any other.
+	RerunOf int
 }
 
 // Dispatcher owns the queue and the running builds.
@@ -178,6 +184,11 @@ type Dispatcher struct {
 	skipped map[string]bool
 	// quietEnded is told, once, each time quiet is turned off.
 	quietEnded func()
+	// chosen are the running builds an admin chose to run again after the
+	// restart, by id, for this quiet only (see ChooseRerun).
+	chosen map[int64]bool
+	// now is Options.Now.
+	now func() time.Time
 }
 
 // run is a build between leaving the queue and releasing what it holds: its
@@ -253,10 +264,13 @@ func New(st *store.Store, r runner.Runner, opts Options) *Dispatcher {
 	if opts.Logger == nil {
 		opts.Logger = slog.Default()
 	}
+	if opts.Now == nil {
+		opts.Now = time.Now
+	}
 	return &Dispatcher{
 		st: st, r: r, opts: opts, log: opts.Logger, bin: executable(),
 		slots: make(chan struct{}, opts.Builds), local: make(chan struct{}, opts.Executors),
-		wake: make(chan struct{}, 1), quit: make(chan struct{}), waiting: map[int64]map[string]string{},
+		wake: make(chan struct{}, 1), quit: make(chan struct{}), waiting: map[int64]map[string]string{}, now: opts.Now,
 		snap:    &config.Snapshot{Jobs: map[string]*config.Job{}},
 		running: map[int64]*run{}, ending: map[int64]bool{}, locks: map[string]int64{},
 		done: map[int64][]chan struct{}{}, changes: make(chan struct{}),
@@ -372,7 +386,7 @@ func (d *Dispatcher) Trigger(ctx context.Context, req TriggerRequest) (*store.Bu
 		return nil, fmt.Errorf("%w (%s)", ErrDropped, why)
 	}
 	b := &store.Build{Job: job.Name, Status: store.Queued, Trigger: req.Kind, TriggerDetail: req.Detail, TriggerBranch: req.Branch, TriggerDefaultBranch: req.DefaultBranch, TriggerTag: req.Tag, UpstreamStatus: req.UpstreamStatus, Params: params, StartedBy: req.By, ConfigHash: snap.Hash,
-		PushedCommit: req.Commit, BuiltCommit: req.BuiltCommit, BaseCommit: req.BaseCommit}
+		PushedCommit: req.Commit, BuiltCommit: req.BuiltCommit, BaseCommit: req.BaseCommit, RerunOf: req.RerunOf}
 	ofChild(b, job)
 	if err := d.st.CreateBuild(ctx, b); err != nil {
 		return nil, err

@@ -120,6 +120,7 @@ The top-level keys:
 | `on_success`, `on_failure` | Hooks run once the build has ended ([Hooks](#hooks)). |
 | `metrics` | The store the builds' numbers go to, and what it remembers ([Metrics](metrics.md)). |
 | `cache_writes_default` | `true` lets every build write the cache's `default` namespace ([Cache](builds.md#cache)). |
+| `rerun_on_restart` | `true` says stopping a build of this job midway and running it again from the start is safe, e.g. a job that waits for a pull request: a safe restart does not wait for it, and runs it again after the start ([Restarting without losing builds](operations.md#restarting-without-losing-builds)). Default `false`; the children of a multibranch job or an owner job have their parent's. |
 
 ## Params
 

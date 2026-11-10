@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ndthuan/kipp/internal/api"
+	"github.com/ndthuan/kipp/internal/dispatch"
 	"github.com/ndthuan/kipp/internal/store"
 	"github.com/ndthuan/kipp/internal/update"
 	"github.com/ndthuan/kipp/internal/upgrade/engine"
@@ -48,8 +49,8 @@ type upgradeView struct {
 	Active bool
 	State  string
 	// Version is the release the run goes to.
-	Version         string
-	Running, Queued int
+	Version                string
+	Running, Queued, Rerun int
 	// Result is the end of the last run when it is recent: "done" or "failed".
 	Result string
 	// Reason is why a failed run failed, Log whether there is a log to link.
@@ -137,7 +138,7 @@ func snoozed(r *http.Request) string {
 
 func buildUpgradeView(info engine.Info, snoozedFor string, now time.Time) *upgradeView {
 	v := &upgradeView{Info: info, State: info.Status.State, Version: info.Status.Version,
-		Running: info.Status.Running, Queued: info.Status.Queued}
+		Running: info.Status.Running, Queued: info.Status.Queued, Rerun: info.Status.Rerun}
 	v.From = info.Status.From
 	v.Active = activeState(v.State)
 	recent := !info.Status.UpdatedAt.IsZero() && now.Sub(info.Status.UpdatedAt) < resultKept
@@ -221,7 +222,7 @@ func (v *upgradeView) Label() string {
 }
 
 func (v *upgradeView) counts() string {
-	return fmt.Sprintf("%d running, %d queued", v.Running, v.Queued)
+	return dispatch.QuietState{Running: v.Running, Queued: v.Queued, Rerun: v.Rerun}.Counts()
 }
 
 // Counts is the card's waiting line.

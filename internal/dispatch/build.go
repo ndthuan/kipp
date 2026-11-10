@@ -160,7 +160,8 @@ func stopped(ctx context.Context) (store.Status, string) {
 	}
 	_, byUser := errors.AsType[cancelledBy](cause)
 	_, gone := errors.AsType[childGone](cause)
-	if byUser || gone {
+	_, restart := errors.AsType[stoppedForRestart](cause)
+	if byUser || gone || restart {
 		return store.Cancelled, "kipp: " + cause.Error()
 	}
 	return store.Lost, lostLine // the server is shutting down

@@ -369,7 +369,7 @@ func TestEveryNewFormNeedsTheCSRFField(t *testing.T) {
 		"/admin/users", "/admin/users/bob/admin/on", "/admin/users/bob/admin/off", "/admin/users/bob/password",
 		"/admin/users/bob/grants", "/admin/users/bob/grants/remove", "/admin/users/bob/tokens",
 		"/admin/users/alice/tokens/" + id + "/revoke", "/admin/users/bob/delete",
-		"/admin/secrets", "/admin/secrets/DEPLOY_KEY/delete", "/admin/server/reload", "/admin/server/quiet", "/admin/server/quiet/off",
+		"/admin/secrets", "/admin/secrets/DEPLOY_KEY/delete", "/admin/server/reload", "/admin/server/quiet", "/admin/server/quiet/off", "/admin/server/quiet/rerun",
 	} {
 		res, page := postBody(t, admin, e.srv.URL+path, url.Values{"password": {"pw"}, "name": {"eve"}, "label": {"x"}, "days": {"0"}, "value": {"12345678"}})
 		eq(t, path+" without the field", res.StatusCode, http.StatusForbidden)

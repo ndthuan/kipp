@@ -10,6 +10,26 @@ lines and the data directory are the public surface.
 
 Added:
 
+- A job key `rerun_on_restart: true` for a job whose build may be stopped
+  midway and run again from the start, such as one that waits for a pull
+  request: a safe restart (`kipp quiet on --wait`, the Server page,
+  `kipp upgrade`) does not wait for its builds, stops them as a cancel does
+  when the server stops, and queues them again at the next start, before
+  the webhooks kept while quiet, with the same parameters and cause. The
+  stopped build and the new one link each other (`rerun_as`, `rerun_of` on
+  a build in the API, and their pages). The children of a multibranch job
+  have their parent's. A job without it is still waited for.
+- Once quiet has waited 10 minutes for builds that started before it, with
+  nothing queued, `kipp quiet status`, `GET /api/v1/admin/quiet`
+  (`holding`, `hint`) and the Server page name them: "Only flow #3 still
+  runs; it may be waiting on something quiet holds back". The page offers
+  to run them again after the restart and restart now (confirmed, admin
+  only, in the audit), and shows the line that makes it permanent; the
+  same is `kipp quiet rerun <job> <number> [--restart]` and
+  `POST /api/v1/admin/quiet/rerun`.
+- The quiet counts say how many builds will run again after the restart
+  (`rerun` in `GET /api/v1/admin/quiet` and `GET /api/v1/admin/upgrade`).
+
 - `kipp upgrade --dry-run [vX.Y.Z]` (and `--json`), the button **Check this
   upgrade** on the Server page's Upgrade card and
   `POST /api/v1/admin/upgrade/dry-run` make every check of an upgrade but
@@ -46,6 +66,10 @@ Added:
 
 Changed:
 
+- While quiet, `running` in `GET /api/v1/admin/quiet` (and so `idle`, and
+  what `kipp quiet on --wait` and a safe upgrade wait for) leaves out the
+  builds of jobs with `rerun_on_restart: true`, which are counted in
+  `rerun`.
 - The daily sweep gives the pages it frees back to the disk
   (`PRAGMA incremental_vacuum`) once a compact has turned incremental
   `auto_vacuum` on.

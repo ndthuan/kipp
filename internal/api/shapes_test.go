@@ -230,11 +230,11 @@ func TestAGuardWhoseOriginBuildIsGoneHasNoStatusAndAnIdOfZero(t *testing.T) {
 
 func TestV1HasBuildSummariesInListsAndABuildWithStagesAndCompleteAlone(t *testing.T) {
 	e, _ := shapeEnv(t)
-	summary := "base_branch,base_commit,branch,built_commit,finished_at,id,job,kept,number,params,parent,pr,queued_at,started_at,started_by,status,trigger,trigger_detail"
+	summary := "base_branch,base_commit,branch,built_commit,finished_at,id,job,kept,number,params,parent,pr,queued_at,rerun_as,rerun_of,started_at,started_by,status,trigger,trigger_detail"
 	builds, _ := e.page(t, e.admin, "/api/v1/jobs/smoke/builds")
 	eqKeys(t, "a summary", builds[0], summary)
 	// Every field is there, null where the build has none.
-	for _, k := range []string{"parent", "branch", "built_commit", "pr", "base_branch", "base_commit", "kept"} {
+	for _, k := range []string{"parent", "branch", "built_commit", "pr", "base_branch", "base_commit", "kept", "rerun_of", "rerun_as"} {
 		eq(t, k, builds[0][k], nil)
 	}
 	jobs, _ := e.page(t, e.admin, "/api/v1/jobs")

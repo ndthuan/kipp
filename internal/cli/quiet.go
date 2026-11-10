@@ -4,21 +4,31 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 )
 
-const quietUsage = `quiet on [--wait [--timeout <duration>]] | off | status [--url <url>] [--token <token>]`
+const quietUsage = `quiet on [--wait [--timeout <duration>]] | off | status | rerun <job> <number> [--restart] [--url <url>] [--token <token>]`
 
 // quietPoll is how often quiet on --wait looks at what still runs.
 var quietPoll = 2 * time.Second
 
 // quietState is the server's answer to /api/v1/admin/quiet.
 type quietState struct {
-	Quiet   bool   `json:"quiet"`
-	Since   string `json:"since"`
-	Running int    `json:"running"`
-	Queued  int    `json:"queued"`
-	Idle    bool   `json:"idle"`
+	Quiet   bool         `json:"quiet"`
+	Since   string       `json:"since"`
+	Running int          `json:"running"`
+	Queued  int          `json:"queued"`
+	Rerun   int          `json:"rerun"`
+	Idle    bool         `json:"idle"`
+	Holding []quietBuild `json:"holding"`
+	Hint    string       `json:"hint"`
+}
+
+// quietBuild is a build quiet names, by its job and number.
+type quietBuild struct {
+	Job    string `json:"job"`
+	Number int    `json:"number"`
 }
 
 func (q quietState) text() string {
@@ -26,7 +36,21 @@ func (q quietState) text() string {
 	if q.Quiet {
 		state = "on"
 	}
-	return fmt.Sprintf("quiet %s: %d running, %d queued", state, q.Running, q.Queued)
+	s := fmt.Sprintf("quiet %s: %d running, %d queued", state, q.Running, q.Queued)
+	if q.Rerun > 0 {
+		s += fmt.Sprintf(", %d will run again after the restart", q.Rerun)
+	}
+	if q.Hint == "" {
+		return s
+	}
+	s += "\n" + q.Hint + ".\nTo run it again after the restart and restart now:"
+	for i, b := range q.Holding {
+		s += fmt.Sprintf("\n  kipp quiet rerun %s %d", b.Job, b.Number)
+		if i == len(q.Holding)-1 {
+			s += " --restart"
+		}
+	}
+	return s + "\nTo have its job always run again after a restart, add to its job file: rerun_on_restart: true"
 }
 
 // cmdQuiet makes a server quiet before a restart, as Jenkins does: it
@@ -37,13 +61,14 @@ func (q quietState) text() string {
 func cmdQuiet(args []string, _ io.Reader, stdout, stderr io.Writer) int {
 	fs := newFlags(quietUsage, stderr)
 	wait := fs.Bool("wait", false, "on: return once no build runs or waits")
+	restart := fs.Bool("restart", false, "rerun: restart the server now, once nothing else runs or waits")
 	timeout := fs.Duration("timeout", 2*time.Hour, "on --wait: how long to wait before quiet is turned off again and the command fails")
 	newClient := clientFlags(fs)
 	positional, err := parseArgs(fs, args)
 	if err != nil {
 		return exitFor(err)
 	}
-	if len(positional) != 1 || (positional[0] != "on" && positional[0] != "off" && positional[0] != "status") || (*wait && positional[0] != "on") {
+	if !quietArgsOK(positional, *wait, *restart) {
 		fs.Usage()
 		return 2
 	}
@@ -57,6 +82,10 @@ func cmdQuiet(args []string, _ io.Reader, stdout, stderr io.Writer) int {
 		err = c.call(http.MethodGet, "/admin/quiet", nil, &q)
 	case "off":
 		err = c.call(http.MethodDelete, "/admin/quiet", nil, &q)
+	case "rerun":
+		n, _ := strconv.Atoi(positional[2]) // quietArgsOK read it
+		body := map[string]any{"builds": []map[string]any{{"job": positional[1], "number": n}}, "restart": *restart}
+		err = c.call(http.MethodPost, "/admin/quiet/rerun", body, &q)
 	default:
 		if err = c.call(http.MethodPost, "/admin/quiet", nil, &q); err == nil && *wait {
 			q, err = waitIdle(c, q, *timeout, stdout)
@@ -67,6 +96,25 @@ func cmdQuiet(args []string, _ io.Reader, stdout, stderr io.Writer) int {
 	}
 	say(stdout, "%s", q.text())
 	return 0
+}
+
+// quietArgsOK reports whether the words and flags make one of the forms of
+// quietUsage.
+func quietArgsOK(args []string, wait, restart bool) bool {
+	if len(args) == 0 || (wait && args[0] != "on") || (restart && args[0] != "rerun") {
+		return false
+	}
+	switch args[0] {
+	case "on", "off", "status":
+		return len(args) == 1
+	case "rerun":
+		if len(args) != 3 {
+			return false
+		}
+		n, err := strconv.Atoi(args[2])
+		return err == nil && n > 0
+	}
+	return false
 }
 
 // waitIdle polls until nothing runs or waits. At the timeout it turns

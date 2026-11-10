@@ -52,6 +52,7 @@ func (s *Site) adminRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /admin/server/reload", s.withUser(s.reload))
 	mux.HandleFunc("POST /admin/server/quiet", s.withUser(s.quietOn))
 	mux.HandleFunc("POST /admin/server/quiet/off", s.withUser(s.quietOff))
+	mux.HandleFunc("POST /admin/server/quiet/rerun", s.withUser(s.quietRerun))
 	s.upgradeRoutes(mux)
 }
 
@@ -749,4 +750,49 @@ func (s *Site) setQuiet(w http.ResponseWriter, r *http.Request, u *store.User, o
 		what = "quiet-on"
 	}
 	done(w, r, "/admin/server", what)
+}
+
+// quietRerun asks first, then has the restart stop the builds that hold
+// quiet and run them again after the start, and restarts now.
+func (s *Site) quietRerun(w http.ResponseWriter, r *http.Request, u *store.User) {
+	if !u.Admin {
+		s.fail(w, r, api.ErrForbidden)
+		return
+	}
+	var req api.RerunRequest
+	for _, v := range r.PostForm["build"] {
+		job, n, _ := strings.Cut(v, "#")
+		number, err := strconv.Atoi(n)
+		if err != nil || job == "" {
+			s.fail(w, r, fmt.Errorf("%w: a build is a job and its number, as job#3", api.ErrBadInput))
+			return
+		}
+		req.Builds = append(req.Builds, api.BuildName{Job: job, Number: number})
+	}
+	if r.PostFormValue("confirmed") == "" {
+		s.confirmRerun(w, r, req)
+		return
+	}
+	req.Restart = true
+	if _, err := s.api.Service().RerunAfterRestart(r.Context(), u, req); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	done(w, r, "/admin/server", "restarting")
+}
+
+func (s *Site) confirmRerun(w http.ResponseWriter, r *http.Request, req api.RerunRequest) {
+	q := dispatch.QuietState{}
+	hidden := []hiddenField{{"confirmed", "1"}}
+	for _, b := range req.Builds {
+		q.Holding = append(q.Holding, dispatch.BuildRef{Job: b.Job, Number: b.Number})
+		hidden = append(hidden, hiddenField{"build", fmt.Sprintf("%s#%d", b.Job, b.Number)})
+	}
+	names := q.HoldingNames()
+	s.confirm(w, r, "/admin/server/quiet/rerun", confirmData{
+		Heading: "Run " + names + " again after the restart, and restart now?",
+		Lines: []string{"kipp stops " + names + " as a cancel does, restarts, and queues it again with the same parameters and cause before anything else.",
+			"Nothing else may run or wait: if a build does, kipp does not restart and says so."},
+		Button: "Restart now", Back: "/admin/server#holding", Hidden: hidden,
+	})
 }

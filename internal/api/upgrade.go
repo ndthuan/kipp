@@ -92,6 +92,7 @@ type upgradeJSON struct {
 	Backup      string              `json:"backup"`
 	Running     int                 `json:"running"`
 	Queued      int                 `json:"queued"`
+	Rerun       int                 `json:"rerun"`
 	UpdatedAt   *stamp              `json:"updated_at"`
 	Error       string              `json:"error"`
 	Latest      string              `json:"latest"`
@@ -111,7 +112,7 @@ type upgradeFailureJSON struct {
 
 func toUpgradeJSON(in engine.Info) upgradeJSON {
 	out := upgradeJSON{State: in.Status.State, Version: in.Status.Version, From: in.Status.From, Backup: in.Status.Backup,
-		Running: in.Status.Running, Queued: in.Status.Queued, Error: in.Error, Latest: in.Latest, Upgradable: in.Upgradable,
+		Running: in.Status.Running, Queued: in.Status.Queued, Rerun: in.Status.Rerun, Error: in.Error, Latest: in.Latest, Upgradable: in.Upgradable,
 		Unavailable: in.Unavailable, RollbackTo: in.RollbackTo}
 	if out.State == "" {
 		out.State = "idle"

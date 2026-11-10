@@ -188,6 +188,48 @@ paths:
       tags:
         - admin
       x-kipp-package: api
+  /admin/quiet/rerun:
+    post:
+      description: |
+        While quiet, has the restart stop the named running builds, as a cancel
+        does, and queue them again after the start with their params and cause,
+        as rerun_on_restart does, for this quiet only: turning quiet off forgets
+        it. Each is recorded in the audit, and builds not named are left as
+        they are. For an admin.
+      operationId: rerunAfterRestart
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuietRerun"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quiet"
+          description: The quiet mode, with the builds chosen counted in rerun.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - bearerToken: []
+        - csrfToken: []
+          sessionCookie: []
+      summary: Run running builds again after the restart
+      tags:
+        - admin
+      x-kipp-package: api
   /admin/reload:
     post:
       description: For an admin.
@@ -2560,6 +2602,16 @@ components:
             - "null"
         queued_at:
           $ref: "#/components/schemas/Timestamp"
+        rerun_as:
+          description: For a build stopped for a restart, the number of the build of the same job that runs it again; null for any other build.
+          type:
+            - integer
+            - "null"
+        rerun_of:
+          description: The number of the build of the same job, stopped for a restart, that this one runs again; null for any other build.
+          type:
+            - integer
+            - "null"
         stages:
           items:
             $ref: "#/components/schemas/Stage"
@@ -2594,6 +2646,8 @@ components:
         - base_branch
         - base_commit
         - kept
+        - rerun_of
+        - rerun_as
         - stages
         - complete
       type: object
@@ -2630,6 +2684,18 @@ components:
         - build
         - store
         - stages
+      type: object
+    BuildName:
+      additionalProperties: false
+      description: A build by its job and number.
+      properties:
+        job:
+          type: string
+        number:
+          type: integer
+      required:
+        - job
+        - number
       type: object
     BuildRef:
       additionalProperties: false
@@ -2722,6 +2788,16 @@ components:
             - "null"
         queued_at:
           $ref: "#/components/schemas/Timestamp"
+        rerun_as:
+          description: For a build stopped for a restart, the number of the build of the same job that runs it again; null for any other build.
+          type:
+            - integer
+            - "null"
+        rerun_of:
+          description: The number of the build of the same job, stopped for a restart, that this one runs again; null for any other build.
+          type:
+            - integer
+            - "null"
         started_at:
           $ref: "#/components/schemas/NullableTimestamp"
         started_by:
@@ -2752,6 +2828,8 @@ components:
         - base_branch
         - base_commit
         - kept
+        - rerun_of
+        - rerun_as
       type: object
     CacheEntry:
       additionalProperties: false
@@ -3951,6 +4029,17 @@ components:
       additionalProperties: false
       description: The server's quiet mode, in which it takes no new builds.
       properties:
+        hint:
+          description: The sentence that says so, empty when holding is.
+          type: string
+        holding:
+          description: |
+            Once quiet has waited 10 minutes with nothing queued, the builds
+            still running that started before it: one may be waiting on
+            something quiet holds back. Empty in any other case.
+          items:
+            $ref: "#/components/schemas/BuildName"
+          type: array
         idle:
           description: True when nothing runs or waits, so the server may be restarted.
           type: boolean
@@ -3959,8 +4048,17 @@ components:
           type: integer
         quiet:
           type: boolean
+        rerun:
+          description: |
+            While quiet, the running builds the restart stops and queues again
+            after the start (rerun_on_restart, or chosen with
+            POST /admin/quiet/rerun): a safe restart does not wait for them.
+            0 when quiet is off.
+          type: integer
         running:
-          description: Builds with something running.
+          description: |
+            Builds with something running. While quiet it leaves out the builds
+            in rerun.
           type: integer
         since:
           $ref: "#/components/schemas/NullableTimestamp"
@@ -3969,7 +4067,27 @@ components:
         - since
         - running
         - queued
+        - rerun
         - idle
+        - holding
+        - hint
+      type: object
+    QuietRerun:
+      additionalProperties: false
+      description: The running builds the restart is to stop and run again after the start.
+      properties:
+        builds:
+          items:
+            $ref: "#/components/schemas/BuildName"
+          minItems: 1
+          type: array
+        restart:
+          description: |
+            Restart the server now, once the builds are chosen. Refused (409),
+            with nothing restarted, while any other build runs or waits.
+          type: boolean
+      required:
+        - builds
       type: object
     Refusal:
       additionalProperties: false
@@ -5115,6 +5233,11 @@ components:
         queued:
           description: Builds waiting to start, while the upgrade waits for them.
           type: integer
+        rerun:
+          description: |
+            Builds the restart stops and runs again after the start
+            (rerun_on_restart), which the upgrade does not wait for.
+          type: integer
         rollback_to:
           description: |
             The version a rollback returns to (`bundled` is the executable the
@@ -5159,6 +5282,7 @@ components:
         - backup
         - running
         - queued
+        - rerun
         - updated_at
         - error
         - latest

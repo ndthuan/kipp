@@ -88,6 +88,8 @@ type env struct {
 	dir string
 	// reloadErr is why the last reload was refused, as serve would say it.
 	reloadErr atomic.Pointer[string]
+	// ahead is how far the dispatcher's clock is ahead of time.Now.
+	ahead atomic.Int64
 }
 
 var hashOnce = sync.OnceValue(func() string {
@@ -114,12 +116,14 @@ func site(t *testing.T, tune ...func(*api.Deps)) *env {
 	must(t, err)
 	ctx, stop := context.WithCancel(context.Background())
 	quiet := slog.New(slog.DiscardHandler)
-	d := dispatch.New(st, runner.Local{}, dispatch.Options{DataDir: dir, Logger: quiet, PassEnv: append([]string{gateEnv}, dispatch.DefaultPassEnv...)})
+	e := &env{dir: dir}
+	d := dispatch.New(st, runner.Local{}, dispatch.Options{DataDir: dir, Logger: quiet, PassEnv: append([]string{gateEnv}, dispatch.DefaultPassEnv...),
+		Now: func() time.Time { return time.Now().Add(time.Duration(e.ahead.Load())) }})
 	d.SetSnapshot(snap)
 	stopped := make(chan struct{})
 	go func() { d.Run(ctx); close(stopped) }()
 	au := auth.New(st, time.Hour, []byte("an obvious test device key 32 b."))
-	e := &env{st: st, d: d, dir: dir}
+	e.st, e.d = st, d
 	e.reloadErr.Store(new(""))
 	deps := api.Deps{Auth: au, Dispatch: d, Store: st, Version: "t", Logger: quiet, Listen: "127.0.0.1:0", FlakyFlips: overview.DefaultFlips,
 		Reload: func(context.Context) error { return nil }, ReloadError: func() string { return *e.reloadErr.Load() },
