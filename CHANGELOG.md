@@ -10,6 +10,15 @@ lines and the data directory are the public surface.
 
 Added:
 
+- A user's page puts Tokens (and Connected apps) above Grants. With the
+  script, the grants grid has a filter by job name (hidden rows keep their
+  ticks and are still saved), a box in each group's heading that ticks or
+  clears a column for the rows shown (build or cancel brings view), and a
+  save bar that stays at the bottom of the window with the count of jobs
+  changed while the form differs from what was loaded. For an admin the grid
+  is folded under the sentence that says the grants count only once admin is
+  taken away.
+
 - Metrics is a link in the header beside Jobs, no longer a line in the menu
   under the user's name. That menu holds the name, Account, for an admin an
   "Admin" group (Users, Secrets, GitHub Apps, Runners, Cache, Server), and

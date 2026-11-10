@@ -244,6 +244,64 @@ func TestAUsersPageSetsTheirGrantsOnTheLoadedJobsAndListsTheOnesOnGoneJobsApart(
 	contains(t, page, `no job called &#34;no-such-job&#34; is loaded`)
 }
 
+func TestAUsersPageOrdersAdminTokensGrantsThenTheDangerousActions(t *testing.T) {
+	e := site(t)
+	admin := e.login(t, "admin")
+	order := func(page string) {
+		t.Helper()
+		last := -1
+		for _, id := range []string{`id="admin-heading"`, `id="tokens-heading"`, `id="grants-heading"`, `id="danger-heading"`} {
+			at := strings.Index(page, id)
+			if at < 0 || at < last {
+				t.Fatalf("%s is missing or out of order in:\n%s", id, page)
+			}
+			last = at
+		}
+	}
+	_, page := get(t, admin, e.srv.URL+"/admin/users/bob")
+	order(page)
+	lacks(t, page, `<details class="fold">`)
+
+	must(t, e.st.Grant(context.Background(), e.user(t, "bob").ID, "gone-job", []string{"view"}))
+	e.sudo(t, admin)
+	res, _ := e.form(t, admin, "/admin/users/bob/admin/on", nil)
+	eq(t, "on", res.StatusCode, http.StatusSeeOther)
+	_, page = get(t, admin, e.srv.URL+"/admin/users/bob")
+	order(page)
+	fold := strings.Index(page, `<details class="fold">`)
+	form := strings.Index(page, `action="/admin/users/bob/grants"`)
+	end := fold + strings.Index(page[fold:], "</details>")
+	gone := strings.Index(page, "On jobs no longer in the job files")
+	if fold < 0 || form < fold || end < form || gone < end {
+		t.Fatalf("the grid is not alone in the fold (fold %d, form %d, end %d, gone %d)", fold, form, end, gone)
+	}
+	contains(t, page, "<summary>Show the grants</summary>", "these grants count only once admin is taken away")
+	if strings.Index(page, "these grants count") > fold {
+		t.Fatal("the sentence is not above the fold")
+	}
+	lacks(t, page, `<details class="fold" open`)
+}
+
+// A job the filter hides keeps its boxes, and the browser sends them with
+// the rest of the form, so what is saved is the ticked state of every row.
+func TestAGrantsFormWithRowsTheFilterHidesSavesExactlyWhatIsTicked(t *testing.T) {
+	e := site(t)
+	admin := e.login(t, "admin")
+	_, page := get(t, admin, e.srv.URL+"/admin/users/bob")
+	contains(t, page, `<tr data-job="ask">`, `<tr data-job="smoke">`, `<tr data-job="slow">`, `<th colspan="4" data-group scope="rowgroup">`)
+	e.sudo(t, admin)
+	res, _ := e.form(t, admin, "/admin/users/bob/grants", url.Values{"view": {"ask", "smoke", "slow"}, "build": {"smoke", "slow"}})
+	eq(t, "saved", res.StatusCode, http.StatusSeeOther)
+	if got, want := e.perms(t, "bob"), map[string]store.Perm{"ask": {View: true}, "smoke": {View: true, Build: true}, "slow": {View: true, Build: true}}; !maps.Equal(got, want) {
+		t.Fatalf("grants: got %v, want %v", got, want)
+	}
+	res, _ = e.form(t, admin, "/admin/users/bob/grants", url.Values{"view": {"ask"}})
+	eq(t, "saved", res.StatusCode, http.StatusSeeOther)
+	if got, want := e.perms(t, "bob"), map[string]store.Perm{"ask": {View: true}}; !maps.Equal(got, want) {
+		t.Fatalf("grants: got %v, want %v", got, want)
+	}
+}
+
 func TestAdminIsGivenAtOnceAndTakenAwayAfterAPageThatAsks(t *testing.T) {
 	e := site(t)
 	admin := e.login(t, "admin")

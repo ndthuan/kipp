@@ -24,29 +24,42 @@
 </form>
 {{end}}</section>
 
+<section class="stack" aria-labelledby="tokens-heading">
+<h2 id="tokens-heading">Tokens</h2>
+{{template "tokens" (tokenList .Info.Tokens (printf "%s/tokens" $path))}}
+</section>
+
+{{if .AppsOn}}<section class="stack" aria-labelledby="apps-heading">
+<h2 id="apps-heading">Connected apps</h2>
+{{template "apps" (appList .Apps (printf "%s/apps" $path))}}
+</section>
+{{end}}
 <section class="stack" aria-labelledby="grants-heading">
 <h2 id="grants-heading">Grants</h2>
 {{if .Info.Admin}}<p class="sub">An admin may do everything on every job; these grants count only once admin is taken away.</p>{{end}}
-{{if .Groups}}<form class="stack" method="post" action="{{$path}}/grants">
+{{if .Groups}}{{if .Info.Admin}}<details class="fold">
+<summary>Show the grants</summary>
+{{end}}<form class="stack" method="post" action="{{$path}}/grants">
 <input type="hidden" name="csrf" value="{{$.CSRF}}">
 <div class="scroll">
 <table class="grants" data-needs-view>
 <thead><tr><th>Job</th><th>View</th><th>Build</th><th>Cancel</th></tr></thead>
 {{range .Groups}}<tbody>
-<tr><th colspan="4" scope="rowgroup">{{.Label}}</th></tr>
-{{range .Jobs}}<tr>
+<tr data-group-row><th colspan="4" data-group scope="rowgroup">{{.Label}}</th></tr>
+{{range .Jobs}}{{$job := .Job}}<tr data-job="{{$job}}">
 <td><code>{{.Job}}</code></td>
 <td class="tick"><label><input type="checkbox" name="view" value="{{.Job}}" aria-label="View {{.Job}}"{{if .Perm.View}} checked{{end}}></label></td>
 <td class="tick"><label><input type="checkbox" name="build" value="{{.Job}}" aria-label="Build {{.Job}}"{{if .Perm.Build}} checked{{end}}></label></td>
 <td class="tick"><label><input type="checkbox" name="cancel" value="{{.Job}}" aria-label="Cancel {{.Job}}"{{if .Perm.Cancel}} checked{{end}}></label></td>
 </tr>
-{{with .Warn}}<tr><td colspan="4"><p class="notice notice-warn" role="alert">{{.}}</p></td></tr>
+{{with .Warn}}<tr data-warn-of="{{$job}}"><td colspan="4"><p class="notice notice-warn" role="alert">{{.}}</p></td></tr>
 {{end}}{{end}}</tbody>
 {{end}}</table>
 </div>
-<div><button class="action action-main">Save the grants</button></div>
+<div class="savebar"><span class="savebar-count" role="status" hidden></span><button class="action action-main">Save the grants</button></div>
 </form>
-{{else}}<p class="sub">No job is loaded.</p>
+{{if .Info.Admin}}</details>
+{{end}}{{else}}<p class="sub">No job is loaded.</p>
 {{end}}
 {{if .Info.GoneGrants}}<h3>On jobs no longer in the job files</h3>
 <p class="sub">Kept until removed here: a job of the same name, added again, would be granted at once.</p>
@@ -60,17 +73,7 @@
 {{end}}</ul>
 {{end}}</section>
 
-<section class="stack" aria-labelledby="tokens-heading">
-<h2 id="tokens-heading">Tokens</h2>
-{{template "tokens" (tokenList .Info.Tokens (printf "%s/tokens" $path))}}
-</section>
-
-{{if .AppsOn}}<section class="stack" aria-labelledby="apps-heading">
-<h2 id="apps-heading">Connected apps</h2>
-{{template "apps" (appList .Apps (printf "%s/apps" $path))}}
-</section>
-
-{{end}}<section class="stack narrow" aria-labelledby="danger-heading">
+<section class="stack narrow" aria-labelledby="danger-heading">
 <h2 id="danger-heading">Password and deletion</h2>
 <div class="actions">
 <a class="action action-quiet" href="{{$path}}/password">Reset the password</a>

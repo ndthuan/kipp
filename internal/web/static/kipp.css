@@ -264,6 +264,16 @@
   .once code { padding: calc(var(--space) * 2) calc(var(--space) * 3); border: 1px solid var(--line-strong); border-radius: var(--radius-m); background-color: var(--bg-sunken); overflow-wrap: anywhere; user-select: all; }
   .grants td:not(:first-child), .grants th:not(:first-child) { text-align: center; }
   .grants th[scope="rowgroup"] { text-align: left; color: var(--fg-muted); }
+  .grants tr[data-group-row] td { background-color: var(--bg-sunken); }
+  .fold > summary { cursor: pointer; font-weight: var(--weight-medium); }
+  .fold[open] > summary { margin-bottom: calc(var(--space) * 4); }
+  /* With the script, the bar that holds the button leaves the end of the form
+     and stays at the bottom of the window while something is unsaved. It sits
+     in the form's own flow, so at the end it lies after the last row and
+     covers none. */
+  .savebar { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--space) * 3) calc(var(--space) * 4); }
+  .savebar.dirty { position: sticky; bottom: 0; z-index: 1; padding: calc(var(--space) * 3); border: 1px solid var(--line-strong); border-radius: var(--radius-m); background-color: var(--bg-raised); box-shadow: var(--shadow-pop); }
+  .savebar-count[hidden] { display: none; }
   .check { display: flex; align-items: center; gap: calc(var(--space) * 2); font-size: var(--size-sm); font-weight: var(--weight-medium); }
 
   /* The jobs: a row is one short name, so the name gets a third of the
@@ -594,7 +604,7 @@
     .action, .action-small, .seg a, .navlink, .brand, .menu-toggle,
     .group > summary, .user > summary, .menu a, .menu-button, .menu li.menu-who,
     .theme > summary, .queue-badge, .sort, .link-plain, td .link, th .link, .pager .link,
-    .results > summary, .guards > summary, .artifacts > summary, .log summary, .frequent > summary {
+    .results > summary, .guards > summary, .artifacts > summary, .log summary, .frequent > summary, .fold > summary {
       min-height: 44px;
     }
     .action, .seg a, .navlink, .brand, .menu a, .menu-button, .queue-badge, td .link, td .link-plain, th .link, .pager .link {
@@ -605,7 +615,7 @@
     .entry { min-height: 44px; }
     .seg { align-items: stretch; }
     .theme > summary { min-width: 44px; align-items: center; justify-content: center; }
-    .results > summary, .guards > summary, .artifacts > summary, .log summary, .frequent > summary { display: flex; align-items: center; }
+    .results > summary, .guards > summary, .artifacts > summary, .log summary, .frequent > summary, .fold > summary { display: flex; align-items: center; }
     .dots { display: inline-flex; vertical-align: middle; }
     .dot { position: relative; margin-right: calc(var(--space) * 3); }
     .dot::after { content: ""; position: absolute; inset: -17px calc(var(--space) * -1.5); }
