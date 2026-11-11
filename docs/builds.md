@@ -410,7 +410,7 @@ stages:
 `KIPP_JOB`, `KIPP_BUILD`, `KIPP_TRIGGER`, `KIPP_BRANCH`,
 `KIPP_DEFAULT_BRANCH`, `KIPP_TAG`, `KIPP_COMMIT`, `KIPP_PR`,
 `KIPP_BASE_BRANCH`, `KIPP_BASE_COMMIT`, `KIPP_UPSTREAM_BUILD`,
-`KIPP_UPSTREAM_STATUS` and `KIPP_STAGE`. A secret, or a name that is none
+`KIPP_UPSTREAM_STATUS`, `KIPP_UPSTREAM_COMMIT` and `KIPP_STAGE`. A secret, or a name that is none
 of these, is refused when the job file is read; a key that is no key once
 expanded (a branch with a slash in it) skips that cache and says so in
 the log. On a runner and in a container the runner restores and saves.

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -210,5 +211,47 @@ func TestLoadRefusesTwoAppsUnderOneNameAndTwoJobsOfOneAccountUnderOneApp(t *test
 	})
 	if _, err := Load(dir); err != nil {
 		t.Fatalf("one App serving two accounts: %v", err)
+	}
+}
+
+func TestAfterMayNameAnOwnerJobsRepoNode(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "acme.yml"), []byte(ownerJob))
+	write(t, filepath.Join(dir, "deploy.yml"), []byte(jobWithAfter("deploy", "acme.site", "acme.not-scanned-yet")))
+	snap, err := Load(dir)
+	if err != nil {
+		t.Fatalf("an owner job's repo node, scanned or not, is a name after may follow: %v", err)
+	}
+	if got := snap.Jobs["deploy"].Triggers.After; !slices.Equal(got, []string{"acme.site", "acme.not-scanned-yet"}) {
+		t.Fatalf("after %v", got)
+	}
+}
+
+func TestAfterRefusesANameThatNeverFiresAndSaysWhichToUse(t *testing.T) {
+	for name, tc := range map[string]struct{ after, want string }{
+		"owner branch":       {"acme.site.main", `after follows the repo node "acme.site"`},
+		"owner pull request": {"acme.site.pr-12", `after follows the repo node "acme.site"`},
+		"owner job itself":   {"acme", `"acme.<repo>"`},
+		"multibranch branch": {"site.main", `after follows the multibranch job "site"`},
+		"upper case key":     {"acme.Site", "not a job"},
+		"unknown":            {"zzz.site", "not a job"},
+	} {
+		dir := t.TempDir()
+		write(t, filepath.Join(dir, "acme.yml"), []byte(ownerJob))
+		write(t, filepath.Join(dir, "site.yml"), []byte("name: site\nmultibranch: {repo: acme/site}\n"))
+		write(t, filepath.Join(dir, "deploy.yml"), []byte(jobWithAfter("deploy", tc.after)))
+		_, err := Load(dir)
+		if err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: after %q: %v, want %q", name, tc.after, err, tc.want)
+		}
+	}
+}
+
+func TestAfterAMultibranchJobStillLoads(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "site.yml"), []byte("name: site\nmultibranch: {repo: acme/site}\n"))
+	write(t, filepath.Join(dir, "deploy.yml"), []byte(jobWithAfter("deploy", "site")))
+	if _, err := Load(dir); err != nil {
+		t.Fatal(err)
 	}
 }

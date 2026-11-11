@@ -105,6 +105,15 @@ be looked for this time keeps the state it had.
   `owner` object with `login`, `scan` and the `repos`.
 - An owner job builds nothing itself: Build is refused (409), and its
   `cron` builds the default branch of every repo.
+- Another job runs after a repo with `after: [<owner job>.<key>]`
+  (`after: [acme.site]`): when the build of the repo's default branch ends
+  `success` or `unstable`, never after another branch or a pull request,
+  with `KIPP_UPSTREAM_BUILD` naming that build (`acme.site.main#46`) and
+  `KIPP_UPSTREAM_COMMIT` its commit ([after](jobs.md#after)). A repo the
+  owner job has not indexed yet, or that left its set, is accepted by
+  `kipp check`; the job runs after it once the repo is indexed. A branch
+  or a pull request (`acme.site.main`) and the owner job itself (`acme`)
+  are refused, with the name to use.
 - A grant on the owner job is a grant on every repo and every child of
   it, the gone ones too; the grants editor lists owner jobs only.
 - A `max_permissions:` on the owner job is the ceiling for the `permissions:`

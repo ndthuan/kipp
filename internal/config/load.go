@@ -136,17 +136,47 @@ func checkVars(snap *Snapshot) []error {
 	return errs
 }
 
-// checkAfter refuses a triggers.after naming a job outside the set.
+// checkAfter refuses a triggers.after naming what can never fire it.
 func checkAfter(snap *Snapshot) []error {
 	var errs []error
-	for _, j := range snap.Jobs {
+	for _, n := range snap.Names {
+		j := snap.Jobs[n]
 		for _, up := range j.Triggers.After {
-			if _, ok := snap.Jobs[up]; !ok {
-				errs = append(errs, fmt.Errorf("%s.yml: triggers.after names %q, which is not a job", j.Name, up))
+			if why := snap.afterRefusal(up); why != "" {
+				errs = append(errs, fmt.Errorf("%s.yml: triggers.after names %q, %s", j.Name, up, why))
 			}
 		}
 	}
 	return errs
+}
+
+// afterRefusal says why name can never fire a job that runs after it, or ""
+// when it can: exactly the names triggerDownstream fires, a job of the
+// files or a repo's node. A repo not indexed yet is accepted, as
+// permissions accept it: the files alone cannot know the owner's repos.
+func (s *Snapshot) afterRefusal(name string) string {
+	if j, ok := s.Jobs[name]; ok {
+		if j.IsOwner() {
+			return fmt.Sprintf("which is an owner job and never builds itself: after follows one of its repos' nodes, %q", name+".<repo>")
+		}
+		return ""
+	}
+	for _, j := range s.Jobs {
+		rest, ok := strings.CutPrefix(name, j.Name+".")
+		if !ok || !j.IsOwner() && !j.IsParent() {
+			continue
+		}
+		key, _, nested := strings.Cut(rest, ".")
+		switch {
+		case j.IsParent():
+			return fmt.Sprintf("which is a branch or a pull request of a multibranch job: after follows the multibranch job %q; it fires on its default branch's green build", j.Name)
+		case nested:
+			return fmt.Sprintf("which is a branch or a pull request of a repo: after follows the repo node %q; it fires on its default branch's green build", j.Name+"."+key)
+		case repoKeyRe.MatchString(key):
+			return ""
+		}
+	}
+	return "which is not a job"
 }
 
 // checkApps refuses two Apps under one name, which would share a webhook
@@ -190,8 +220,14 @@ func checkAfterCycles(snap *Snapshot) []error {
 		if done[n] {
 			return nil
 		}
+		// A name that is no job of the files (a repo's node) lists no
+		// after of its own, so no way round passes through it.
+		job := snap.Jobs[n]
+		if job == nil {
+			return nil
+		}
 		path = append(path, n)
-		for _, up := range snap.Jobs[n].Triggers.After {
+		for _, up := range job.Triggers.After {
 			if c := visit(up); c != nil {
 				return c
 			}

@@ -40,7 +40,7 @@ var varRe = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
 var KeyVars = []string{
 	"KIPP_JOB", "KIPP_BUILD", "KIPP_TRIGGER", "KIPP_BRANCH", "KIPP_DEFAULT_BRANCH",
 	"KIPP_TAG", "KIPP_COMMIT", "KIPP_PR", "KIPP_BASE_BRANCH", "KIPP_BASE_COMMIT",
-	"KIPP_UPSTREAM_BUILD", "KIPP_UPSTREAM_STATUS", "KIPP_STAGE",
+	"KIPP_UPSTREAM_BUILD", "KIPP_UPSTREAM_STATUS", "KIPP_UPSTREAM_COMMIT", "KIPP_STAGE",
 }
 
 // Expand is the spec with its keys read against lookup, which says a

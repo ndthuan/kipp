@@ -221,7 +221,7 @@ func (d *Dispatcher) triggerDownstream(ctx context.Context, b *store.Build, job 
 		if down := snap.Jobs[name]; down.Disabled || !slices.Contains(down.Triggers.After, up) {
 			continue
 		}
-		req := TriggerRequest{Job: name, Kind: "after", Detail: fmt.Sprintf("%s#%d", job.Name, b.Number), UpstreamStatus: status, By: "kipp"}
+		req := TriggerRequest{Job: name, Kind: "after", Detail: fmt.Sprintf("%s#%d", job.Name, b.Number), UpstreamStatus: status, UpstreamCommit: b.BuiltCommit, By: "kipp"}
 		if _, err := d.Trigger(ctx, req); err != nil {
 			d.log.Warn("downstream trigger", "job", name, "after", up, "err", err)
 		}

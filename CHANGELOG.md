@@ -10,6 +10,14 @@ lines and the data directory are the public surface.
 
 Added:
 
+- `triggers.after` may name a repo of an owner job, `<owner job>.<key>`
+  (`after: [acme.site]`): the job runs when the build of the repo's
+  default branch ends `success` or `unstable`, as after a multibranch job.
+  A repo not indexed yet is accepted. A branch or a pull request
+  (`acme.site.main`, `site.pr-12`) and the owner job itself are refused,
+  with the name to use instead.
+- A build started by `after` gets `KIPP_UPSTREAM_COMMIT`, the commit the
+  upstream build built, recorded when it is queued.
 - A job key `rerun_on_restart: true` for a job whose build may be stopped
   midway and run again from the start, such as one that waits for a pull
   request: a safe restart (`kipp quiet on --wait`, the Server page,

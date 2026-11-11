@@ -186,7 +186,8 @@ listed on the parent's page as not built.
   child, and so does a build of the parent asked for by hand (its Build
   button, `POST /api/v1/jobs/<parent>/builds`, `kipp run <parent>`).
   Another job's `after: [site]` runs when the default branch's child
-  succeeds or ends unstable, and after no other child. Until kipp has
+  succeeds or ends unstable, and after no other child; `after: [site.main]`
+  is refused, with `site` as the name to use. Until kipp has
   heard of the default branch (a push to it, or a scan, makes its child),
   such a build is refused.
 - A child's build clones `clone` at the commit a push named, or, when no

@@ -256,6 +256,9 @@ type RepoRecord struct {
 // Name is the node's job name.
 func (r RepoRecord) Name() string { return r.Owner + "." + r.Key }
 
+// repoKeyRe matches every key RepoKey can make.
+var repoKeyRe = regexp.MustCompile(`^[a-z0-9_-]+$`)
+
 // RepoKey is the key of a repo's node: its name lower-cased, with every
 // character outside [a-z0-9_-] as a dash, and the first 6 hex digits of
 // the SHA-256 of the name after it when that changed anything or when

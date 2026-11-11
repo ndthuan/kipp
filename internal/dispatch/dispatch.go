@@ -129,6 +129,9 @@ type TriggerRequest struct {
 	DefaultBranch string
 	// UpstreamStatus is how the upstream build ended, for an after trigger.
 	UpstreamStatus store.Status
+	// UpstreamCommit is the commit the upstream build built, for an after
+	// trigger.
+	UpstreamCommit string
 	Params         map[string]string
 	By             string
 	// Commit, BuiltCommit and BaseCommit are what Again carries from the
@@ -385,7 +388,7 @@ func (d *Dispatcher) Trigger(ctx context.Context, req TriggerRequest) (*store.Bu
 		}
 		return nil, fmt.Errorf("%w (%s)", ErrDropped, why)
 	}
-	b := &store.Build{Job: job.Name, Status: store.Queued, Trigger: req.Kind, TriggerDetail: req.Detail, TriggerBranch: req.Branch, TriggerDefaultBranch: req.DefaultBranch, TriggerTag: req.Tag, UpstreamStatus: req.UpstreamStatus, Params: params, StartedBy: req.By, ConfigHash: snap.Hash,
+	b := &store.Build{Job: job.Name, Status: store.Queued, Trigger: req.Kind, TriggerDetail: req.Detail, TriggerBranch: req.Branch, TriggerDefaultBranch: req.DefaultBranch, TriggerTag: req.Tag, UpstreamStatus: req.UpstreamStatus, UpstreamCommit: req.UpstreamCommit, Params: params, StartedBy: req.By, ConfigHash: snap.Hash,
 		PushedCommit: req.Commit, BuiltCommit: req.BuiltCommit, BaseCommit: req.BaseCommit, RerunOf: req.RerunOf}
 	ofChild(b, job)
 	if err := d.st.CreateBuild(ctx, b); err != nil {

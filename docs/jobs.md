@@ -232,8 +232,21 @@ stages check the commit out themselves (from `KIPP_REPO` and
 `after: [site-build]` starts a build when a build of `site-build` ends
 `success` or `unstable`. Every job named must exist, a job cannot run
 after itself, and a loop among jobs is refused. The build gets
-`KIPP_UPSTREAM_BUILD` (`job#number`) and `KIPP_UPSTREAM_STATUS`, so that
-it can refuse an unstable upstream.
+`KIPP_UPSTREAM_BUILD` (`job#number`), `KIPP_UPSTREAM_STATUS`, so that
+it can refuse an unstable upstream, and `KIPP_UPSTREAM_COMMIT`, the
+commit the upstream build built (empty when it built none), so that a
+deploy needs no API call to learn what to deploy.
+
+A name in `after` may also be a [multibranch job](multibranch.md) or a
+repo of an [owner job](organization-folders.md), `<owner job>.<repo>`
+(`after: [acme.site]`): either fires when the build of its default
+branch's child ends `success` or `unstable`, and never for another branch
+or a pull request. `KIPP_UPSTREAM_BUILD` then names that child's build
+(`acme.site.main#46`). A repo the owner job has not indexed yet is
+accepted, and the job runs after it once a scan or a webhook has indexed
+it. A name that can never fire is refused, with the name to use: a
+branch or a pull request (`acme.site.main`, `site.pr-12`) and the owner
+job itself (`acme`).
 
 ### By hand
 
@@ -674,9 +687,11 @@ same, but for the ones under Where it runs, which are the runner's.
 - **A pull request's build**: `KIPP_PR`, `KIPP_BASE_BRANCH`,
   `KIPP_BASE_COMMIT`, `KIPP_PR_TITLE`, `KIPP_PR_URL` and `KIPP_PR_AUTHOR`
   ([Multibranch jobs](multibranch.md#what-a-childs-stages-get)).
-- **Upstream**: `KIPP_UPSTREAM_BUILD` (`job#number`) and
-  `KIPP_UPSTREAM_STATUS` (`success` or `unstable`) for a build started by
-  `after`, recorded when the build is queued.
+- **Upstream**: `KIPP_UPSTREAM_BUILD` (`job#number`),
+  `KIPP_UPSTREAM_STATUS` (`success` or `unstable`) and
+  `KIPP_UPSTREAM_COMMIT` (the commit the upstream build built, empty when
+  it built none) for a build started by `after`, recorded when the build
+  is queued, so they hold after the upstream build is gone.
 - **Of a stage**: `KIPP_STAGE`, `KIPP_ENV`, `KIPP_METRICS` for a stage
   that declares `metrics` ([Metrics](metrics.md)), `KIPP_CACHE_URL`,
   `KIPP_CACHE_TOKEN` and `KIPP_CACHE_SCOPE` for a stage with caches

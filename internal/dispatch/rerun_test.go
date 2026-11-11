@@ -107,6 +107,29 @@ func TestARestartStopsABuildToRunAgainAndTheNextStartQueuesItWithItsParamsAndCau
 	}
 }
 
+func TestAnAfterBuildRunAgainAfterARestartKeepsItsUpstream(t *testing.T) {
+	block, open := gated(t)
+	h := newHarness(t, map[string]string{"down": rerunJob("down", block+"; echo $KIPP_UPSTREAM_BUILD $KIPP_UPSTREAM_STATUS $KIPP_UPSTREAM_COMMIT")})
+	ctx := context.Background()
+	first, err := h.d.Trigger(ctx, TriggerRequest{Job: "down", Kind: "after", Detail: "acme.site.main#4", UpstreamStatus: store.Unstable, UpstreamCommit: "abc123", By: "kipp"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.untilRunning(t, first.ID)
+	if _, err := h.d.SetQuiet(ctx, true); err != nil {
+		t.Fatal(err)
+	}
+	h2, again := h.restart(t)
+	if len(again) != 1 {
+		t.Fatalf("queued again: %+v", again)
+	}
+	open()
+	b := h2.wait(t, again[0].ID)
+	if got := h2.log(t, b, "s"); b.UpstreamCommit != "abc123" || !strings.HasSuffix(got, "acme.site.main#4 unstable abc123\n") {
+		t.Fatalf("the build run again has upstream commit %q and says %q", b.UpstreamCommit, got)
+	}
+}
+
 // activity is the job's newest activity lines, one a line.
 func activity(t *testing.T, st *store.Store, job string) string {
 	t.Helper()

@@ -146,7 +146,7 @@ func (d *Dispatcher) Rerun(ctx context.Context) []*store.Build {
 	var out []*store.Build
 	for _, o := range pending {
 		req := d.againRequest(o, o.Trigger, o.TriggerDetail, o.StartedBy)
-		req.UpstreamStatus, req.RerunOf = o.UpstreamStatus, o.Number
+		req.UpstreamStatus, req.UpstreamCommit, req.RerunOf = o.UpstreamStatus, o.UpstreamCommit, o.Number
 		b, err := d.Trigger(ctx, req)
 		if err != nil {
 			d.log.Warn("a build stopped for the restart was not run again", "job", o.Job, "number", o.Number, "err", err)
