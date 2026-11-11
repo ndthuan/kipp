@@ -74,6 +74,8 @@ Changed:
   (`PRAGMA incremental_vacuum`) once a compact has turned incremental
   `auto_vacuum` on.
 - `kipp.case_seconds` keeps the newest 30 builds of each case per job.
+- Built with Go 1.27.4, which fixes a net/http crash on a MaxBytesReader
+  header race (GO-2026-6859); building from source needs 1.27.4 or newer.
 
 Fixed:
 
