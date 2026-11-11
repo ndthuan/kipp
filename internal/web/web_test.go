@@ -2221,8 +2221,9 @@ func TestTheQueuePageSaysWhatRunsAndWhyTheRestWaits(t *testing.T) {
 	contains(t, page, `<section id="queue" class="stack" hx-get="/queue" hx-select="#queue" hx-target="this" hx-swap="outerHTML" hx-trigger="kipp-changed from:body">`,
 		`1 of 4 build slots busy`,
 		`<a class="link" href="/jobs/hold/1">hold #1</a>`,
-		`<span class="status running">running</span> <span class="sub">s</span>`,
-		`<time class="since" datetime="`,
+		`<span class="status running">running</span> <span class="sub stages">stage: s</span>`,
+		`<span class="tl">running </span><time class="elapsed" datetime="`,
+		`<span class="tl">queued </span><time class="elapsed" datetime="`,
 		`<span class="status queued">queued</span> <span class="sub">waiting for lock <code>k</code>, held by <a class="link" href="/jobs/hold/1">hold #1</a></span>`,
 		`href="/jobs/wait/1/cancel?next=`, `href="/jobs/hold/1/cancel?next=`,
 		`<script src="/static/queue.js?v=`)

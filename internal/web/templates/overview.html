@@ -30,7 +30,7 @@
 {{range .}}<tr>
 <td class="lead" data-label="Job"><a class="link" href="/jobs/{{.Job}}">{{.Job}}</a>{{if .Flaky}} <span class="tag">flaky</span>{{end}}</td>
 <td class="lead" data-label="Build"><a class="link" href="{{buildPath .Build}}">#{{.Build.Number}}</a> <span class="status {{.Build.Status}}">{{.Build.Status}}</span>{{template "why" (whyRow .Build (index $why .Build.ID))}}</td>
-<td class="lead" data-label="Red since">{{template "since" (since .Since)}}</td>
+<td class="lead" data-label="Red since">{{template "since" (since .Since "red")}}</td>
 <td data-label="Recent">{{template "dots" .Dots}}</td>
 </tr>
 {{end}}</tbody>
@@ -47,7 +47,7 @@
 {{range .}}<tr>
 <td class="lead" data-label="Job"><a class="link" href="/jobs/{{.Job}}">{{.Job}}</a>{{if .Flaky}} <span class="tag">flaky</span>{{end}}</td>
 <td class="lead" data-label="Build"><a class="link" href="{{buildPath .Build}}">#{{.Build.Number}}</a> <span class="status {{.Build.Status}}">{{.Build.Status}}</span></td>
-<td class="lead" data-label="Unstable since">{{template "since" (since .Since)}}</td>
+<td class="lead" data-label="Unstable since">{{template "since" (since .Since "unstable")}}</td>
 <td data-label="Recent">{{template "dots" .Dots}}</td>
 </tr>
 {{end}}</tbody>

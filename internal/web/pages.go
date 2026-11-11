@@ -341,26 +341,53 @@ func csrf(r *http.Request) string {
 	return ""
 }
 
-// moment is what the "since" template shows: how long ago a time was,
-// kept up to date by queue.js from the time in its datetime.
-type moment struct{ At, Ago string }
+// moment is what the "since" template shows. Kind is its class and says how
+// queue.js keeps it: "elapsed" is a live build's duration, counted in seconds
+// every second, "since" a state that still holds (a duration) and "past" a
+// moment that is over (a duration and "ago"), both coarse and moved once a
+// minute. Word is what it is, written before it on a phone, where the column
+// header is hidden.
+type moment struct{ Kind, Word, At, Title, Text string }
 
-// since is the moment of v, a time.Time or a *time.Time; there is none of
-// a nil one or of anything else.
-func since(v any) *moment {
-	var t time.Time
-	switch at := v.(type) {
-	case time.Time:
-		t = at
-	case *time.Time:
-		if at == nil {
+// momentIn makes the views of one kind of moment of v, a time.Time or a
+// *time.Time; there is none of a nil one, a zero one or of anything else.
+func momentIn(kind string, zone *time.Location, now func() time.Time) func(v any, word string) *moment {
+	return func(v any, word string) *moment {
+		var t time.Time
+		switch at := v.(type) {
+		case time.Time:
+			t = at
+		case *time.Time:
+			if at == nil {
+				return nil
+			}
+			t = *at
+		}
+		if t.IsZero() {
 			return nil
 		}
-		t = *at
-	default:
-		return nil
+		d := now().Sub(t)
+		text := coarse(d)
+		switch kind {
+		case "elapsed":
+			text = short(d)
+		case "past":
+			text += " ago"
+		}
+		return &moment{Kind: kind, Word: word, At: t.UTC().Format(time.RFC3339), Title: t.In(zone).Format("2006-01-02 15:04:05 MST"), Text: text}
 	}
-	return &moment{At: t.UTC().Format(time.RFC3339), Ago: short(time.Since(t))}
+}
+
+func elapsedIn(zone *time.Location, now func() time.Time) func(v any, word string) *moment {
+	return momentIn("elapsed", zone, now)
+}
+
+func sinceIn(zone *time.Location, now func() time.Time) func(v any, word string) *moment {
+	return momentIn("since", zone, now)
+}
+
+func pastIn(zone *time.Location, now func() time.Time) func(v any, word string) *moment {
+	return momentIn("past", zone, now)
 }
 
 // join is a list of names as a page shows it.
@@ -940,7 +967,7 @@ func clockIn(zone *time.Location) func(v any) string {
 }
 
 // whenView is a time as the "when" template shows it: within 24 hours of now
-// relative ("3h 5m ago", "in 9m"), further away as date and time without
+// relative and without seconds ("3h 5m ago", "in 9m"), further away as date and time without
 // seconds in the server's zone. Title is the full value with seconds and
 // zone, and Abs the absolute text, so queue.js can keep the choice true on a
 // page that stays open.
@@ -960,9 +987,9 @@ func whenIn(zone *time.Location, now func() time.Time) func(v any) *whenView {
 		text := abs
 		if d := t.Sub(now()); d > -24*time.Hour && d < 24*time.Hour {
 			if d < 0 {
-				text = short(-d) + " ago"
+				text = coarse(-d) + " ago"
 			} else {
-				text = "in " + short(d)
+				text = "in " + coarse(d)
 			}
 		}
 		return &whenView{At: t.UTC().Format(time.RFC3339), Title: t.In(zone).Format("2006-01-02 15:04:05 MST"), Abs: abs, Text: text}
@@ -995,6 +1022,21 @@ func took(start, end *time.Time) string {
 		return short(time.Since(*start))
 	}
 	return short(end.Sub(*start))
+}
+
+// coarse is a duration with no seconds, for a moment that does not move
+// each second: minutes under an hour, hours and minutes under a day, then
+// days alone. Mirrored by coarse in queue.js.
+func coarse(d time.Duration) string {
+	switch {
+	case d < time.Minute:
+		return "<1m"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", d/time.Minute)
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh %dm", d/time.Hour, d%time.Hour/time.Minute)
+	}
+	return fmt.Sprintf("%dd", d/(24*time.Hour))
 }
 
 func short(d time.Duration) string {

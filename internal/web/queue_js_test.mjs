@@ -31,7 +31,10 @@ function page() {
     now = end;
   };
   const refreshed = [];
-  const since = { attrs: { datetime: "2026-10-14T09:56:48Z" }, textContent: "", getAttribute(k) { return this.attrs[k]; } };
+  const el = (datetime, ago) => ({ attrs: { datetime, "data-ago": ago }, textContent: "", getAttribute(k) { return this.attrs[k] ?? null; } });
+  const elapsed = el("2026-10-14T09:56:48Z");
+  const since = el("2026-10-14T06:54:00Z");
+  const ended = el("2026-10-14T09:02:00Z", "1");
   const mk = (datetime, abs) => ({ attrs: { datetime, "data-abs": abs }, textContent: "", getAttribute(k) { return this.attrs[k]; } });
   const past = mk("2026-10-13T10:30:00Z", "2026-10-13 17:30");
   const future = mk("2026-10-15T10:20:00Z", "2026-10-15 17:20");
@@ -53,12 +56,12 @@ function page() {
     EventSource: FakeEventSource,
     CustomEvent: class { constructor(type) { this.type = type; } },
     document: {
-      querySelectorAll: (sel) => (sel === "time.since" ? [since] : sel === "time.when" ? [past, future] : []),
+      querySelectorAll: (sel) => ({ "time.elapsed": [elapsed], "time.since": [since], "time.past": [ended], "time.when": [past, future] })[sel] ?? [],
       body: { dispatchEvent: (e) => refreshed.push(e.type) },
     },
   };
   new Function(...Object.keys(context), script)(...Object.values(context));
-  return { stream, refreshed, since, past, future, advance };
+  return { stream, refreshed, elapsed, since, ended, past, future, advance };
 }
 
 {
@@ -99,21 +102,39 @@ function page() {
 }
 
 {
-  const { since, advance } = page();
+  const { elapsed, since, ended, advance } = page();
   advance(1000);
-  assert.equal(since.textContent, "3m 13s", "a time counts on its own");
+  assert.equal(elapsed.textContent, "3m 13s", "a live elapsed time counts on its own, with seconds");
+  advance(1000);
+  assert.equal(elapsed.textContent, "3m 14s", "every second");
+  assert.equal(since.textContent, "", "a past moment is not touched before the minute is up");
+  assert.equal(ended.textContent, "");
+  advance(58000);
+  assert.equal(since.textContent, "3h 7m", "a state that holds is a duration with no seconds");
+  assert.equal(ended.textContent, "59m ago", "a moment that is over says ago");
+  advance(59000);
+  assert.equal(since.textContent, "3h 7m", "and stays until the next minute");
   advance(3600 * 1000);
-  assert.equal(since.textContent, "1h 3m");
+  assert.equal(elapsed.textContent, "1h 5m", "an elapsed time past the hour");
+  assert.equal(since.textContent, "4h 7m");
+  advance(7 * 86400 * 1000);
+  assert.equal(since.textContent, "7d", "from a day on it is days");
+  assert.equal(ended.textContent, "7d ago");
+  assert.doesNotMatch(since.textContent + ended.textContent, /\ds\b/, "never seconds");
 }
 
 {
   const { past, future, advance } = page();
-  advance(1000);
-  assert.equal(past.textContent, "23h 30m ago", "a time within a day past is relative");
+  advance(60000);
+  assert.equal(past.textContent, "23h 31m ago", "a time within a day past is relative, with no seconds");
   assert.equal(future.textContent, "2026-10-15 17:20", "a time more than a day ahead stays absolute");
   advance(31 * 60 * 1000);
   assert.equal(past.textContent, "2026-10-13 17:30", "a past time a day old turns absolute");
   assert.equal(future.textContent, "in 23h 48m", "a future time within a day turns relative");
+  advance(23 * 3600 * 1000 + 40 * 60 * 1000);
+  assert.equal(future.textContent, "in 8m");
+  advance(8 * 60 * 1000);
+  assert.equal(future.textContent, "in <1m", "under a minute reads in <1m");
 }
 
 console.log("queue.js: ok");

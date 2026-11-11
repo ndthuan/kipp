@@ -61,7 +61,7 @@ func TestTheOverviewShowsWhatIsRedAndWhatFlaps(t *testing.T) {
 	e.finished(t, "quoted", "ssssssfffff")        // green now, one flip
 	page := e.overviewPage(t, "admin")
 	failing, rest, _ := strings.Cut(page, "<h2>Flaky</h2>")
-	contains(t, failing, `<a class="link" href="/jobs/smoke">smoke</a>`, `<a class="link" href="/jobs/smoke/4">#4</a> <span class="status failed">failed</span>`, `<time class="since"`)
+	contains(t, failing, `<a class="link" href="/jobs/smoke">smoke</a>`, `<a class="link" href="/jobs/smoke/4">#4</a> <span class="status failed">failed</span>`, `<span class="tl">red </span><time class="since" datetime="`)
 	lacks(t, failing, "Nothing is failing.", `href="/jobs/slow"`, `<span class="tag">flaky</span>`)
 	flaky, _, _ := strings.Cut(rest, `<section class="charts`)
 	contains(t, flaky, `<a class="link" href="/jobs/slow">slow</a>`, "20% failed", "(4/20)", "7 flips")
@@ -202,7 +202,10 @@ func TestTheUnstableSectionIsBetweenFailingAndFlakyAndHasItsRows(t *testing.T) {
 	unstable, flaky, _ := strings.Cut(rest, "<h2>Flaky</h2>")
 	contains(t, failing, `href="/jobs/slow"`)
 	lacks(t, failing, `href="/jobs/smoke"`)
-	contains(t, unstable, `href="/jobs/smoke"`, `<span class="status unstable">unstable</span>`, "Unstable since", `<time class="since"`)
+	contains(t, unstable, `href="/jobs/smoke"`, `<span class="status unstable">unstable</span>`, "Unstable since", `<span class="tl">unstable </span><time class="since" datetime="`)
+	if !regexp.MustCompile(`unstable </span><time class="since"[^>]*>\d+h \d+m</time>`).MatchString(unstable) {
+		t.Errorf("a state that holds reads as a duration with no seconds:\n%s", unstable)
+	}
 	lacks(t, unstable, `href="/jobs/slow"`, "Nothing is unstable.")
 	contains(t, flaky, "Nothing is flaky.")
 }
@@ -315,5 +318,27 @@ func TestTheOverviewOfAServerWithNoJobAndNoBuildAnswersOkInBothWindowsWithEmptyT
 	for _, path := range []string{"/jobs", "/queue"} {
 		code, _ := get(t, c, e.srv.URL+path)
 		eq(t, path, code, http.StatusOK)
+	}
+}
+
+// On a phone each time names itself in its own text and the stage names
+// of a running build are not drawn; a stacked table's box never scrolls down.
+func TestOnAPhoneTimesNameThemselvesAndStackedBoxesDoNotScroll(t *testing.T) {
+	b, err := staticFS.ReadFile("static/kipp.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	css := string(b)
+	_, phone, ok := strings.Cut(css, "@media (max-width: 47.99rem) {\n    .stacked, .stacked tbody")
+	if !ok {
+		t.Fatal("the stacked-table rules are not found")
+	}
+	if !regexp.MustCompile(`\.tl\s*\{[^}]*display:\s*none`).MatchString(css) {
+		t.Error("the word before a time is drawn on a wide screen")
+	}
+	for _, rule := range []string{`\.stacked \.tl\s*\{[^}]*display:\s*inline`, `\.stages\s*\{[^}]*display:\s*none`, `\.scroll:has\(> \.stacked\)\s*\{[^}]*overflow:\s*visible`} {
+		if !regexp.MustCompile(rule).MatchString(phone) {
+			t.Errorf("under 48rem there is no rule %s", rule)
+		}
 	}
 }

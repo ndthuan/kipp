@@ -8,6 +8,16 @@ lines and the data directory are the public surface.
 
 ## Unreleased
 
+Changed:
+
+- Only a live build's time ticks. A running or queued build's "For" counts
+  seconds every second; every past moment (red since, unstable since, seen,
+  and the relative times of the other pages) has no seconds and moves once a
+  minute: `red 3h 5m`, `unstable 10d`, `57m ago`, `in 5m`. On a phone each
+  of them is written with its word (`running 9m 42s`, `seen 3m ago`). The
+  stage names after a running build's badge read `stage: build` and are not
+  drawn on a phone, and a stacked table's box no longer scrolls down.
+
 Removed (breaking for the API and the MCP `overview` tool):
 
 - The overview no longer lists the red builds of the last 24 hours or 7

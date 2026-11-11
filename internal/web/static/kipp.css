@@ -378,6 +378,9 @@
   .children td:last-child { font-variant-numeric: tabular-nums; }
   /* A table scrolls inside its own box, so the page never does at 360px. */
   .scroll { position: relative; overflow-x: auto; }
+  /* The word that says what a time is (red, running, seen) is for a phone,
+     where the column header it stands in for is hidden. */
+  .tl { display: none; }
   /* A long table also scrolls down inside its box, under its header. While
      there is more below, the last rows fade into the page: the fade is a
      block of its own after the table that sticks to the bottom of the box,
@@ -630,6 +633,13 @@
      row is only hidden from the eye. */
   @media (max-width: 47.99rem) {
     .stacked, .stacked tbody { display: block; }
+    /* A box around a stacked table has nothing wide to scroll, and with
+       overflow-x set the browser also scrolls it down by the few pixels its
+       rows overflow by. */
+    .scroll:has(> .stacked) { overflow: visible; }
+    .stacked .tl { display: inline; }
+    /* The build's page names its stages; a row keeps to one line. */
+    .stacked .stages { display: none; }
     .stacked thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
     .stacked tr { display: flex; flex-wrap: wrap; align-items: baseline; gap: calc(var(--space) * 1) calc(var(--space) * 3); padding: calc(var(--space) * 2) calc(var(--space) * 3); border-bottom: 1px solid var(--line); }
     .stacked tr[hidden] { display: none; }
