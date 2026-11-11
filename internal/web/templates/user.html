@@ -2,7 +2,7 @@
 {{define "content"}}
 {{with .Data}}{{$path := userPath .Info.Name}}
 <div class="head">
-<h1 class="crumbs"><a class="link-plain" href="/admin/users">Users</a><span aria-hidden="true">/</span><span>{{.Info.Name}}</span>{{if .Info.Admin}} <span class="tag">admin</span>{{end}}</h1>
+<h1 class="crumbs"><a class="link-plain" href="/admin/users">Users</a><span aria-hidden="true">/</span><span class="crumb-end"><span>{{.Info.Name}}</span>{{if .Info.Admin}} <span class="tag">admin</span>{{end}}</span></h1>
 <div class="head-actions">
 <details class="build drop"{{if $.Fill.Is "token"}} open{{end}}>
 <summary class="action action-main">Make a token</summary>

@@ -224,6 +224,9 @@
   .head-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: calc(var(--space) * 2); margin-left: auto; }
   .head-actions .build { margin-left: 0; }
   .crumbs { align-items: baseline; gap: 0 calc(var(--space) * 2); min-width: 0; overflow-wrap: anywhere; }
+  /* The last crumb and its pill wrap as one, never the pill alone on a line. */
+  .crumb-end { display: inline-flex; align-items: baseline; gap: calc(var(--space) * 2); min-width: 0; }
+  .crumb-end > :first-child { min-width: 0; overflow-wrap: anywhere; }
   .crumbs > [aria-hidden] { color: var(--fg-subtle); font-weight: var(--weight-normal); }
   .build { flex: none; margin-left: auto; }
   .build > summary::after { content: ""; border: 4px solid transparent; border-top-color: currentColor; border-bottom-width: 0; }
