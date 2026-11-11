@@ -41,13 +41,17 @@ const (
 	BranchWithPRBuild = "build"
 )
 
-// The kinds of a child: a branch, a pull request merged into its base, and
-// a pull request's head alone.
+// The kinds of a child: a branch, a pull request merged into its base, a
+// pull request's head alone, and the pushed tags, all built as one child.
 const (
 	KindBranch = "branch"
 	KindPR     = "pr"
 	KindPRHead = "pr-head"
+	KindTag    = "tag"
 )
+
+// TagsKey is the key of the child that builds a repo's pushed tags.
+const TagsKey = "tags"
 
 // The states of a child: live builds, gone builds no more and is listed
 // apart until it leaves the job set.
@@ -80,6 +84,9 @@ type Multibranch struct {
 	// App is the GitHub App an owner job's repo is called with instead of
 	// a token; only an owner job has one.
 	App *App
+	// Tags are the pushed tags built, by the child TagsKey; the zero
+	// filter builds every tag.
+	Tags TagFilter
 }
 
 // Authenticated reports whether kipp can call GitHub for the repo: it has
@@ -104,7 +111,8 @@ type multibranchFile struct {
 	Orphans       *struct {
 		Days *int `yaml:"days"`
 	} `yaml:"orphans"`
-	Token string `yaml:"token"`
+	Token string     `yaml:"token"`
+	Tags  *TagFilter `yaml:"tags"`
 }
 
 var repoRe = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
@@ -146,6 +154,9 @@ func (f *multibranchFile) settings(what string) (*Multibranch, error) {
 	}
 	if f.Orphans != nil && f.Orphans.Days != nil {
 		m.Orphans.Days = *f.Orphans.Days
+	}
+	if f.Tags != nil {
+		m.Tags = *f.Tags
 	}
 	return m, m.setScan(what, f.Scan)
 }
@@ -189,7 +200,7 @@ func (m *Multibranch) check(what string) error {
 			return fmt.Errorf("%s.branches: %q is not default, a name or a pattern path.Match reads", what, p)
 		}
 	}
-	return nil
+	return m.Tags.check(what + ".tags")
 }
 
 // Selects reports whether a push to branch builds it without a pull
@@ -218,6 +229,8 @@ func (m *Multibranch) Builds(kind string) bool {
 		return m.PullRequests == PRMerge || m.PullRequests == PRBoth
 	case KindPRHead:
 		return m.PullRequests == PRHead || m.PullRequests == PRBoth
+	case KindTag:
+		return !m.Tags.Off
 	}
 	return true
 }
@@ -251,12 +264,14 @@ func PRKey(n int, kind string, mode string) string {
 	return key
 }
 
-var prKeyRe = regexp.MustCompile(`^pr-[0-9]+(-head)?$`)
+// reservedKeyRe are the keys a branch's own name never takes: a pull
+// request's and the tags'.
+var reservedKeyRe = regexp.MustCompile(`^(pr-[0-9]+(-head)?|` + TagsKey + `)$`)
 
 // ChildKey is the key of a branch's child: its name lower-cased, with
 // every character outside [a-z0-9._-] as a dash, and the first 6 hex
 // digits of the SHA-256 of the name after it when that changed anything,
-// when the result is a pull request's key, or when taken says another
+// when the result is a pull request's key or the tags', or when taken says another
 // child has it. A key is so always a part of a job name, and two branches
 // never share one.
 func ChildKey(branch string, taken func(string) bool) string {
@@ -266,7 +281,7 @@ func ChildKey(branch string, taken func(string) bool) string {
 		}
 		return '-'
 	}, strings.ToLower(branch))
-	if key == branch && !prKeyRe.MatchString(key) && !taken(key) {
+	if key == branch && !reservedKeyRe.MatchString(key) && !taken(key) {
 		return key
 	}
 	sum := sha256.Sum256([]byte(branch))
@@ -303,6 +318,13 @@ func (j *Job) IsParent() bool { return j.Multibranch != nil && j.Parent == "" }
 func (j *Job) IsLeaf() bool {
 	return !j.IsParent() && !j.IsOwner() && (j.Folder == "" || j.Parent != "")
 }
+
+// IsPR reports whether a child of kind builds a pull request.
+func IsPR(kind string) bool { return kind == KindPR || kind == KindPRHead }
+
+// BuildsTags reports whether the job is the child that builds its repo's
+// pushed tags.
+func (j *Job) BuildsTags() bool { return j.Origin != nil && j.Origin.Kind == KindTag }
 
 // OnDefaultBranch reports whether the job is the child of its repo's
 // default branch.

@@ -1,2 +1,3 @@
 type: string
-enum: [branch, pr, pr-head]
+description: A branch, a pull request merged into its base, a pull request's head alone, or the pushed tags, which one child builds.
+enum: [branch, pr, pr-head, tag]

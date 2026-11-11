@@ -234,6 +234,12 @@ build has `kept` (`{by, at}`, or null) and the job's activity says
 `#12 kept by alice`. A build that has not ended is 409; keeping a kept
 build changes nothing, and it stays kept by the first user.
 
+A build of a pushed tag by a multibranch or owner job that ends `success`
+or `unstable` is kept by `kipp` itself, as the record of a release, and
+its job's activity says `#3 kept by kipp: the build of tag v1.2.0`; a red
+one is under the job's `keep` as any build is. "Stop keeping" puts a
+tag's build back under the rules too ([Tags](multibranch.md#tags)).
+
 ## Test results
 
 A stage's `junit:` is a glob of JUnit XML files in the stage's directory,
@@ -410,7 +416,7 @@ stages:
 `KIPP_JOB`, `KIPP_BUILD`, `KIPP_TRIGGER`, `KIPP_BRANCH`,
 `KIPP_DEFAULT_BRANCH`, `KIPP_TAG`, `KIPP_COMMIT`, `KIPP_PR`,
 `KIPP_BASE_BRANCH`, `KIPP_BASE_COMMIT`, `KIPP_UPSTREAM_BUILD`,
-`KIPP_UPSTREAM_STATUS`, `KIPP_UPSTREAM_COMMIT` and `KIPP_STAGE`. A secret, or a name that is none
+`KIPP_UPSTREAM_STATUS`, `KIPP_UPSTREAM_COMMIT`, `KIPP_UPSTREAM_TAG` and `KIPP_STAGE`. A secret, or a name that is none
 of these, is refused when the job file is read; a key that is no key once
 expanded (a branch with a slash in it) skips that cache and says so in
 the log. On a runner and in a container the runner restores and saves.

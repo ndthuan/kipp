@@ -83,6 +83,7 @@ type ownerFile struct {
 		Days *int `yaml:"days"`
 	} `yaml:"orphans"`
 	Repos map[string]repoSettingsFile `yaml:"repos"`
+	Tags  *TagFilter                  `yaml:"tags"`
 }
 
 type repoSettingsFile struct {
@@ -161,7 +162,7 @@ func (f *ownerFile) owner() (*Owner, error) {
 		}
 	}
 	mf := multibranchFile{Path: f.Path, Branches: f.Branches, PullRequests: f.PullRequests, BranchWithPR: f.BranchWithPR,
-		RebuildOnBase: f.RebuildOnBase, Scan: f.Scan, Orphans: f.Orphans, Token: f.Token}
+		RebuildOnBase: f.RebuildOnBase, Scan: f.Scan, Orphans: f.Orphans, Token: f.Token, Tags: f.Tags}
 	m, err := mf.settings("owner")
 	if err != nil {
 		return nil, err

@@ -114,8 +114,8 @@ func TestPushToTheDefaultBranchBuildsItsChildAtTheHead(t *testing.T) {
 	if plan, _ := f.x.Push(ctx, "site", PushEvent{Repo: "acme/other", Ref: "refs/heads/main", After: head}); plan.Ignored == "" {
 		t.Fatal("a push to another repo builds")
 	}
-	if plan, _ := f.x.Push(ctx, "site", PushEvent{Repo: "acme/site", Ref: "refs/tags/v1", After: head}); plan.Ignored != "refs/tags/v1 is not a branch" {
-		t.Fatalf("a tag: %+v", plan)
+	if plan, _ := f.x.Push(ctx, "site", PushEvent{Repo: "acme/site", Ref: "refs/notes/commits", After: head}); plan.Ignored != "refs/notes/commits is neither a branch nor a tag" {
+		t.Fatalf("a note: %+v", plan)
 	}
 }
 

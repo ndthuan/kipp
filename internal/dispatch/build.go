@@ -413,6 +413,7 @@ func (d *Dispatcher) buildVars(b *store.Build, job *config.Job, e *buildEnv, sec
 			add("KIPP_UPSTREAM_STATUS", string(b.UpstreamStatus))
 		}
 		add("KIPP_UPSTREAM_COMMIT", b.UpstreamCommit)
+		add("KIPP_UPSTREAM_TAG", b.UpstreamTag)
 	}
 	// Last, so that it wins over a KIPP_TOKEN a secret or an env gave.
 	if e.token != "" {

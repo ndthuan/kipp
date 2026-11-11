@@ -10,7 +10,8 @@ import (
 )
 
 // PushEvent is what a push to the repo says: the ref and the commit it
-// now names, whether it was deleted, and the repo's default branch.
+// now names (for a tag, the commit the tag names, not an annotated tag's
+// object), whether it was deleted, and the repo's default branch.
 type PushEvent struct {
 	Repo, Ref, After string
 	Deleted          bool
@@ -19,7 +20,7 @@ type PushEvent struct {
 
 // Push applies a push to the parent's repo: a branch it builds gets its
 // child, made the first time, at the pushed head; a deleted branch's child
-// becomes gone.
+// becomes gone. A tag it builds is built by the tags' child.
 func (x *Index) Push(ctx context.Context, parent string, ev PushEvent) (*TriggerPlan, error) {
 	x.mu.Lock()
 	defer x.mu.Unlock()
@@ -31,14 +32,17 @@ func (x *Index) Push(ctx context.Context, parent string, ev PushEvent) (*Trigger
 	if !strings.EqualFold(ev.Repo, m.Repo) {
 		return ignored("repository %s is not %s", ev.Repo, m.Repo), nil
 	}
-	branch, ok := strings.CutPrefix(ev.Ref, "refs/heads/")
-	if !ok {
-		return ignored("%s is not a branch", ev.Ref), nil
-	}
 	if err := x.setDefaultLocked(ctx, parent, ev.DefaultBranch); err != nil {
 		return nil, err
 	}
 	defer x.publishLocked() // a new default branch changes what the children are on
+	if tag, ok := strings.CutPrefix(ev.Ref, "refs/tags/"); ok {
+		return x.tagLocked(ctx, m, parent, tag, ev)
+	}
+	branch, ok := strings.CutPrefix(ev.Ref, "refs/heads/")
+	if !ok {
+		return ignored("%s is neither a branch nor a tag", ev.Ref), nil
+	}
 	child := x.branchLocked(parent, branch)
 	if ev.Deleted {
 		if child == nil {
@@ -114,4 +118,43 @@ func (x *Index) takenLocked(parent string) func(string) bool {
 		}
 		return false
 	}
+}
+
+// tagLocked plans the build of a pushed tag by the parent's tags' child,
+// made the first time. A deleted tag, and one multibranch.tags leaves out,
+// build nothing.
+func (x *Index) tagLocked(ctx context.Context, m *config.Multibranch, parent, tag string, ev PushEvent) (*TriggerPlan, error) {
+	switch {
+	case ev.Deleted:
+		return ignored("tag %s was deleted", tag), nil
+	case m.Tags.Off:
+		return ignored("tag %s is not built: tags: false", tag), nil
+	case !m.Tags.Matches(tag):
+		return ignored("tag %s is not built: tags leaves it out", tag), nil
+	}
+	c := store.Child{Parent: parent, Kind: config.KindTag}
+	if old := x.tagsLocked(parent); old != nil {
+		c = *old
+	} else {
+		c.Key = config.TagsKey
+		if x.takenLocked(parent)(c.Key) {
+			c.Key = config.ChildKey(c.Key, x.takenLocked(parent))
+		}
+	}
+	c.HeadSHA, c.State, c.GoneAt, c.LastSeenAt = ev.After, config.ChildLive, nil, x.now()
+	if err := x.putLocked(ctx, c); err != nil {
+		return nil, err
+	}
+	req := dispatch.TriggerRequest{Job: c.Job(), Kind: "webhook", Detail: ev.After, Tag: tag, DefaultBranch: x.defaults[parent], By: "github"}
+	return &TriggerPlan{Builds: []dispatch.TriggerRequest{req}}, nil
+}
+
+// tagsLocked is the row of the parent's tags' child, nil when it has none.
+func (x *Index) tagsLocked(parent string) *store.Child {
+	for _, c := range x.rows[parent] {
+		if c.Kind == config.KindTag {
+			return &c
+		}
+	}
+	return nil
 }

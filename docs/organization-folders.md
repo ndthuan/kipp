@@ -28,6 +28,7 @@ owner:
   path: .kipp.yml
   branches: [default]
   pull_requests: merge
+  tags: {exclude: ["*-rc*"]}       # default: every pushed tag; false for none
   scan: 30m                        # at least 5m; 0 for never
   orphans: {days: 7}
   repos:
@@ -43,8 +44,10 @@ triggers:
 ```
 
 `owner` takes the place of `stages`, `source` and `multibranch`. `path`,
-`branches`, `pull_requests`, `branch_with_pr`, `rebuild_on_base`, `scan`
-and `orphans` mean what they do in a multibranch job, for every repo.
+`branches`, `pull_requests`, `branch_with_pr`, `rebuild_on_base`, `tags`,
+`scan` and `orphans` mean what they do in a multibranch job, for every
+repo: with no `tags`, every repo builds every tag pushed to it
+([Tags](multibranch.md#tags)).
 
 The job's `secrets`, `locks`, `env`, `timeout`, `keep` and `cron` are the
 defaults of every repo. A repo listed under `owner.repos` replaces the
@@ -96,7 +99,8 @@ be looked for this time keeps the state it had.
   `-` (a dot too, so that `acme.a.b` is always the branch `b` of the repo
   `a`), and `-<6 hex digits>` of the SHA-256 of the name after it when
   that changed anything or another repo has the key. Its children are
-  `<owner job>.<key>.<branch>` and `.pr-<n>`, as in a multibranch job.
+  `<owner job>.<key>.<branch>`, `.pr-<n>` and `.tags`, as in a
+  multibranch job.
 - The job list shows the owner job once, with how many repos it builds
   and the worst status of their last builds. Its page lists the repos,
   with the state of each webhook, and **Scan now**
@@ -106,10 +110,12 @@ be looked for this time keeps the state it had.
 - An owner job builds nothing itself: Build is refused (409), and its
   `cron` builds the default branch of every repo.
 - Another job runs after a repo with `after: [<owner job>.<key>]`
-  (`after: [acme.site]`): when the build of the repo's default branch ends
-  `success` or `unstable`, never after another branch or a pull request,
-  with `KIPP_UPSTREAM_BUILD` naming that build (`acme.site.main#46`) and
-  `KIPP_UPSTREAM_COMMIT` its commit ([after](jobs.md#after)). A repo the
+  (`after: [acme.site]`): when the build of the repo's default branch, or
+  of a pushed tag, ends `success` or `unstable`, never after another
+  branch or a pull request, with `KIPP_UPSTREAM_BUILD` naming that build
+  (`acme.site.main#46`, `acme.site.tags#3`), `KIPP_UPSTREAM_COMMIT` its
+  commit and `KIPP_UPSTREAM_TAG` its tag, empty for the default branch's
+  ([after](jobs.md#after)). A repo the
   owner job has not indexed yet, or that left its set, is accepted by
   `kipp check`; the job runs after it once the repo is indexed. A branch
   or a pull request (`acme.site.main`) and the owner job itself (`acme`)
@@ -120,8 +126,8 @@ be looked for this time keeps the state it had.
   of the `.kipp.yml` of every repo and child under it, as it is for a
   multibranch job ([the build's token](multibranch.md#the-builds-token));
   `self` is each child itself.
-- A commit status says `kipp/<owner job>` (`kipp/<owner job>/head`), for
-  the commit of its repo.
+- A commit status says `kipp/<owner job>` (`kipp/<owner job>/head`, and
+  `kipp/<owner job>/tag` for a tag's build), for the commit of its repo.
 
 ## Webhooks
 

@@ -1,7 +1,8 @@
 type: object
 additionalProperties: false
 description: |
-  One child of a multibranch job: a branch or a pull request. The ones that
+  One child of a multibranch job: a branch, a pull request, or the pushed
+  tags (kind tag, key tags, one build per tag pushed). The ones that
   build come first, then the gone ones, then the pull requests from forks.
 required: [job, key, kind, branch, pr, title, author, url, head_commit, base_branch, from_fork, state, gone_at, last_seen_at, last]
 properties:

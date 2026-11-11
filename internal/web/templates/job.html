@@ -168,10 +168,10 @@
 {{end}}
 {{define "children"}}<div class="scroll">
 <table class="children stacked">
-<thead><tr><th>Branch or pull request</th><th>Head</th><th>Last build</th><th>Seen</th></tr></thead>
+<thead><tr><th>Branch, pull request or tags</th><th>Head</th><th>Last build</th><th>Seen</th></tr></thead>
 <tbody>
 {{range .}}<tr>
-<td class="lead" data-label="Branch or pull request"><a class="link" href="/jobs/{{.Job}}">{{if .PR}}PR #{{.PR}}{{if eq .Kind "pr-head"}} (head alone){{end}}{{with .Title}} {{.}}{{end}}{{else}}{{.Branch}}{{end}}</a>{{if .PR}} <span class="sub">{{with .Author}}by {{.}}, {{end}}{{.Branch}}{{with .BaseBranch}} into {{.}}{{end}}</span>{{end}}</td>
+<td class="lead" data-label="Branch, pull request or tags"><a class="link" href="/jobs/{{.Job}}">{{if .PR}}PR #{{.PR}}{{if eq .Kind "pr-head"}} (head alone){{end}}{{with .Title}} {{.}}{{end}}{{else if eq .Kind "tag"}}Tags{{else}}{{.Branch}}{{end}}</a>{{if eq .Kind "tag"}}{{with .Last}} <span class="sub">last {{.TriggerTag}}</span>{{end}}{{end}}{{if .PR}} <span class="sub">{{with .Author}}by {{.}}, {{end}}{{.Branch}}{{with .BaseBranch}} into {{.}}{{end}}</span>{{end}}</td>
 <td data-label="Head"><code>{{printf "%.7s" .HeadSHA}}</code></td>
 <td class="lead" data-label="Last build">{{with .Last}}<a class="link" href="{{buildPath .}}">#{{.Number}}</a> <span class="status {{.Status}}">{{.Status}}</span>{{else}}<span class="sub">never built</span>{{end}}</td>
 <td data-label="Seen">{{template "since" (since .LastSeenAt)}}</td>

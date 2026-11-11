@@ -116,7 +116,7 @@ func TestAWebhookBranchIsAnExactNameOrAPathMatchPattern(t *testing.T) {
 }
 
 func TestAWebhookTagIsAPatternAndABranchPushAndATagPushNeverMatchEachOther(t *testing.T) {
-	tags := &Webhook{Repo: "o/r", Tags: []string{"v*", "release/*"}}
+	tags := &Webhook{Repo: "o/r", Tags: &TagFilter{Include: []string{"v*", "release/*"}}}
 	for tag, want := range map[string]bool{"v1.2.0": true, "v": true, "release/2026": true, "release/a/b": false, "1.2.0": false, "V1": false} {
 		if got := tags.WatchesTag(tag); got != want {
 			t.Errorf("tag %s: watched %v, want %v", tag, got, want)
@@ -125,7 +125,7 @@ func TestAWebhookTagIsAPatternAndABranchPushAndATagPushNeverMatchEachOther(t *te
 	if tags.Watches("v1") || tags.Watches("main") {
 		t.Error("a webhook with tags alone watches a branch")
 	}
-	both := &Webhook{Repo: "o/r", Branches: []string{"main"}, Tags: []string{"v*"}}
+	both := &Webhook{Repo: "o/r", Branches: []string{"main"}, Tags: &TagFilter{Include: []string{"v*"}}}
 	if !both.Watches("main") || !both.WatchesTag("v2") || both.Watches("v2") || both.WatchesTag("main") {
 		t.Error("a webhook with branches and tags does not watch each by its own list")
 	}

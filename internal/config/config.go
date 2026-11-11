@@ -133,22 +133,24 @@ type Webhook struct {
 	// name, so a name is only ever itself. Neither branches nor tags
 	// watches every branch.
 	Branches []string `yaml:"branches"`
-	// Tags are names or patterns of the tags whose push starts the job,
-	// read as Branches are; none watches no tag.
-	Tags []string `yaml:"tags"`
+	// Tags are the tags whose push starts the job (TagFilter); nil
+	// watches no tag.
+	Tags *TagFilter `yaml:"tags"`
 }
 
 // Watches reports whether a push to branch is this webhook's. A webhook
 // with tags and no branches is a release's and watches no branch.
 func (w *Webhook) Watches(branch string) bool {
 	if len(w.Branches) == 0 {
-		return len(w.Tags) == 0
+		return !w.watchesTags()
 	}
 	return matchesAny(w.Branches, branch)
 }
 
 // WatchesTag reports whether a push of tag is this webhook's.
-func (w *Webhook) WatchesTag(tag string) bool { return matchesAny(w.Tags, tag) }
+func (w *Webhook) WatchesTag(tag string) bool { return w.watchesTags() && w.Tags.Matches(tag) }
+
+func (w *Webhook) watchesTags() bool { return w.Tags != nil && !w.Tags.Off }
 
 // matchesAny reports whether name is one of patterns, or matches one.
 func matchesAny(patterns []string, name string) bool {
@@ -565,15 +567,13 @@ func (j *Job) checkTriggers() error {
 	if !strings.Contains(w.Repo, "/") {
 		return errors.New("triggers.webhook.repo: owner/name")
 	}
-	for _, list := range []struct {
-		key      string
-		patterns []string
-	}{{"branches", w.Branches}, {"tags", w.Tags}} {
-		for _, p := range list.patterns {
-			if _, err := path.Match(p, ""); err != nil {
-				return fmt.Errorf("job %s: triggers.webhook.%s: %q is not a pattern path.Match reads", j.Name, list.key, p)
-			}
+	for _, p := range w.Branches {
+		if _, err := path.Match(p, ""); err != nil {
+			return fmt.Errorf("job %s: triggers.webhook.branches: %q is not a pattern path.Match reads", j.Name, p)
 		}
+	}
+	if w.Tags != nil {
+		return w.Tags.check("job " + j.Name + ": triggers.webhook.tags")
 	}
 	return nil
 }

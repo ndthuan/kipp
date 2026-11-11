@@ -25,6 +25,7 @@ var migrationSums = []string{
 	"eb3dc6d00cc0d3828545171c13e9ffa66cc18e43820ea3b4d79e4d7737be4e5e",
 	"1354826ffc7a018014b62a2885dd0dd3aca064accaf76b44977e5cfbb83bb730",
 	"2d3e8579d4b39c40a20b6d65806de053835647f270d02fed24cf7d52bac17393",
+	"f3ac0fbe85c8eebce66e2b50d97000540317fe4b9a0dea88537ec18072774171",
 }
 
 func TestMigrationsAreAppendOnly(t *testing.T) {
@@ -373,5 +374,25 @@ func TestAnAfterBuildOfAnEarlierSchemaKeepsItsUpstreamAndHasNoUpstreamCommit(t *
 	must(t, err)
 	if b.TriggerDetail != "up#3" || b.UpstreamStatus != Success || b.UpstreamCommit != "" {
 		t.Fatalf("an old after build reads %q %q %q", b.TriggerDetail, b.UpstreamStatus, b.UpstreamCommit)
+	}
+}
+
+func TestAnAfterBuildOfAnEarlierSchemaHasNoUpstreamTag(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "db.sqlite")
+	withMigrations(t, migrations[:8], func() {
+		s, err := Open(path)
+		must(t, err)
+		_, err = s.db.ExecContext(ctx, `INSERT INTO builds (job, number, status, trigger, trigger_detail, upstream_status, upstream_commit, queued_at) VALUES ('a', 1, 'success', 'after', 'up#3', 'success', 'abc', ?)`, ts(time.Now()))
+		must(t, err)
+		must(t, s.Close())
+	})
+
+	s, err := Open(path)
+	must(t, err)
+	defer func() { must(t, s.Close()) }()
+	b, err := s.BuildByNumber(ctx, "a", 1)
+	must(t, err)
+	if b.UpstreamCommit != "abc" || b.UpstreamTag != "" {
+		t.Fatalf("an old after build reads upstream commit %q, tag %q", b.UpstreamCommit, b.UpstreamTag)
 	}
 }

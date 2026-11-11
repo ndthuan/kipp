@@ -174,6 +174,8 @@ ALTER TABLE builds ADD COLUMN rerun_as INTEGER NOT NULL DEFAULT 0;
 CREATE TABLE pending_reruns (build_id INTEGER PRIMARY KEY REFERENCES builds(id) ON DELETE CASCADE);
 `, `
 ALTER TABLE builds ADD COLUMN upstream_commit TEXT NOT NULL DEFAULT '';
+`, `
+ALTER TABLE builds ADD COLUMN upstream_tag TEXT NOT NULL DEFAULT '';
 `}
 
 // Upgrade is what Open did to the schema of the database it opened.

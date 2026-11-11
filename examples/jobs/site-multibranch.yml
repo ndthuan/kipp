@@ -1,5 +1,6 @@
-# One job file builds a repo's default branch and its pull requests, each
-# as a child job (site-multibranch.main, site-multibranch.pr-12) that
+# One job file builds a repo's default branch, its pull requests and its
+# pushed tags, each as a child job (site-multibranch.main,
+# site-multibranch.pr-12, site-multibranch.tags) that
 # reads its stages from .kipp.yml in the commit it builds; a pull
 # request's child builds its head merged into its base's tip, a fork's
 # is never built. What the repo may not grant itself
@@ -9,6 +10,7 @@
 #   stages:
 #     test: {run: make test, junit: "reports/*.xml"}
 #     deploy: {needs: [test], when: {default_branch: true}, run: ./deploy.sh}
+#     release: {needs: [test], when: {tags: ["v*"]}, run: ./release.sh}
 #
 # A build's KIPP_TOKEN views its own job and nothing else. The repo's
 # .kipp.yml may ask for more with a permissions: key, up to what
@@ -28,6 +30,7 @@ multibranch:
   pull_requests: merge
   branch_with_pr: skip
   rebuild_on_base: false
+  tags: {include: ["v*"]}     # default: every pushed tag; false for none
   scan: 30m
   orphans: {days: 7}
   token: GITHUB_TOKEN_ACME

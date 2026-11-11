@@ -2907,7 +2907,8 @@ components:
     Child:
       additionalProperties: false
       description: |
-        One child of a multibranch job: a branch or a pull request. The ones that
+        One child of a multibranch job: a branch, a pull request, or the pushed
+        tags (kind tag, key tags, one build per tag pushed). The ones that
         build come first, then the gone ones, then the pull requests from forks.
       properties:
         author:
@@ -2974,10 +2975,12 @@ components:
         - last
       type: object
     ChildKind:
+      description: A branch, a pull request merged into its base, a pull request's head alone, or the pushed tags, which one child builds.
       enum:
         - branch
         - pr
         - pr-head
+        - tag
       type: string
     ChildList:
       additionalProperties: false

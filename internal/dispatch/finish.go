@@ -42,6 +42,9 @@ func (d *Dispatcher) finish(ctx context.Context, b *store.Build, job *config.Job
 	if err := os.RemoveAll(e.workspace); err != nil {
 		d.log.Error("removing the workspace", "job", b.Job, "number", b.Number, "err", err)
 	}
+	if status.Succeeded() {
+		d.keepTag(ctx, b, job)
+	}
 	if err := d.opts.Retain(ctx, d.st, job, d.LogsDir(), time.Now()); err != nil {
 		d.log.Error("retention", "job", job.Name, "err", err)
 	}
@@ -204,6 +207,23 @@ func (d *Dispatcher) runHook(ctx context.Context, b *store.Build, job *config.Jo
 	}
 }
 
+// keepTag keeps a tag's green build out of retention, as the record of a
+// release; a person can put it back under the job's keep.
+func (d *Dispatcher) keepTag(ctx context.Context, b *store.Build, job *config.Job) {
+	if !job.BuildsTags() {
+		return
+	}
+	now := time.Now()
+	if err := d.st.KeepBuild(ctx, b.ID, "kipp", now); err != nil {
+		d.log.Error("keeping a tag's build", "job", b.Job, "number", b.Number, "err", err)
+		return
+	}
+	line := fmt.Sprintf("#%d kept by kipp: the build of tag %s", b.Number, b.TriggerTag)
+	if err := d.st.AddActivity(ctx, b.Job, line, now); err != nil {
+		d.log.Error("recording a kept build", "job", b.Job, "number", b.Number, "err", err)
+	}
+}
+
 // triggerDownstream starts every job whose triggers.after names this one
 // and that is not disabled, and tells each how this build ended.
 func (d *Dispatcher) triggerDownstream(ctx context.Context, b *store.Build, job *config.Job, status store.Status) {
@@ -211,8 +231,8 @@ func (d *Dispatcher) triggerDownstream(ctx context.Context, b *store.Build, job 
 	up := job.Name
 	if job.Parent != "" {
 		// Another job runs after a multibranch job when its default
-		// branch's child succeeds, and after no other child.
-		if !job.OnDefaultBranch() {
+		// branch's child or its tags' child succeeds, and after no other.
+		if !job.OnDefaultBranch() && !job.BuildsTags() {
 			return
 		}
 		up = job.Parent
@@ -221,7 +241,7 @@ func (d *Dispatcher) triggerDownstream(ctx context.Context, b *store.Build, job 
 		if down := snap.Jobs[name]; down.Disabled || !slices.Contains(down.Triggers.After, up) {
 			continue
 		}
-		req := TriggerRequest{Job: name, Kind: "after", Detail: fmt.Sprintf("%s#%d", job.Name, b.Number), UpstreamStatus: status, UpstreamCommit: b.BuiltCommit, By: "kipp"}
+		req := TriggerRequest{Job: name, Kind: "after", Detail: fmt.Sprintf("%s#%d", job.Name, b.Number), UpstreamStatus: status, UpstreamCommit: b.BuiltCommit, UpstreamTag: b.TriggerTag, By: "kipp"}
 		if _, err := d.Trigger(ctx, req); err != nil {
 			d.log.Warn("downstream trigger", "job", name, "after", up, "err", err)
 		}

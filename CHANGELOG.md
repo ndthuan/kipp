@@ -18,6 +18,18 @@ Added:
   with the name to use instead.
 - A build started by `after` gets `KIPP_UPSTREAM_COMMIT`, the commit the
   upstream build built, recorded when it is queued.
+- Multibranch jobs and the repos of owner jobs build pushed tags: one
+  child, `<parent>.tags`, builds each tag at the commit it names (an
+  annotated tag's too) from that commit's `.kipp.yml`, with `KIPP_TAG` set
+  and `KIPP_BRANCH` empty. `multibranch.tags` and `owner.tags` narrow it
+  (`{include: [...], exclude: [...]}`, an exclude wins) or turn it off
+  (`false`). Its status is `kipp/<parent>/tag`; `after: [<parent>]` also
+  runs after a green tag build, with `KIPP_UPSTREAM_TAG` set (empty after
+  the default branch's); a green tag build is kept by kipp; Build again
+  rebuilds the same tag. Children list kind `tag` in the API.
+- `triggers.webhook.tags` also takes `{include: [...], exclude: [...]}`,
+  and `true` or `false`, the one tag filter of every job (docs/jobs.md, Tag
+  filters); the list form keeps working as the include.
 - A job key `rerun_on_restart: true` for a job whose build may be stopped
   midway and run again from the start, such as one that waits for a pull
   request: a safe restart (`kipp quiet on --wait`, the Server page,
@@ -74,6 +86,11 @@ Added:
 
 Changed:
 
+- **Every multibranch and owner job now builds every pushed tag** unless
+  its file says `tags: false` or narrows `tags`. A tag's build runs each
+  stage of the tagged commit's `.kipp.yml` whose `when` lets it, so a
+  stage with no `when` runs for a tag; give release-only stages `when:
+  {tags: [...]}` and branch-only ones `when: {default_branch: true}`.
 - While quiet, `running` in `GET /api/v1/admin/quiet` (and so `idle`, and
   what `kipp quiet on --wait` and a safe upgrade wait for) leaves out the
   builds of jobs with `rerun_on_restart: true`, which are counted in

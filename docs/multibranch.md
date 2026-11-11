@@ -1,7 +1,7 @@
 # Multibranch jobs
 
-A job with `multibranch:` builds one repo's branches and pull requests,
-each as a job of its own, a child, whose stages are read from a file in
+A job with `multibranch:` builds one repo's branches, pull requests and
+pushed tags, each as a job of its own, a child, whose stages are read from a file in
 the very commit it builds. It is Jenkins' Multibranch Pipeline in kipp's
 terms: [`source`](jobs.md#stages-from-a-repo-source) plus discovery.
 
@@ -12,6 +12,7 @@ else.
 
 - [The job file](#the-job-file)
 - [What is built](#what-is-built)
+- [Tags](#tags)
 - [The scan](#the-scan)
 - [Commit statuses](#commit-statuses)
 - [Pull requests](#pull-requests)
@@ -32,6 +33,7 @@ multibranch:
   pull_requests: merge             # merge (default) | head | both | off
   branch_with_pr: skip             # skip (default) | build
   rebuild_on_base: false           # default false
+  tags: {exclude: ["*-rc*"]}       # default: every pushed tag; false for none
   scan: 30m                        # default 30m, at least 5m; 0 turns it off
   orphans: {days: 7}               # default 7
   token: GITHUB_TOKEN_ACME         # a kipp secret's name; optional
@@ -49,6 +51,7 @@ env: {MODE: fast}              # every stage's; optional
 stages:
   test: {run: make test, junit: "reports/*.xml"}
   deploy: {needs: [test], when: {default_branch: true}, env: {TARGET: staging}, run: ./deploy.sh}
+  release: {needs: [test], when: {tags: ["v*"]}, run: ./release.sh}
 ```
 
 - `multibranch` takes the place of `stages` and `source`. It refuses
@@ -90,9 +93,56 @@ every branch, with a pull request or without.
 | pull request closed or merged | its child becomes gone, and its queued and running builds are cancelled |
 | push to a base branch with open pull requests | nothing for them, unless `rebuild_on_base: true` |
 | branch deleted | its child becomes gone, and its queued and running builds are cancelled |
+| push of a tag `tags` lets through | the tags' child, at the commit the tag names ([Tags](#tags)) |
+| tag deleted, or a tag `tags` leaves out | nothing |
 
-A multibranch job builds no tag; a release job is an ordinary job with
-`triggers.webhook.tags` ([webhook](jobs.md#webhook)).
+## Tags
+
+A multibranch job builds every tag pushed to its repo, with no key
+needed. `tags` narrows that with the [tag filter](jobs.md#tag-filters)
+every tag-building job shares: `tags: {include: ["v*"], exclude:
+["*-rc*"]}` builds `v1.2.0` and not `v1.2.0-rc1` (an exclude wins), and
+`tags: false` builds no tag.
+
+**A job that has a multibranch or owner job builds every tag once kipp
+is upgraded to a version with tag builds.** A tag's build runs the
+stages of the tagged commit's `.kipp.yml` whose `when` lets it: a stage
+with no `when` runs, as on any build, and so does one with `when:
+{default_branch: false}`, which a tag's build is not on. A job whose
+stages should not run for a tag says `tags: false`, or gives those
+stages `when: {default_branch: true}` or `when: {tags: [...]}`.
+
+- Every tag is built by one child, `<parent>.tags` (kind `tag`), with a
+  build per tag pushed, so the job's page lists it once, with the last
+  tag built, and its build numbers count the tags.
+- A tag's build clones the commit the tag names, in a clean workspace,
+  and reads the stages from `.kipp.yml` there; for an annotated tag kipp
+  takes the push's `head_commit.id`, the tagged commit, not the tag
+  object. Its stages get `KIPP_TAG` (`v1.2.0`), an empty `KIPP_BRANCH`,
+  `KIPP_REF` `refs/tags/<tag>` and `KIPP_COMMIT`, so `when: {tags:
+  ["v*"]}` holds and `when: {default_branch: true}` does not.
+- A tag deleted builds nothing, and a branch's push never builds the
+  tags' child. Two tags pushed on one commit are two builds; the same
+  push delivered twice (two hooks of one repo) is built once.
+- The tags' child cannot be built by hand: Build on its page is refused
+  (409). Build again on a tag's build builds the same tag at the same
+  commit.
+- Another job's `after: [<parent>]` runs when a tag's build ends
+  `success` or `unstable`, as it does after the default branch's, with
+  `KIPP_UPSTREAM_TAG` the tag (empty after the default branch's build;
+  [after](jobs.md#after)).
+- Its commit status is `kipp/<parent>/tag`, so it never overwrites the
+  default branch's `kipp/<parent>` on the same commit
+  ([Commit statuses](#commit-statuses)).
+- It keeps the parent's `keep`, and a tag's build that ends `success` or
+  `unstable` is kept by kipp, as the record of a release, until someone
+  stops keeping it ([Keeping a build](builds.md#keeping-a-build)).
+- A scan lists branches and pull requests, never tags: a tag pushed while
+  kipp was not listening is built by pushing it again, or by Build again
+  on an earlier build of it.
+
+An ordinary job with `triggers.webhook.tags` ([webhook](jobs.md#webhook))
+still builds tags as before, for a release job outside the repo.
 
 ## The scan
 
@@ -134,8 +184,9 @@ when the build ends:
 | it failed before any stage ran (no file at `path`, a clone or a merge that failed) | `error` |
 
 The context is `kipp/<parent>`; under `pull_requests: both` the build of
-a pull request's head alone is `kipp/<parent>/head`, so that the two
-builds do not overwrite one another. The description is
+a pull request's head alone is `kipp/<parent>/head`, and a tag's build is
+`kipp/<parent>/tag`, so that two builds of one commit do not overwrite
+one another. The description is
 `<child> #<n> <status>`, and `target_url` is the build's page under
 `serve --base-url`, left out when that flag is not given. For a pull
 request the commit is its head, not the merge. A status that cannot be
@@ -174,8 +225,10 @@ listed on the parent's page as not built.
   `-<6 hex digits>` of the SHA-256 of the name after it when that changed
   anything or the key is another child's (`main` stays `site.main`;
   `feature/login` is `site.feature-login-<hex>`). For a pull request it is
-  `pr-<n>`, and `pr-<n>-head` for its head alone under `both`. A job file
-  whose name starts with a multibranch job's name and a dot is refused.
+  `pr-<n>`, and `pr-<n>-head` for its head alone under `both`. The pushed
+  tags are the child `tags`, which a branch called `tags` never takes
+  (it gets the hex suffix). A job file whose name starts with a
+  multibranch job's name and a dot is refused.
 - A child has everything of its parent but its cron, `after` and webhook,
   and has its own build numbers, history and concurrency. So
   `rerun_on_restart: true` on the parent holds for the build of every
@@ -185,8 +238,8 @@ listed on the parent's page as not built.
 - `cron` and `after` belong to the parent and build the default branch's
   child, and so does a build of the parent asked for by hand (its Build
   button, `POST /api/v1/jobs/<parent>/builds`, `kipp run <parent>`).
-  Another job's `after: [site]` runs when the default branch's child
-  succeeds or ends unstable, and after no other child; `after: [site.main]`
+  Another job's `after: [site]` runs when the default branch's child or
+  a tag's build succeeds or ends unstable, and after no other child; `after: [site.main]`
   is refused, with `site` as the name to use. Until kipp has
   heard of the default branch (a push to it, or a scan, makes its child),
   such a build is refused.
@@ -231,7 +284,8 @@ a child's stages get:
 
 - `KIPP_COMMIT`: the head commit built, whatever started the build;
 - `KIPP_BRANCH`: its branch, for every trigger; on a pull request's
-  build, the head branch;
+  build, the head branch; on a tag's build, empty, and `KIPP_TAG` is the
+  tag;
 - `KIPP_DEFAULT_BRANCH`;
 - `KIPP_PR` (the number), `KIPP_BASE_BRANCH`, `KIPP_BASE_COMMIT` (under
   `merge`, the base tip merged into), `KIPP_PR_TITLE`, `KIPP_PR_URL` (the
@@ -286,8 +340,8 @@ ceiling unless it is named.
 
 The parent's webhook is `POST /api/v1/hooks/github/<parent>`, signed
 with the secret `GITHUB_WEBHOOK_<PARENT>` and checked exactly as any
-job's ([webhook](jobs.md#webhook)), for the events `push` and
-`pull_request`. An event it builds is answered 202 with
+job's ([webhook](jobs.md#webhook)), for the events `push` (of a branch or
+a tag) and `pull_request`. An event it builds is answered 202 with
 `{"builds": [{"job", "id", "number"}]}` (a build the child's concurrency
 dropped says `error` in place of the id, and a commit that has a build
 queued or running already says `skipped`); one it builds nothing for, 200

@@ -594,7 +594,7 @@ func (s *Service) BuildNumbered(ctx context.Context, u *store.User, job string, 
 // Params the job refuses are ErrBadInput; a trigger the job's concurrency
 // rule drops is ErrConflict, and dispatch.ErrDropped too; so is one for a
 // disabled job, and dispatch.ErrDisabled; so is one for an owner job, which
-// builds nothing itself.
+// builds nothing itself, and one for a tags' child, which a push builds.
 func (s *Service) Trigger(ctx context.Context, u *store.User, name string, params map[string]string, kind string) (*store.Build, error) {
 	if err := s.buildable(ctx, u, name); err != nil {
 		return nil, err
@@ -603,7 +603,7 @@ func (s *Service) Trigger(ctx context.Context, u *store.User, name string, param
 	switch {
 	case errors.Is(err, dispatch.ErrBadParams):
 		return nil, fmt.Errorf("%w: %w", ErrBadInput, err)
-	case errors.Is(err, dispatch.ErrDropped), errors.Is(err, dispatch.ErrDisabled), errors.Is(err, dispatch.ErrOwnerJob):
+	case errors.Is(err, dispatch.ErrDropped), errors.Is(err, dispatch.ErrDisabled), errors.Is(err, dispatch.ErrOwnerJob), errors.Is(err, dispatch.ErrNoTag):
 		return nil, fmt.Errorf("%w: %w", ErrConflict, err)
 	case errors.Is(err, dispatch.ErrUnknownJob): // a reload removed it meanwhile
 		return nil, ErrNotFound

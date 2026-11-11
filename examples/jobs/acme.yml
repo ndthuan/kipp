@@ -1,7 +1,7 @@
 # One job file indexes every repo of a GitHub owner that holds .kipp.yml at
 # its default branch. Each such repo is a multibranch job of its own
-# (acme.site, acme.api), and its branches and pull requests are that job's
-# children (acme.site.main, acme.site.pr-12). Archived repos and forks are
+# (acme.site, acme.api), and its branches, pull requests and pushed tags are
+# that job's children (acme.site.main, acme.site.pr-12, acme.site.tags). Archived repos and forks are
 # skipped. What a repo may not grant itself stays here, for every repo
 # unless owner.repos says otherwise.
 #
@@ -27,6 +27,7 @@ owner:
   path: .kipp.yml
   branches: [default]
   pull_requests: merge
+  tags: {exclude: ["*-rc*"]}   # every pushed tag but release candidates
   scan: 30m
   orphans: {days: 7}
   repos:

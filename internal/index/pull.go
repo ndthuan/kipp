@@ -112,7 +112,7 @@ func (x *Index) livePRLocked(ctx context.Context, m *config.Multibranch, parent,
 func (x *Index) closeLocked(ctx context.Context, parent string, n int) (*TriggerPlan, error) {
 	var gone []string
 	for _, c := range x.rows[parent] {
-		if c.Kind == config.KindBranch || c.PR != n {
+		if !config.IsPR(c.Kind) || c.PR != n {
 			continue
 		}
 		if err := x.goneLocked(ctx, c); err != nil {
@@ -140,7 +140,7 @@ func (x *Index) keyLocked(parent, key string) *store.Child {
 // of the repo itself.
 func (x *Index) openPRLocked(parent, branch string) bool {
 	for _, c := range x.rows[parent] {
-		if c.Kind != config.KindBranch && !c.FromFork && c.State == config.ChildLive && c.Branch == branch {
+		if config.IsPR(c.Kind) && !c.FromFork && c.State == config.ChildLive && c.Branch == branch {
 			return true
 		}
 	}
@@ -153,7 +153,7 @@ func (x *Index) openPRLocked(parent, branch string) bool {
 func (x *Index) onBaseLocked(m *config.Multibranch, parent, base string) []dispatch.TriggerRequest {
 	var out []dispatch.TriggerRequest
 	for _, c := range x.rows[parent] {
-		if c.Kind == config.KindBranch || c.FromFork || c.State != config.ChildLive || c.BaseBranch != base || !m.Builds(c.Kind) {
+		if !config.IsPR(c.Kind) || c.FromFork || c.State != config.ChildLive || c.BaseBranch != base || !m.Builds(c.Kind) {
 			continue
 		}
 		out = append(out, dispatch.TriggerRequest{Job: c.Job(), Kind: "webhook", Detail: c.HeadSHA, Branch: c.Branch,

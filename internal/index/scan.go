@@ -207,12 +207,13 @@ func (x *Index) scanBranchLocked(ctx context.Context, m *config.Multibranch, par
 	return &dispatch.TriggerRequest{Job: c.Job(), Kind: "webhook", Detail: b.SHA, Branch: b.Name, DefaultBranch: x.defaults[parent]}, nil
 }
 
-// goneUnseenLocked makes gone every live child the scan did not see, and
-// says how many it made gone.
+// goneUnseenLocked makes gone every live child of a branch or a pull
+// request the scan did not see, and says how many it made gone. The tags'
+// child is no branch the scan lists.
 func (x *Index) goneUnseenLocked(ctx context.Context, parent string, seen map[string]bool) (int, error) {
 	n := 0
 	for _, c := range append([]store.Child(nil), x.rows[parent]...) {
-		if c.State != config.ChildLive || seen[c.Key] {
+		if c.State != config.ChildLive || seen[c.Key] || c.Kind == config.KindTag {
 			continue
 		}
 		if err := x.goneLocked(ctx, c); err != nil {
@@ -255,16 +256,16 @@ func (x *Index) unseenHeadsLocked(ctx context.Context, reqs []dispatch.TriggerRe
 	return out, nil
 }
 
-// OnItsWay reports whether a build of the job for the commit is queued or
-// running: a delivery that asks for it again, by another route or hook of
+// OnItsWay reports whether a build of the job for the commit, and for the
+// tag ("" for a branch's), is queued or running: a delivery that asks for it again, by another route or hook of
 // the same repo, has nothing to add.
-func (x *Index) OnItsWay(ctx context.Context, job, commit string) (bool, error) {
+func (x *Index) OnItsWay(ctx context.Context, job, commit, tag string) (bool, error) {
 	active, err := x.st.BuildsWithStatus(ctx, store.Queued, store.Running)
 	if err != nil {
 		return false, err
 	}
 	for _, b := range active {
-		if b.Job == job && (headOf(b) == commit || b.TriggerDetail == commit && b.Trigger == "scan") {
+		if b.Job == job && b.TriggerTag == tag && (headOf(b) == commit || b.TriggerDetail == commit && b.Trigger == "scan") {
 			return true, nil
 		}
 	}

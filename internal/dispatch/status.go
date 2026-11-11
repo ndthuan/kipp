@@ -33,15 +33,19 @@ func (d *Dispatcher) reports(job *config.Job) bool {
 }
 
 // statusContext is what the child's statuses are said under: the parent's
-// name, or the owner job's for a repo of one (the commit says the repo),
-// and under both the extra build of a pull request's head apart from
-// the build of its merge, so that the two do not overwrite each other.
+// name, or the owner job's for a repo of one (the commit says the repo).
+// The extra build of a pull request's head under both, and a tag's build,
+// say theirs apart, so that they never overwrite the build of the merge or
+// of the default branch on the same commit.
 func statusContext(job *config.Job) string {
 	ctx := "kipp/" + job.Parent
 	if job.Folder != "" {
 		ctx = "kipp/" + job.Folder
 	}
-	if job.Multibranch.PullRequests == config.PRBoth && job.Origin.Kind == config.KindPRHead {
+	switch {
+	case job.BuildsTags():
+		ctx += "/tag"
+	case job.Multibranch.PullRequests == config.PRBoth && job.Origin.Kind == config.KindPRHead:
 		ctx += "/head"
 	}
 	return ctx

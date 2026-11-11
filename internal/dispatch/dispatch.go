@@ -43,6 +43,9 @@ var (
 	// ErrOwnerJob is an owner job asked to build: it builds nothing itself,
 	// and each of its repos has a job that does.
 	ErrOwnerJob = errors.New("an owner job builds nothing itself; build one of its repos")
+	// ErrNoTag is the tags' child of a multibranch job asked to build with
+	// no tag: a push of a tag builds it, and Build again rebuilds one.
+	ErrNoTag = errors.New("this job builds pushed tags: a tag's push starts its builds, and Build again on one rebuilds that tag")
 	// ErrQuiet is any trigger while the server is quiet: it is draining
 	// before a restart and starts no build (see SetQuiet).
 	ErrQuiet = errors.New("kipp is quiet: restarting once running builds end")
@@ -129,11 +132,11 @@ type TriggerRequest struct {
 	DefaultBranch string
 	// UpstreamStatus is how the upstream build ended, for an after trigger.
 	UpstreamStatus store.Status
-	// UpstreamCommit is the commit the upstream build built, for an after
-	// trigger.
-	UpstreamCommit string
-	Params         map[string]string
-	By             string
+	// UpstreamCommit is the commit the upstream build built, and
+	// UpstreamTag the tag it was pushed for, for an after trigger.
+	UpstreamCommit, UpstreamTag string
+	Params                      map[string]string
+	By                          string
 	// Commit, BuiltCommit and BaseCommit are what Again carries from the
 	// build it repeats: the commit a push named, the commit that build
 	// checked out, and the base a pull request was merged into.
@@ -227,6 +230,8 @@ func goneWhy(job *config.Job) string {
 		return ""
 	case job.Origin.Kind == config.KindBranch:
 		return "branch " + job.Origin.Branch + " is gone"
+	case job.Origin.Kind == config.KindTag:
+		return "the repo's tags are no longer built"
 	}
 	return fmt.Sprintf("pull request #%d is closed", job.Origin.PR)
 }
@@ -355,21 +360,9 @@ func (d *Dispatcher) Trigger(ctx context.Context, req TriggerRequest) (*store.Bu
 		return nil, ErrQuiet
 	}
 	snap := d.Snapshot()
-	job := snap.Jobs[req.Job]
-	if job == nil {
-		return nil, fmt.Errorf("%w: %s", ErrUnknownJob, req.Job)
-	}
-	if job.IsOwner() {
-		return nil, ErrOwnerJob
-	}
-	if job.IsParent() && !job.Disabled {
-		// A multibranch job builds through the child of its default branch.
-		if job = snap.DefaultChild(job.Name); job == nil {
-			return nil, fmt.Errorf("%w: %s", ErrNoDefaultChild, req.Job)
-		}
-	}
-	if job.Disabled {
-		return nil, ErrDisabled
+	job, err := buildable(snap, req)
+	if err != nil {
+		return nil, err
 	}
 	params, err := job.ResolveParams(req.Params)
 	if err != nil {
@@ -388,7 +381,7 @@ func (d *Dispatcher) Trigger(ctx context.Context, req TriggerRequest) (*store.Bu
 		}
 		return nil, fmt.Errorf("%w (%s)", ErrDropped, why)
 	}
-	b := &store.Build{Job: job.Name, Status: store.Queued, Trigger: req.Kind, TriggerDetail: req.Detail, TriggerBranch: req.Branch, TriggerDefaultBranch: req.DefaultBranch, TriggerTag: req.Tag, UpstreamStatus: req.UpstreamStatus, UpstreamCommit: req.UpstreamCommit, Params: params, StartedBy: req.By, ConfigHash: snap.Hash,
+	b := &store.Build{Job: job.Name, Status: store.Queued, Trigger: req.Kind, TriggerDetail: req.Detail, TriggerBranch: req.Branch, TriggerDefaultBranch: req.DefaultBranch, TriggerTag: req.Tag, UpstreamStatus: req.UpstreamStatus, UpstreamCommit: req.UpstreamCommit, UpstreamTag: req.UpstreamTag, Params: params, StartedBy: req.By, ConfigHash: snap.Hash,
 		PushedCommit: req.Commit, BuiltCommit: req.BuiltCommit, BaseCommit: req.BaseCommit, RerunOf: req.RerunOf}
 	ofChild(b, job)
 	if err := d.st.CreateBuild(ctx, b); err != nil {
@@ -399,6 +392,30 @@ func (d *Dispatcher) Trigger(ctx context.Context, req TriggerRequest) (*store.Bu
 	}
 	d.kick()
 	return b, nil
+}
+
+// buildable is the job the request builds: the one it names, or for a
+// multibranch job the child of its default branch; or why there is none.
+func buildable(snap *config.Snapshot, req TriggerRequest) (*config.Job, error) {
+	job := snap.Jobs[req.Job]
+	if job == nil {
+		return nil, fmt.Errorf("%w: %s", ErrUnknownJob, req.Job)
+	}
+	if job.IsOwner() {
+		return nil, ErrOwnerJob
+	}
+	if job.IsParent() && !job.Disabled {
+		if job = snap.DefaultChild(job.Name); job == nil {
+			return nil, fmt.Errorf("%w: %s", ErrNoDefaultChild, req.Job)
+		}
+	}
+	switch {
+	case job.Disabled:
+		return nil, ErrDisabled
+	case job.BuildsTags() && req.Tag == "":
+		return nil, ErrNoTag
+	}
+	return job, nil
 }
 
 // supersede, for a supersede job, cancels the other builds of b's job and

@@ -105,7 +105,7 @@ func (h *hook) queue(r *http.Request, plan *index.TriggerPlan) []queued {
 	out := make([]queued, 0, len(plan.Builds))
 	for _, req := range plan.Builds {
 		if req.Kind == "webhook" && req.Detail != "" && !plan.Rebuild {
-			on, err := h.o.Index.OnItsWay(r.Context(), req.Job, req.Detail)
+			on, err := h.o.Index.OnItsWay(r.Context(), req.Job, req.Detail, req.Tag)
 			if err != nil {
 				slog.Error("webhook: looking for a build of the commit", "job", req.Job, "err", err)
 				out = append(out, queued{Job: req.Job, Error: "could not queue the build"})
@@ -137,11 +137,16 @@ func (h *hook) push(r *http.Request, name string, body []byte) (*index.TriggerPl
 		return nil, badEvent("body is not a push event")
 	}
 	deleted := ev.Deleted || strings.Trim(ev.After, "0") == "" && ev.After != ""
-	if !deleted && !commitID(ev.After) {
-		return nil, badEvent("after is not a full commit id")
+	field, commit := "after", ev.After
+	if strings.HasPrefix(ev.Ref, "refs/tags/") && ev.HeadCommit != nil && ev.HeadCommit.ID != "" {
+		// An annotated tag's after is the tag object, not the commit it names.
+		field, commit = "head_commit.id", ev.HeadCommit.ID
+	}
+	if !deleted && !commitID(commit) {
+		return nil, badEvent(field + " is not a full commit id")
 	}
 	return h.o.Index.Push(r.Context(), name, index.PushEvent{
-		Repo: ev.Repository.FullName, Ref: ev.Ref, After: strings.ToLower(ev.After), Deleted: deleted,
+		Repo: ev.Repository.FullName, Ref: ev.Ref, After: strings.ToLower(commit), Deleted: deleted,
 		DefaultBranch: ev.Repository.DefaultBranch,
 	})
 }

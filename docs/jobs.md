@@ -196,9 +196,11 @@ of the name and stops at a slash: `branches: [main, "APP-*",
 no `branches` every branch builds, unless the job has `tags`. A push that
 deletes a branch builds nothing.
 
-`tags` lists the tags whose push builds, read as `branches` is
-(`tags: ["v*"]` builds `v1.2.0`; `release/*` does not build
-`release/a/b`). Publishing a GitHub release pushes its tag, so this is
+`tags` says which tags' push builds, by the [tag filter](#tag-filters)
+every tag-building job shares: a list (`tags: ["v*"]` builds `v1.2.0`;
+`release/*` does not build `release/a/b`), or `{include: [...], exclude:
+[...]}` where an exclude wins. With no `tags` an ordinary job builds no
+tag. Publishing a GitHub release pushes its tag, so this is
 how a release deploys: `branches: [main]` in one job for staging and
 `tags: ["v*"]` in another for production, or both keys in one job and
 `when: {branches: [main]}` and `when: {tags: ["v*"]}` on its stages. A job
@@ -227,22 +229,49 @@ A webhook build does not clone anything by itself: a `stages` job's
 stages check the commit out themselves (from `KIPP_REPO` and
 `KIPP_COMMIT`), and a `source` job clones it ([source](#stages-from-a-repo-source)).
 
+### Tag filters
+
+Every key that says which pushed tags build reads the same way:
+`triggers.webhook.tags` of a job, `multibranch.tags` of a
+[multibranch job](multibranch.md#tags) and `owner.tags` of an
+[owner job](organization-folders.md).
+
+```yaml
+tags: ["v*"]                                  # a list: the include alone
+tags: {include: ["v*"], exclude: ["*-rc*"]}   # v1.2.0 builds, v1.2.0-rc1 does not
+tags: {exclude: ["nightly-*"]}                # every tag but these
+tags: true                                    # every tag
+tags: false                                   # no tag
+```
+
+Each pattern is a name or a pattern Go's `path.Match` reads, as for
+`branches`. A tag builds when some `include` pattern matches it (every
+tag when there is no `include`) and no `exclude` pattern does: an
+exclude wins. An empty list, like `false`, builds no tag; an empty
+`include`, a key other than the two, and a pattern `path.Match` cannot
+read are refused. With no `tags` key an ordinary job builds no tag, and a
+multibranch or owner job builds every tag.
+
 ### after
 
 `after: [site-build]` starts a build when a build of `site-build` ends
 `success` or `unstable`. Every job named must exist, a job cannot run
 after itself, and a loop among jobs is refused. The build gets
 `KIPP_UPSTREAM_BUILD` (`job#number`), `KIPP_UPSTREAM_STATUS`, so that
-it can refuse an unstable upstream, and `KIPP_UPSTREAM_COMMIT`, the
+it can refuse an unstable upstream, `KIPP_UPSTREAM_COMMIT`, the
 commit the upstream build built (empty when it built none), so that a
-deploy needs no API call to learn what to deploy.
+deploy needs no API call to learn what to deploy, and `KIPP_UPSTREAM_TAG`,
+the tag the upstream build was pushed for (empty for a branch's build).
 
 A name in `after` may also be a [multibranch job](multibranch.md) or a
 repo of an [owner job](organization-folders.md), `<owner job>.<repo>`
 (`after: [acme.site]`): either fires when the build of its default
-branch's child ends `success` or `unstable`, and never for another branch
-or a pull request. `KIPP_UPSTREAM_BUILD` then names that child's build
-(`acme.site.main#46`). A repo the owner job has not indexed yet is
+branch's child, or of a pushed tag ([tags](multibranch.md#tags)), ends
+`success` or `unstable`, and never for another branch or a pull request.
+`KIPP_UPSTREAM_BUILD` then names that child's build (`acme.site.main#46`,
+`acme.site.tags#3`), and `KIPP_UPSTREAM_TAG` is the tag for a tag's build
+and empty for the default branch's, so a job that wants one kind alone
+tests it (`[ -n "$KIPP_UPSTREAM_TAG" ] || exit 0`). A repo the owner job has not indexed yet is
 accepted, and the job runs after it once a scan or a webhook has indexed
 it. A name that can never fire is refused, with the name to use: a
 branch or a pull request (`acme.site.main`, `site.pr-12`) and the owner
@@ -688,10 +717,11 @@ same, but for the ones under Where it runs, which are the runner's.
   `KIPP_BASE_COMMIT`, `KIPP_PR_TITLE`, `KIPP_PR_URL` and `KIPP_PR_AUTHOR`
   ([Multibranch jobs](multibranch.md#what-a-childs-stages-get)).
 - **Upstream**: `KIPP_UPSTREAM_BUILD` (`job#number`),
-  `KIPP_UPSTREAM_STATUS` (`success` or `unstable`) and
+  `KIPP_UPSTREAM_STATUS` (`success` or `unstable`),
   `KIPP_UPSTREAM_COMMIT` (the commit the upstream build built, empty when
-  it built none) for a build started by `after`, recorded when the build
-  is queued, so they hold after the upstream build is gone.
+  it built none) and `KIPP_UPSTREAM_TAG` (the tag it was pushed for, empty
+  when it was not a tag's build) for a build started by `after`, recorded
+  when the build is queued, so they hold after the upstream build is gone.
 - **Of a stage**: `KIPP_STAGE`, `KIPP_ENV`, `KIPP_METRICS` for a stage
   that declares `metrics` ([Metrics](metrics.md)), `KIPP_CACHE_URL`,
   `KIPP_CACHE_TOKEN` and `KIPP_CACHE_SCOPE` for a stage with caches

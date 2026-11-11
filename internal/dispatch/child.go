@@ -30,7 +30,7 @@ func ofChild(b *store.Build, job *config.Job) {
 	if b.TriggerDefaultBranch == "" {
 		b.TriggerDefaultBranch = job.DefaultBranch
 	}
-	if job.Origin.Kind != config.KindBranch {
+	if config.IsPR(job.Origin.Kind) {
 		b.PR, b.BaseBranch = job.Origin.PR, job.Origin.BaseBranch
 	}
 }
@@ -49,7 +49,7 @@ func childVars(b *store.Build, origin *config.ChildRecord) []string {
 		pr = strconv.Itoa(b.PR)
 	}
 	var title, prURL, author string
-	if origin != nil && origin.Kind != config.KindBranch {
+	if origin != nil && config.IsPR(origin.Kind) {
 		title, prURL, author = origin.Title, origin.URL, origin.Author
 	}
 	return []string{"KIPP_COMMIT=" + commit, "KIPP_PR=" + pr, "KIPP_BASE_BRANCH=" + b.BaseBranch, "KIPP_BASE_COMMIT=" + b.BaseCommit,
@@ -58,12 +58,16 @@ func childVars(b *store.Build, origin *config.ChildRecord) []string {
 
 // childRef is what a child's build checks out, or for a merge build
 // merges: the commit a push named, or one a build made again carries, else
-// the tip of its branch, or of its pull request's head, as of the clone.
+// the tip of its branch, of its pull request's head, or the commit of its
+// tag, as of the clone.
 func childRef(b *store.Build, job *config.Job) string {
 	if commit := cmp.Or(b.Commit(), b.BuiltCommit); commit != "" {
 		return commit
 	}
-	if job.Origin.Kind != config.KindBranch {
+	switch {
+	case job.BuildsTags():
+		return "refs/tags/" + b.TriggerTag
+	case config.IsPR(job.Origin.Kind):
 		return "refs/pull/" + strconv.Itoa(job.Origin.PR) + "/head"
 	}
 	return "refs/heads/" + job.Origin.Branch
