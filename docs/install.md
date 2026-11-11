@@ -123,7 +123,7 @@ To run it as a service, see
 
 ## From source
 
-Building needs Go 1.27.3 or newer, and make:
+Building needs Go 1.27.4 or newer, and make:
 
 ```sh
 make build        # bin/kipp

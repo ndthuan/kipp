@@ -66,7 +66,7 @@ Release archives for Linux and macOS on amd64 and arm64, with
 `SHA256SUMS` with its signature `SHA256SUMS.sig`, and a build provenance
 attestation, are on the
 [releases page](https://github.com/ndthuan/kipp/releases). To build from
-source, `make build` (Go 1.27.3 or newer) gives `bin/kipp`.
+source, `make build` (Go 1.27.4 or newer) gives `bin/kipp`.
 
 [docs/install.md](docs/install.md) has every way in detail, with how to
 check an archive, how to upgrade and what the server needs.
