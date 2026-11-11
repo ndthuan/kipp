@@ -1635,11 +1635,11 @@ func TestAJobAndABuildSayWhereTheyAreByGroupThenJob(t *testing.T) {
 	id := e.build(t, c, "smoke", nil)
 	e.wait(t, id)
 	_, page = get(t, c, e.srv.URL+e.at(t, id))
-	contains(t, page, `<h1 class="crumbs"><a class="link-plain" href="/jobs?group=backend">backend</a>`+sep+`<a class="link-plain" href="/jobs/smoke">smoke</a>`+sep+`<span>#1</span> <span class="status success">success</span></h1>`)
+	contains(t, page, `<h1 class="crumbs"><a class="link-plain" href="/jobs?group=backend">backend</a>`+sep+`<a class="link-plain" href="/jobs/smoke">smoke</a>`+sep+`<span class="crumb-end"><span>#1</span> <span class="status success">success</span></span></h1>`)
 
 	e.drop("smoke")
 	_, page = get(t, c, e.srv.URL+e.at(t, id))
-	contains(t, page, `<h1 class="crumbs"><a class="link-plain" href="/jobs?only=removed">Removed</a>`+sep+`<a class="link-plain" href="/jobs/smoke">smoke</a>`+sep+`<span>#1</span>`)
+	contains(t, page, `<h1 class="crumbs"><a class="link-plain" href="/jobs?only=removed">Removed</a>`+sep+`<a class="link-plain" href="/jobs/smoke">smoke</a>`+sep+`<span class="crumb-end"><span>#1</span>`)
 	_, page = get(t, c, e.srv.URL+"/jobs/smoke")
 	contains(t, page, `<h1 class="crumbs"><a class="link-plain" href="/jobs?only=removed">Removed</a>`+sep+`<span>smoke</span></h1>`)
 }
@@ -1909,7 +1909,7 @@ func TestAnUnstableBuildAndStageAreShownAsUnstableOnEveryPage(t *testing.T) {
 
 	_, page := get(t, c, e.srv.URL+path)
 	contains(t, page,
-		`<span>#1</span> <span class="status unstable">unstable</span></h1>`,
+		`<span class="crumb-end"><span>#1</span> <span class="status unstable">unstable</span></span></h1>`,
 		`<g class="stage unstable" data-stage="lint">`, `<g class="stage success" data-stage="unit">`,
 		"<td class=\"lead\" data-label=\"Stage\"><a class=\"link\" href=\"#log-lint\">lint</a></td>\n<td class=\"lead\" data-label=\"Status\"><span class=\"status unstable\">unstable</span></td>\n<td data-label=\"Exit\">4</td>",
 		"<td class=\"lead\" data-label=\"Stage\"><a class=\"link\" href=\"#log-unit\">unit</a></td>\n<td class=\"lead\" data-label=\"Status\"><span class=\"status success\">success</span></td>",

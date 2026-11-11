@@ -95,3 +95,15 @@ func TestTheHeadingCrumbsShareOneBaselineSoAWrappedTitleKeepsTheGroupBesideItsFi
 		t.Fatal("the crumbs row is not aligned on a baseline")
 	}
 }
+
+func TestTheBuildNumberAndItsStatusPillWrapAsOneCrumbSoThePillNeverStandsAlone(t *testing.T) {
+	e := site(t)
+	page := e.ended(t, "smoke", store.Failed)
+	_, body := get(t, e.login(t, "admin"), e.srv.URL+page)
+	contains(t, body, `<span class="crumb-end"><span>#`, `<span class="status failed">failed</span></span></h1>`)
+	css, err := staticFS.ReadFile("static/kipp.css")
+	must(t, err)
+	if !strings.Contains(string(css), ".crumb-end { display: inline-flex; align-items: baseline;") {
+		t.Fatal("the last crumb and its pill are not one baseline-aligned unit")
+	}
+}
