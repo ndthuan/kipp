@@ -74,46 +74,6 @@
 </div>
 {{else}}<p class="sub">Nothing is flaky.</p>
 {{end}}</section>
-<section class="sec sec-failed">
-<h2>Failed in the last {{$w.Label}}</h2>
-{{with $o.RecentFailures}}<div class="scroll">
-<table class="rows stacked">
-<thead><tr><th>Job</th><th>Build</th><th>Ended</th><th>Now</th></tr></thead>
-<tbody>
-{{range .}}<tr>
-<td class="lead" data-label="Job"><a class="link" href="/jobs/{{.Build.Job}}">{{.Build.Job}}</a></td>
-<td class="lead" data-label="Build"><a class="link" href="{{buildPath .Build}}">#{{.Build.Number}}</a> <span class="status {{.Build.Status}}">{{.Build.Status}}</span></td>
-<td class="lead" data-label="Ended">{{template "since" (since .Build.FinishedAt)}}</td>
-<td data-label="Now">{{if .GreenAgain}}<span class="status success">green again</span>{{else}}<span class="sub">still red</span>{{end}}</td>
-</tr>
-{{end}}</tbody>
-</table>
-</div>
-{{if $o.MoreFailures}}<p class="sub">And {{plural $o.MoreFailures "more failure"}} in the last {{$w.Label}}.</p>
-{{end}}{{else}}<p class="sub">Nothing failed in the last {{$w.Label}}.</p>
-{{end}}</section>
-<section class="sec sec-coming">
-<h2>Coming up</h2>
-{{with $o.Coming}}<div class="scroll">
-<table class="rows stacked">
-<thead><tr><th>When</th><th>Job</th><th>Schedule</th></tr></thead>
-<tbody>
-{{range .}}<tr>
-<td class="lead" data-label="When">{{template "when" (when .At)}}</td>
-<td class="lead" data-label="Job"><a class="link" href="/jobs/{{.Job}}">{{.Job}}</a></td>
-<td data-label="Schedule"><code>{{.Cron}}</code></td>
-</tr>
-{{end}}</tbody>
-</table>
-</div>
-{{end}}{{with $o.Frequent}}<details class="frequent">
-<summary class="sub">{{plural (len .) "job"}} {{if eq (len .) 1}}runs{{else}}run{{end}} every few minutes</summary>
-<ul>
-{{range .}}<li><a class="link" href="/jobs/{{.Job}}">{{.Job}}</a> <code>{{.Cron}}</code></li>
-{{end}}</ul>
-</details>
-{{else}}{{if not $o.Coming}}<p class="sub">Nothing is scheduled.</p>
-{{end}}{{end}}</section>
 </div>
 <section class="charts stack" aria-labelledby="charts-heading">
 <div class="charts-head">

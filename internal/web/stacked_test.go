@@ -41,9 +41,9 @@ func TestEveryCellOfAStackedTableNamesItsColumn(t *testing.T) {
 	})
 
 	// How many stacked tables each page has at least: the overview's
-	// failing, flaky, failed, now and coming up; a job's builds; a build's
+	// failing, flaky and now; a job's builds; a build's
 	// stages are one only with several, so its results and tests stand in.
-	pages := map[string]int{"/": 4, "/queue": 1, "/jobs": 1, "/jobs/smoke": 1, "/jobs/nightly": 2, e.at(t, id): 1}
+	pages := map[string]int{"/": 3, "/queue": 1, "/jobs": 1, "/jobs/smoke": 1, "/jobs/nightly": 2, e.at(t, id): 1}
 	for path, least := range pages {
 		code, page := get(t, c, e.srv.URL+path)
 		eq(t, path, code, http.StatusOK)

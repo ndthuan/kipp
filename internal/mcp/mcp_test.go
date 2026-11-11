@@ -857,3 +857,24 @@ func TestTheOverviewsGroupCountsLeaveOutAGoneBranchOrPullRequest(t *testing.T) {
 	}
 	t.Fatalf("no web group in %+v", ov.Groups)
 }
+
+func TestTheOverviewOfAServerWithNoJobAndNoBuildIsEveryListEmptyAndTheGraphsZero(t *testing.T) {
+	e := newEnv(t, nil)
+	snap, err := config.Load(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.d.SetSnapshot(snap)
+	s := e.session(t, e.admin)
+	for _, window := range []string{"24h", "7d"} {
+		var ov overviewOut
+		ok(t, s, "overview", map[string]any{"window": window}, &ov)
+		if len(ov.Failing)+len(ov.Unstable)+len(ov.Flaky)+len(ov.Groups) != 0 || len(ov.Queue.Running)+len(ov.Queue.Queued) != 0 {
+			t.Fatalf("%s: %+v", window, ov)
+		}
+		c := ov.Charts
+		if c.Window != window || c.Success+c.Unstable+c.Failed+c.Cancelled != 0 || len(c.PassRates) != 0 {
+			t.Fatalf("%s charts: %+v", window, c)
+		}
+	}
+}

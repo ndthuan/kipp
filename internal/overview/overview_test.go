@@ -147,90 +147,11 @@ func TestFlakyIsSortedByFlipsThenFailedShareThenName(t *testing.T) {
 	}
 }
 
-func TestRecentFailuresAreTheLast24HoursNewestFirstAtMostTen(t *testing.T) {
-	var jobs []Job
-	for i := range 12 {
-		name := fmt.Sprintf("j%02d", i)
-		// Ended i hours ago, red, then green before it.
-		jobs = append(jobs, Job{Name: name, History: history(name, "fs", now.Add(-time.Duration(i)*time.Hour-time.Minute))})
-	}
-	jobs = append(jobs, Job{Name: "old", History: history("old", "f", now.Add(-25*time.Hour))})
-	o := compute(jobs, 4, now)
-	if len(o.RecentFailures) != RecentMax || o.MoreFailures != 2 {
-		t.Fatalf("%d shown, %d more", len(o.RecentFailures), o.MoreFailures)
-	}
-	if o.RecentFailures[0].Build.Job != "j00" || o.RecentFailures[9].Build.Job != "j09" {
-		t.Fatalf("order: %s ... %s", o.RecentFailures[0].Build.Job, o.RecentFailures[9].Build.Job)
-	}
-	for _, f := range o.RecentFailures {
-		if f.Build.Job == "old" || f.GreenAgain {
-			t.Errorf("%+v", f)
-		}
-	}
-}
-
-func TestARecentFailureSaysWhetherItsJobIsGreenAgain(t *testing.T) {
-	j := Job{Name: "j", History: history("j", "sfs", now.Add(-time.Hour))}
-	o := compute([]Job{j}, 4, now)
-	if len(o.RecentFailures) != 1 || !o.RecentFailures[0].GreenAgain || o.MoreFailures != 0 {
-		t.Fatalf("%+v", o.RecentFailures)
-	}
-}
-
-func TestComingUpIsTheNextEightByTime(t *testing.T) {
-	var jobs []Job
-	for i := range 10 {
-		at := now.Add(time.Duration(10-i) * time.Minute)
-		jobs = append(jobs, Job{Name: fmt.Sprintf("j%d", i), Cron: "* * * * *", Next: &at})
-	}
-	jobs = append(jobs, Job{Name: "never", Cron: ""})
-	o := compute(jobs, 4, now)
-	if len(o.Upcoming) != UpcomingMax || o.Upcoming[0].Job != "j9" || o.Upcoming[7].Job != "j2" || o.Upcoming[0].Cron != "* * * * *" {
-		t.Fatalf("%+v", o.Upcoming)
-	}
-}
-
-func TestComingUpFoldsJobsFiringMoreOftenThanEveryFifteenMinutes(t *testing.T) {
-	var jobs []Job
-	for i, cron := range []string{"H/2 * * * *", "*/5 * * * *", "*/15 * * * *", "0 9 * * *", "*/5 9 * * *"} {
-		at := now.Add(time.Duration(i+1) * time.Minute)
-		jobs = append(jobs, Job{Name: fmt.Sprintf("j%d", i), Cron: cron, Next: &at})
-	}
-	o := compute(jobs, 4, now)
-	if got := names(o.Frequent, func(u Upcoming) string { return u.Job }); got != "j0,j1,j4" {
-		t.Fatalf("frequent: %s", got)
-	}
-	if got := names(o.Coming, func(u Upcoming) string { return u.Job }); got != "j2,j3" {
-		t.Fatalf("coming: %s", got)
-	}
-	if len(o.Upcoming) != 5 {
-		t.Fatalf("upcoming keeps every job: %+v", o.Upcoming)
-	}
-}
-
-func TestComingUpRowsAreTheNextEightOfTheOtherJobs(t *testing.T) {
-	var jobs []Job
-	for i := range 12 {
-		at := now.Add(time.Duration(i+1) * time.Hour)
-		jobs = append(jobs, Job{Name: fmt.Sprintf("daily%02d", i), Cron: "0 9 * * *", Next: &at})
-	}
-	soon := now.Add(time.Minute)
-	jobs = append(jobs, Job{Name: "busy", Cron: "* * * * *", Next: &soon})
-	o := compute(jobs, 4, now)
-	if len(o.Coming) != UpcomingMax || o.Coming[0].Job != "daily00" || len(o.Frequent) != 1 {
-		t.Fatalf("%+v %+v", o.Coming, o.Frequent)
-	}
-	if o.Upcoming[0].Job != "busy" || len(o.Upcoming) != UpcomingMax {
-		t.Fatalf("upcoming is the next eight of all: %+v", o.Upcoming)
-	}
-}
-
 func TestDisabledJobsAreInEverySectionButTheGroupStrip(t *testing.T) {
-	at := now.Add(time.Minute)
 	j := job("off", "fsfsfsfsfs")
-	j.Disabled, j.Next, j.Group = true, &at, "ci"
+	j.Disabled, j.Group = true, "ci"
 	o := compute([]Job{j}, 4, now)
-	if len(o.Failing)+len(o.Flaky)+len(o.RecentFailures)+len(o.Upcoming) != 0 {
+	if len(o.Failing)+len(o.Flaky) != 0 {
 		t.Fatalf("%+v", o)
 	}
 	if len(o.Groups) != 1 || o.Groups[0] != (Group{Name: "ci", Disabled: 1}) {

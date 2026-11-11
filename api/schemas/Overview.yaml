@@ -1,7 +1,7 @@
 type: object
 additionalProperties: false
 description: What the front page shows besides the queue.
-required: [failing, unstable, flaky, recent_failures, more_failures, upcoming, groups, charts]
+required: [failing, unstable, flaky, groups, charts]
 properties:
   failing:
     type: array
@@ -27,19 +27,6 @@ properties:
       of red.
     items:
       $ref: OverviewFlaky.yaml
-  recent_failures:
-    type: array
-    description: At most 10 red builds that ended in the last `window` (24 hours or 7 days), newest first.
-    items:
-      $ref: OverviewRecentFailure.yaml
-  more_failures:
-    type: integer
-    description: How many more red builds of the last `window` `recent_failures` leaves out.
-  upcoming:
-    type: array
-    description: The next 8 builds a cron will start, soonest first.
-    items:
-      $ref: OverviewUpcoming.yaml
   groups:
     type: array
     description: One entry per group, the groups by name and the jobs with no group (`name` empty) last.

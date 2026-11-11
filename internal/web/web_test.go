@@ -323,7 +323,7 @@ func TestALoginLeadsBackToThePageAskedForAndThePagesShowTheBuild(t *testing.T) {
 
 	code, page := get(t, c, e.srv.URL+"/")
 	eq(t, "jobs", code, http.StatusOK)
-	contains(t, page, "backend", `href="/jobs/smoke"`, "0 3 * * *")
+	contains(t, page, "backend", `href="/jobs/smoke"`)
 
 	code, page = get(t, c, e.srv.URL+"/jobs/smoke")
 	eq(t, "job", code, http.StatusOK)

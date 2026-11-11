@@ -235,20 +235,3 @@ func TestAnUnstableJobThatFlipsIsInUnstableAndInFlaky(t *testing.T) {
 		t.Fatalf("%+v %+v", o.Unstable, o.Flaky)
 	}
 }
-
-func TestTheWeeksFailuresCoverSevenDaysAndTheDaysOnlyOne(t *testing.T) {
-	h := time.Hour
-	j := Job{Name: "j", History: history("j", "sfsf", now.Add(-h))}
-	// Builds ended 1, 2, 3 and 4 hours ago; replace them by ones 1 hour, 3 days and 6 days ago.
-	j.History[1].FinishedAt = new(now.Add(-3 * 24 * h))
-	j.History[3].FinishedAt = new(now.Add(-6 * 24 * h))
-	j.Builds = j.History
-	day := Compute([]Job{j}, Config{Flips: 4}, now)
-	week := Compute([]Job{j}, Config{Flips: 4, Range: Week}, now)
-	if len(day.RecentFailures) != 0 || len(week.RecentFailures) != 2 {
-		t.Fatalf("%d and %d failures", len(day.RecentFailures), len(week.RecentFailures))
-	}
-	if week.RecentFailures[0].Build != j.History[1] || !week.RecentFailures[0].GreenAgain {
-		t.Fatalf("%+v", week.RecentFailures[0])
-	}
-}

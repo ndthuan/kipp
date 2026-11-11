@@ -215,19 +215,16 @@ type none struct{}
 // --- overview -------------------------------------------------------------
 
 type overviewIn struct {
-	Window string `json:"window,omitempty" jsonschema:"how far back the recent failures and the graphs look: 24h (default) or 7d"`
+	Window string `json:"window,omitempty" jsonschema:"how far back the graphs look: 24h (default) or 7d"`
 }
 
 type overviewOut struct {
-	Failing        []failingOut  `json:"failing"`
-	Unstable       []unstableOut `json:"unstable"`
-	Flaky          []flakyOut    `json:"flaky"`
-	RecentFailures []failureOut  `json:"recent_failures"`
-	MoreFailures   int           `json:"more_failures"`
-	Upcoming       []upcomingOut `json:"upcoming"`
-	Groups         []groupOut    `json:"groups"`
-	Charts         chartsOut     `json:"charts"`
-	Queue          queueOut      `json:"queue"`
+	Failing  []failingOut  `json:"failing"`
+	Unstable []unstableOut `json:"unstable"`
+	Flaky    []flakyOut    `json:"flaky"`
+	Groups   []groupOut    `json:"groups"`
+	Charts   chartsOut     `json:"charts"`
+	Queue    queueOut      `json:"queue"`
 }
 
 // chartsOut is each graph in a line or two: what ended in the window, how
@@ -302,17 +299,6 @@ type flakyOut struct {
 	Flips         int    `json:"flips"`
 }
 
-type failureOut struct {
-	buildOut
-	GreenAgain bool `json:"green_again"`
-}
-
-type upcomingOut struct {
-	Job  string `json:"job"`
-	Cron string `json:"cron"`
-	At   string `json:"at"`
-}
-
 type groupOut struct {
 	Name       string `json:"name"`
 	Green      int    `json:"green"`
@@ -335,7 +321,7 @@ func (s *Server) overview(ctx context.Context, c *Caller, in overviewIn) (overvi
 	if !ok {
 		return overviewOut{}, badInput("window is 24h or 7d")
 	}
-	out := overviewOut{Failing: []failingOut{}, Unstable: []unstableOut{}, Charts: chartsOut{Window: rg.Name, PassRates: []passRateOut{}}, Flaky: []flakyOut{}, RecentFailures: []failureOut{}, Upcoming: []upcomingOut{}, Groups: []groupOut{}, Queue: emptyQueue()}
+	out := overviewOut{Failing: []failingOut{}, Unstable: []unstableOut{}, Charts: chartsOut{Window: rg.Name, PassRates: []passRateOut{}}, Flaky: []flakyOut{}, Groups: []groupOut{}, Queue: emptyQueue()}
 	if !sees(c) {
 		return out, nil
 	}
@@ -351,13 +337,6 @@ func (s *Server) overview(ctx context.Context, c *Caller, in overviewIn) (overvi
 	}
 	for _, f := range v.Flaky {
 		out.Flaky = append(out.Flaky, flakyOut{f.Job, f.Failed, f.Finished, f.Percent(), f.Flips})
-	}
-	for _, f := range v.RecentFailures {
-		out.RecentFailures = append(out.RecentFailures, failureOut{s.buildOf(f.Build), f.GreenAgain})
-	}
-	out.MoreFailures = v.MoreFailures
-	for _, u := range v.Upcoming {
-		out.Upcoming = append(out.Upcoming, upcomingOut{u.Job, u.Cron, stamp(u.At)})
 	}
 	for _, g := range v.Groups {
 		out.Groups = append(out.Groups, groupOut{g.Name, g.Green, g.Red, g.NeverBuilt, g.Running, g.Disabled})

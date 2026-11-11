@@ -291,29 +291,3 @@ func TestAZoneWithoutAChangeOfClocksFiresAtTheWallTime(t *testing.T) {
 		t.Errorf("%v", got)
 	}
 }
-
-func TestAScheduleFiringMoreOftenThanTheGapIsFound(t *testing.T) {
-	for _, c := range []struct {
-		spec string
-		want bool
-	}{
-		{"H/2 * * * *", true},
-		{"*/5 * * * *", true},
-		{"*/15 * * * *", false},
-		{"0 9 * * *", false},
-		{"0 * * * *", false},
-		{"*/5 9 * * *", true},
-		{"0,10 9 * * *", true},
-		{"0 0 1 1 *", false},
-	} {
-		s := must(Parse(c.spec, "job"))
-		// Every hour of a day gives the same answer, so it does not flip
-		// with the time of day.
-		for h := range 24 {
-			from := at(fmt.Sprintf("2026-10-10 %02d:07", h))
-			if got := s.FasterThan(15*time.Minute, from, 24*time.Hour); got != c.want {
-				t.Errorf("%q from %v: got %v want %v", c.spec, from, got, c.want)
-			}
-		}
-	}
-}

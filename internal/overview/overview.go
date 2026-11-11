@@ -1,6 +1,5 @@
 // Package overview works out what the front page and GET /api/v1/overview
-// show: what is red, what flaps, what failed lately, what runs next and how
-// each group stands. It is given the jobs a user may view, with their
+// show: what is red, what flaps, how each group stands and the graphs. It is given the jobs a user may view, with their
 // finished builds, and decides nothing about who may view what.
 package overview
 
@@ -9,7 +8,6 @@ import (
 	"slices"
 	"time"
 
-	"github.com/ndthuan/kipp/internal/sched"
 	"github.com/ndthuan/kipp/internal/store"
 )
 
@@ -22,15 +20,8 @@ const (
 	// DefaultFlips is how many times the colour must change inside the
 	// window for a job to be flaky; 0 switches the section off.
 	DefaultFlips = 4
-	// RecentMax bounds the failures listed, UpcomingMax the builds coming
-	// up, and Dots the run of dots beside a job.
-	RecentMax   = 10
-	UpcomingMax = 8
-	Dots        = 5
-	// FrequentGap is the gap under which a job's schedule is "frequent",
-	// looked for over the FrequentLook after now.
-	FrequentGap  = 15 * time.Minute
-	FrequentLook = 24 * time.Hour
+	// Dots is the run of dots beside a job.
+	Dots = 5
 )
 
 // Job is one leaf job the viewer may see: a job that builds itself, so
@@ -43,9 +34,6 @@ type Job struct {
 	Disabled, Gone bool
 	// Child is a branch or pull request of a multibranch job.
 	Child bool
-	Cron  string
-	// Next is when the cron fires next, nil for none.
-	Next *time.Time
 	// Running: the job's newest build is queued or running.
 	Running bool
 	// History is the job's newest builds that ended green or red, newest
@@ -67,18 +55,6 @@ type Overview struct {
 	// unstable ones it ends.
 	Unstable []Failing
 	Flaky    []FlakyJob
-	// RecentFailures are the red builds that ended in the last Range.Length
-	// of Charts.Range.
-	RecentFailures []Failure
-	// MoreFailures is how many of them RecentFailures leaves out.
-	MoreFailures int
-	// Upcoming is the next UpcomingMax builds of every job. Coming and
-	// Frequent are for the page: Coming is the next UpcomingMax builds of
-	// the jobs that fire no more often than every FrequentGap, and Frequent
-	// every job that fires more often, soonest first.
-	Upcoming []Upcoming
-	Coming   []Upcoming
-	Frequent []Upcoming
 	Groups   []Group
 	Charts   *Charts
 }
@@ -107,18 +83,6 @@ type FlakyJob struct {
 // Percent is the share of the window that is red, in whole percent.
 func (f FlakyJob) Percent() int { return (f.Failed*100 + f.Finished/2) / f.Finished }
 
-// Failure is a red build that ended lately, and whether its job's newest finished build is green again.
-type Failure struct {
-	Build      *store.Build
-	GreenAgain bool
-}
-
-// Upcoming is a build a cron will start.
-type Upcoming struct {
-	Job, Cron string
-	At        time.Time
-}
-
 // Group is how the jobs of a group stand, Name "" being the jobs with no
 // group. A running job is also counted by its colour, so the counts of one
 // group do not add up to its jobs; a disabled job is only disabled. A gone
@@ -135,7 +99,6 @@ func Compute(jobs []Job, cfg Config, now time.Time) *Overview {
 	o := &Overview{Groups: groups(jobs), Charts: chartsOf(jobs, cfg, now)}
 	o.Charts.addCounts(o.Groups)
 	flips := cfg.Flips
-	var reds []Failure
 	for _, j := range jobs {
 		if j.Disabled || j.Gone {
 			continue
@@ -145,35 +108,9 @@ func Compute(jobs []Job, cfg Config, now time.Time) *Overview {
 			h = h[:Window]
 		}
 		o.addStanding(j, h, flips)
-		reds = append(reds, recentReds(j, cfg.rng().Length, now)...)
-		if j.Next != nil {
-			u := Upcoming{j.Name, j.Cron, *j.Next}
-			o.Upcoming = append(o.Upcoming, u)
-			if frequent(j, now) {
-				o.Frequent = append(o.Frequent, u)
-			} else {
-				o.Coming = append(o.Coming, u)
-			}
-		}
 	}
 	o.sort()
-	slices.SortFunc(reds, func(a, b Failure) int {
-		return cmp.Or(endOf(b.Build).Compare(endOf(a.Build)), cmp.Compare(b.Build.ID, a.Build.ID))
-	})
-	o.RecentFailures, o.MoreFailures = reds, 0
-	if len(reds) > RecentMax {
-		o.RecentFailures, o.MoreFailures = reds[:RecentMax], len(reds)-RecentMax
-	}
-	o.Upcoming = o.Upcoming[:min(len(o.Upcoming), UpcomingMax)]
-	o.Coming = o.Coming[:min(len(o.Coming), UpcomingMax)]
 	return o
-}
-
-// frequent is whether j's schedule fires more often than every FrequentGap.
-// Its Next carries the job's own zone, which the spec is read in.
-func frequent(j Job, now time.Time) bool {
-	s, err := sched.Parse(j.Cron, j.Name)
-	return err == nil && s.FasterThan(FrequentGap, now.In(j.Next.Location()), FrequentLook)
 }
 
 // addStanding puts a job into Failing, Unstable or Flaky, by its newest
@@ -205,10 +142,6 @@ func (o *Overview) sort() {
 		// Failed/Finished compared without division.
 		return cmp.Or(cmp.Compare(b.Flips, a.Flips), cmp.Compare(b.Failed*a.Finished, a.Failed*b.Finished), cmp.Compare(a.Job, b.Job))
 	})
-	byTime := func(a, b Upcoming) int { return cmp.Or(a.At.Compare(b.At), cmp.Compare(a.Job, b.Job)) }
-	slices.SortFunc(o.Upcoming, byTime)
-	slices.SortFunc(o.Coming, byTime)
-	slices.SortFunc(o.Frequent, byTime)
 }
 
 // endOf is when a build ended.
@@ -249,18 +182,6 @@ func redCount(h []*store.Build) int {
 		}
 	}
 	return n
-}
-
-// recentReds is the red builds of j that ended within length of now.
-func recentReds(j Job, length time.Duration, now time.Time) []Failure {
-	var out []Failure
-	again := len(j.History) > 0 && j.History[0].Status.Green()
-	for _, b := range j.Builds {
-		if b.Status.Red() && b.FinishedAt != nil && now.Sub(*b.FinishedAt) <= length {
-			out = append(out, Failure{Build: b, GreenAgain: again})
-		}
-	}
-	return out
 }
 
 // groups counts the jobs of every group, the named ones by name and the

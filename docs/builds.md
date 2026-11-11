@@ -103,8 +103,9 @@ the header. An old link to `/?group=<name>` still works: it leads on to
 
 On a wide window (75rem and up) the page is a strip of three graphs, then
 two columns, then the groups; on a narrower one everything is one column in
-the order graphs, running and queued, failing, unstable, flaky, failed,
-coming up, groups. A control beside the graphs sets how far back they look:
+the order graphs, running and queued, failing, unstable, flaky, groups. A
+control beside the graphs sets how far back they look (the lists above them
+are what is true now, and do not follow it):
 **24 hours** (the default, `/`) or **7 days** (`/?window=7d`); an address
 with any other window shows the 24 hours.
 
@@ -125,11 +126,6 @@ comes with its numbers as text for a screen reader:
 
 The columns follow, the left one with:
 
-- **Running and queued**: the queue, as below.
-- **Coming up**: the next 8 builds a cron will start.
-
-and the right one with:
-
 - **Failing now**: every job whose newest finished build is red, with how
   long it has been red, the run of its recent builds as dots, and a `flaky`
   tag when it also flips as often as a flaky job does. The job that has
@@ -143,9 +139,9 @@ and the right one with:
   between consecutive builds among its last 20 finished ones (at least 5
   needed), with its share of red builds ("20% failed (4/20)") and its flips.
   `kipp serve --flaky-flips <n>` sets the four; 0 hides the section.
-- **Failed in the last 24 hours** (or **7 days**, as the window says): up to
-  10 red builds, newest first, with a count of the rest, and whether the job
-  is green again.
+
+and the right one with **Running and queued**: the queue, as below. A job's
+next run is on its own page and in the job list.
 
 **Groups** comes last across the full width: one line per group, linking to
 its list, with how many jobs are green, red, never built, running and
@@ -163,7 +159,7 @@ builds more than 100 times a week needs a larger `keep.builds` for the
 week's graphs to be whole. A user sees only the jobs they may view.
 `GET /api/v1/overview?window=24h|7d` gives the same as JSON ([API](api.md)).
 
-![The overview: failing, unstable, flaky and failed on the left, with the stages that failed named in each failing row, running and coming up on the right, then a strip of graphs (builds over time, slots and queue, pass rate by group) below; a group's row of the pass-rate graph says how many of its jobs are never built or disabled](screenshots/overview.png)
+![The overview: failing, unstable and flaky on the left, with the stages that failed named in each failing row, running and queued on the right, then a strip of graphs (builds over time, slots and queue, pass rate by group) below; a group's row of the pass-rate graph says how many of its jobs are never built or disabled](screenshots/overview.png)
 
 ## The queue
 

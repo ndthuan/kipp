@@ -10,8 +10,8 @@ import (
 	"github.com/ndthuan/kipp/internal/store"
 )
 
-// Overview is what is red, unstable, flaky, recently failed, coming up and
-// how each group stands, with the graphs of the last rg, over the jobs u may
+// Overview is what is red, unstable and flaky, how each group stands and
+// the graphs of the last rg, over the jobs u may
 // view that build themselves.
 func (s *Service) Overview(ctx context.Context, u *store.User, rg overview.Range) (*overview.Overview, error) {
 	snap := s.deps.Dispatch.Snapshot()
@@ -52,8 +52,8 @@ func (s *Service) Overview(ctx context.Context, u *store.User, rg overview.Range
 	for _, n := range names {
 		j := snap.Jobs[n]
 		running := last[n] != nil && !last[n].Status.Terminal()
-		jobs = append(jobs, overview.Job{Name: n, Group: j.Group, Disabled: j.Disabled, Gone: j.Gone, Child: j.Parent != "", Cron: j.Triggers.Cron,
-			Next: nextFire(j, now, s.deps.Dispatch.Zone(j)), Running: running, History: history[n],
+		jobs = append(jobs, overview.Job{Name: n, Group: j.Group, Disabled: j.Disabled, Gone: j.Gone, Child: j.Parent != "",
+			Running: running, History: history[n],
 			Builds: byJob[n], Before: before[n]})
 	}
 	cfg := overview.Config{Flips: s.deps.FlakyFlips, Range: rg, Builds: s.deps.Dispatch.Builds(), Zone: zone}
@@ -85,14 +85,11 @@ func (a *API) overview(w http.ResponseWriter, r *http.Request, u *store.User) {
 }
 
 type overviewV1 struct {
-	Failing        []failingV1  `json:"failing"`
-	Unstable       []failingV1  `json:"unstable"`
-	Flaky          []flakyV1    `json:"flaky"`
-	RecentFailures []recentV1   `json:"recent_failures"`
-	MoreFailures   int          `json:"more_failures"`
-	Upcoming       []upcomingV1 `json:"upcoming"`
-	Groups         []groupV1    `json:"groups"`
-	Charts         chartsV1     `json:"charts"`
+	Failing  []failingV1 `json:"failing"`
+	Unstable []failingV1 `json:"unstable"`
+	Flaky    []flakyV1   `json:"flaky"`
+	Groups   []groupV1   `json:"groups"`
+	Charts   chartsV1    `json:"charts"`
 }
 
 type chartsV1 struct {
@@ -147,17 +144,6 @@ type flakyV1 struct {
 	Dots     []buildSummaryV1 `json:"recent"`
 }
 
-type recentV1 struct {
-	Build      buildSummaryV1 `json:"build"`
-	GreenAgain bool           `json:"green_again"`
-}
-
-type upcomingV1 struct {
-	Job  string `json:"job"`
-	Cron string `json:"cron"`
-	At   stamp  `json:"at"`
-}
-
 type groupV1 struct {
 	Name       string `json:"name"`
 	Green      int    `json:"green"`
@@ -198,7 +184,7 @@ func toChartsV1(c *overview.Charts) chartsV1 {
 }
 
 func toOverviewV1(v *overview.Overview) overviewV1 {
-	out := overviewV1{Failing: []failingV1{}, Unstable: []failingV1{}, Flaky: []flakyV1{}, RecentFailures: []recentV1{}, MoreFailures: v.MoreFailures, Upcoming: []upcomingV1{}, Groups: []groupV1{}}
+	out := overviewV1{Failing: []failingV1{}, Unstable: []failingV1{}, Flaky: []flakyV1{}, Groups: []groupV1{}}
 	for _, f := range v.Failing {
 		out.Failing = append(out.Failing, failingV1{f.Job, toBuildSummaryV1(f.Build), stampOf(f.Since), f.Flaky, summaries(f.Dots)})
 	}
@@ -207,12 +193,6 @@ func toOverviewV1(v *overview.Overview) overviewV1 {
 	}
 	for _, f := range v.Flaky {
 		out.Flaky = append(out.Flaky, flakyV1{f.Job, f.Failed, f.Finished, f.Percent(), f.Flips, summaries(f.Dots)})
-	}
-	for _, f := range v.RecentFailures {
-		out.RecentFailures = append(out.RecentFailures, recentV1{toBuildSummaryV1(f.Build), f.GreenAgain})
-	}
-	for _, u := range v.Upcoming {
-		out.Upcoming = append(out.Upcoming, upcomingV1{u.Job, u.Cron, stampOf(u.At)})
 	}
 	for _, g := range v.Groups {
 		out.Groups = append(out.Groups, groupV1{g.Name, g.Green, g.Red, g.NeverBuilt, g.Running, g.Disabled})

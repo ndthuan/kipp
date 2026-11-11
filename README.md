@@ -7,14 +7,14 @@ everything else (builds, users, secrets) is kept in one SQLite file.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/home-dark.png">
-  <img alt="The overview: the jobs failing now with the stage each failed in and how long it has been red, the unstable and the flaky ones, the builds running on six of eight slots, and what runs next" src="docs/screenshots/home.png">
+  <img alt="The overview: the jobs failing now with the stage each failed in and how long it has been red, the unstable and the flaky ones, the builds running on six of eight slots, and what is queued" src="docs/screenshots/home.png">
 </picture>
 
 ## Highlights
 
 - **It says what is red, and why.** The overview lists what fails now,
-  since when and in which stage, what is unstable or flaky, what is
-  running and what comes next. A failed build opens on the lines that
+  since when and in which stage, what is unstable or flaky, and what is
+  running. A failed build opens on the lines that
   broke it, and its log walks from one problem to the next.
 - **Jobs are files.** One `<name>.yml` per job in a directory, shared
   variables in `_vars.yml`, checked offline with `kipp check` and read

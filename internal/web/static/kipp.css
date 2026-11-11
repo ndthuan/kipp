@@ -346,35 +346,20 @@
   .swatch-limit { height: 0; width: 14px; border-radius: 0; background-color: transparent; border-top: 2px dashed var(--bad); }
   .columns, .red-now { display: grid; gap: calc(var(--space) * 4); min-width: 0; }
   .columns > *, .red-now > * { min-width: 0; }
-  /* From 75rem grid rows are shared by both columns, so the red pair is
-     one item spanning the row where Coming up starts: Coming up sits right
-     under a Now shorter than the pair, and only a taller Now pushes Flaky
-     down. With nothing red and two builds or more running the pair is the
-     shorter, so Flaky spans that row instead, over three rows so that Now,
-     over two, sizes it first. Coming up and Failed end on the one flexible
-     row, so their heights never stretch the rows above. */
+  /* From 75rem the red pair and Flaky are one column and Now the other.
+     Now spans both rows, so its height never stretches the red pair: Flaky
+     takes the rest of the second row and sits right under the pair. */
   @media (min-width: 75rem) {
     .columns {
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      grid-template-rows: auto auto auto 1fr;
-      grid-template-areas: "red now" "red coming" "flaky coming" "failed coming";
+      grid-template-rows: auto 1fr;
+      grid-template-areas: "red now" "flaky now";
       align-items: start;
-    }
-    .columns:has(#queue tr:nth-child(2)):not(:has(.red-now table)) {
-      grid-template-rows: auto auto auto auto 1fr;
-      grid-template-areas: "red now" "flaky now" "flaky coming" "flaky coming" "failed coming";
     }
     .red-now { grid-area: red; }
     .sec-now { grid-area: now; }
     .sec-flaky { grid-area: flaky; }
-    .sec-failed { grid-area: failed; }
-    .sec-coming { grid-area: coming; }
   }
-  /* The jobs that fire every few minutes, folded under Coming up. */
-  .frequent { margin-top: calc(var(--space) * 3); padding-inline: calc(var(--space) * 3); }
-  .frequent > summary { cursor: pointer; }
-  .frequent ul { display: flex; flex-direction: column; gap: calc(var(--space) * 1); margin-top: calc(var(--space) * 2); font-size: var(--size-sm); }
-  .frequent li { display: flex; flex-wrap: wrap; gap: calc(var(--space) * 1) calc(var(--space) * 3); }
   /* Unstable is green to every count but it is not quite right: its heading
      wears the warning colour, as the badge and the dots do. */
   .attn-unstable::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: calc(var(--space) * 2); border-radius: var(--radius-pill); background-color: var(--warn); }

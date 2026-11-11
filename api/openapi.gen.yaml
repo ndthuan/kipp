@@ -1939,7 +1939,7 @@ paths:
         `failed`, `timeout` or `lost`; other builds are not looked at. Each
         job is judged by its last 20 builds that ended green or red. The queue
         is `GET /queue` and is not repeated here. `window` sets how far back
-        `recent_failures` and `charts` look.
+        `charts` looks.
       operationId: getOverview
       parameters:
         - $ref: "#/components/parameters/OverviewWindow"
@@ -1956,7 +1956,7 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalError"
-      summary: What is failing, unstable, flaky, recently failed and coming up
+      summary: What is failing, unstable, flaky
       tags:
         - jobs
       x-kipp-package: api
@@ -3581,14 +3581,6 @@ components:
           items:
             $ref: "#/components/schemas/OverviewGroup"
           type: array
-        more_failures:
-          description: How many more red builds of the last `window` `recent_failures` leaves out.
-          type: integer
-        recent_failures:
-          description: At most 10 red builds that ended in the last `window` (24 hours or 7 days), newest first.
-          items:
-            $ref: "#/components/schemas/OverviewRecentFailure"
-          type: array
         unstable:
           description: |
             Jobs whose newest red-or-green build is `unstable`, in the shape of
@@ -3599,18 +3591,10 @@ components:
           items:
             $ref: "#/components/schemas/OverviewFailing"
           type: array
-        upcoming:
-          description: The next 8 builds a cron will start, soonest first.
-          items:
-            $ref: "#/components/schemas/OverviewUpcoming"
-          type: array
       required:
         - failing
         - unstable
         - flaky
-        - recent_failures
-        - more_failures
-        - upcoming
         - groups
         - charts
       type: object
@@ -3818,18 +3802,6 @@ components:
         - before
         - change
       type: object
-    OverviewRecentFailure:
-      additionalProperties: false
-      properties:
-        build:
-          $ref: "#/components/schemas/BuildSummary"
-        green_again:
-          description: True when the job's newest build that ended green or red is green.
-          type: boolean
-      required:
-        - build
-        - green_again
-      type: object
     OverviewTally:
       additionalProperties: false
       properties:
@@ -3846,20 +3818,6 @@ components:
         - green
         - red
         - percent
-      type: object
-    OverviewUpcoming:
-      additionalProperties: false
-      properties:
-        at:
-          $ref: "#/components/schemas/Timestamp"
-        cron:
-          type: string
-        job:
-          type: string
-      required:
-        - job
-        - cron
-        - at
       type: object
     Owner:
       additionalProperties: false

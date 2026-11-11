@@ -72,7 +72,7 @@ the model to read.
 
 | Tool | Arguments | What it gives |
 | --- | --- | --- |
-| `overview` | `window` (optional: `24h`, the default, or `7d`) | What is failing, unstable, flaky, recently failed in the window, coming up, how each group stands, a summary of the graphs (what ended, the peak of builds running, the longest wait, each group's pass rate), and the queue. |
+| `overview` | `window` (optional: `24h`, the default, or `7d`) | What is failing, unstable, flaky, how each group stands, a summary of the graphs (what ended, the peak of builds running, the longest wait, each group's pass rate), and the queue. |
 | `list_jobs` | `group` (optional) | Each job: group, description, disabled, schedule and next run, last build. |
 | `get_job` | `job` | Parameters (name, default, choices) to pass to `run_build`, stages, schedule, concurrency, recent builds, and for a multibranch job its branches and pull requests. |
 | `list_builds` | `job`, `limit` (10, at most 50), `cursor` | Builds newest first, with a `next_cursor` for older ones. |

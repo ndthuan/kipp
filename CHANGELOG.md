@@ -8,6 +8,17 @@ lines and the data directory are the public surface.
 
 ## Unreleased
 
+Removed (breaking for the API and the MCP `overview` tool):
+
+- The overview no longer lists the red builds of the last 24 hours or 7
+  days, nor the next builds a cron will start. The page drops the sections
+  "Failed in the last 24 hours" ("7 days") and "Coming up", and
+  `GET /api/v1/overview` drops the fields `recent_failures`,
+  `more_failures` and `upcoming`, as does the MCP tool `overview`. The
+  window (`?window=`, `window`) still sets how far back the graphs look and
+  does nothing else. A job's next run is still on its page, in the job
+  list and in `GET /api/v1/jobs/<name>`.
+
 Added:
 
 - `triggers.after` may name a repo of an owner job, `<owner job>.<key>`

@@ -60,7 +60,7 @@ func TestTheOverviewAnswersEverySectionAsTheSpecDescribesItForATokenUser(t *test
 	e.ended(t, "slow", "ssssfssssfsssssfsssf")
 	e.ended(t, "once", "ffffssffssf")
 	o := e.object(t, http.StatusOK, e.admin, "GET", "/api/v1/overview", "")
-	eqKeys(t, "keys", o, "charts,failing,flaky,groups,more_failures,recent_failures,unstable,upcoming")
+	eqKeys(t, "keys", o, "charts,failing,flaky,groups,unstable")
 
 	failing := rowsOf(t, o, "failing")
 	// The job red for the shortest time first.
@@ -74,17 +74,6 @@ func TestTheOverviewAnswersEverySectionAsTheSpecDescribesItForATokenUser(t *test
 	eq(t, "flaky", jobsOf(flaky, "job"), "slow")
 	eqKeys(t, "a flaky row", flaky[0], "failed,failed_percent,finished,flips,job,recent")
 	eq(t, "failed", fmt.Sprint(flaky[0]["failed"], "/", flaky[0]["finished"], " ", flaky[0]["failed_percent"], "% ", flaky[0]["flips"]), "4/20 20% 7")
-
-	recent := rowsOf(t, o, "recent_failures")
-	if len(recent) == 0 || len(recent) > 10 {
-		t.Fatalf("%d recent failures", len(recent))
-	}
-	eqKeys(t, "a recent failure", recent[0], "build,green_again")
-
-	upcoming := rowsOf(t, o, "upcoming")
-	eq(t, "the one cron", jobsOf(upcoming, "job"), "gc")
-	eqKeys(t, "an upcoming build", upcoming[0], "at,cron,job")
-	eq(t, "its cron", upcoming[0]["cron"], "*/10 * * * *")
 
 	groups := rowsOf(t, o, "groups")
 	eq(t, "groups", jobsOf(groups, "name"), "backend,")
@@ -108,16 +97,13 @@ func TestTheOverviewKeepsToTheJobsTheCallerMayViewAndASectionOfNoneIsEmpty(t *te
 	e.ended(t, "slow", "ffff")
 	o := e.object(t, http.StatusOK, e.viewer, "GET", "/api/v1/overview", "") // may view smoke
 	eq(t, "failing", jobsOf(rowsOf(t, o, "failing"), "job"), "smoke")
-	eq(t, "recent", jobsOf(rowsOf(t, o, "recent_failures"), "build"), "smoke,smoke,smoke,smoke")
-	eq(t, "upcoming: gc is not the viewer's", len(rowsOf(t, o, "upcoming")), 0)
 	eq(t, "groups", jobsOf(rowsOf(t, o, "groups"), "name"), "backend")
 
 	none := token(t, e.st, "nobody", false, nil)
 	o = e.object(t, http.StatusOK, none, "GET", "/api/v1/overview", "")
-	for _, k := range []string{"failing", "flaky", "recent_failures", "upcoming", "groups"} {
+	for _, k := range []string{"failing", "flaky", "groups"} {
 		eq(t, k, len(rowsOf(t, o, k)), 0)
 	}
-	eq(t, "more", o["more_failures"], any(float64(0)))
 }
 
 func TestAJobRemovedFromTheFilesIsInNoSectionAndADisabledOneOnlyInItsGroupCount(t *testing.T) {
@@ -129,8 +115,6 @@ func TestAJobRemovedFromTheFilesIsInNoSectionAndADisabledOneOnlyInItsGroupCount(
 	e.ended(t, "off", "ffff")
 	o := e.object(t, http.StatusOK, e.admin, "GET", "/api/v1/overview", "")
 	eq(t, "failing", len(rowsOf(t, o, "failing")), 0)
-	eq(t, "recent", len(rowsOf(t, o, "recent_failures")), 0)
-	eq(t, "upcoming", jobsOf(rowsOf(t, o, "upcoming"), "job"), "gc")
 	groups := rowsOf(t, o, "groups")
 	eq(t, "groups", jobsOf(groups, "name"), "backend,")
 	eq(t, "disabled", groups[0]["disabled"], any(float64(1)))
@@ -203,8 +187,6 @@ func TestTheOverviewAnswersTheChartsOfTheDayAndTheWeekAndRefusesAnyOtherWindow(t
 	eq(t, "day: unstable", sum(dc, "unstable"), 1)
 	eq(t, "day: cancelled", sum(dc, "cancelled"), 1)
 	eq(t, "week: the failure of three days ago too", sum(wc, "failed"), 2)
-	eq(t, "the failed list follows the window", len(rowsOf(t, day, "recent_failures")), 1)
-	eq(t, "the failed list of the week", len(rowsOf(t, week, "recent_failures")), 2)
 	eq(t, "the limit of builds", dc["builds_limit"], any(float64(e.api.deps.Dispatch.Builds())))
 
 	groups := rowsOf(t, dc, "groups")
@@ -258,4 +240,29 @@ func TestAGoneBranchAndAGoneRepoAreInNoCountOfAGroupButALiveChildOfADisabledPare
 	// gone pull request is in neither count.
 	eq(t, "web", fmt.Sprint(web["never_built"], web["disabled"]), "1 1")
 	eq(t, "the API's rates stay the groups that built", len(rowsOf(t, o["charts"].(map[string]any), "groups")), 0)
+}
+
+func TestTheOverviewOfAServerWithNoJobAndNoBuildIsEveryListEmptyAndTheChartsAllZero(t *testing.T) {
+	e := newEnv(t)
+	jobs := t.TempDir()
+	snap, err := config.Load(jobs)
+	must(t, err)
+	e.api.deps.Dispatch.SetSnapshot(snap)
+	for window, columns := range map[string]int{"24h": 25, "7d": 29} {
+		o := e.object(t, http.StatusOK, e.admin, "GET", "/api/v1/overview?window="+window, "")
+		eqKeys(t, "keys", o, "charts,failing,flaky,groups,unstable")
+		for _, k := range []string{"failing", "unstable", "flaky", "groups"} {
+			eq(t, window+" "+k, len(rowsOf(t, o, k)), 0)
+		}
+		c := o["charts"].(map[string]any)
+		eq(t, "window", c["window"], any(window))
+		eq(t, "no group rate", len(rowsOf(t, c, "groups")), 0)
+		buckets := rowsOf(t, c, "buckets")
+		eq(t, window+" buckets", len(buckets), columns)
+		for _, b := range buckets {
+			for _, k := range []string{"success", "unstable", "failed", "cancelled", "max_running", "started"} {
+				eq(t, k, b[k], any(float64(0)))
+			}
+		}
+	}
 }

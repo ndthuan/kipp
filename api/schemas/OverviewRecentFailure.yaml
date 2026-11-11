@@ -1,9 +1,0 @@
-type: object
-additionalProperties: false
-required: [build, green_again]
-properties:
-  build:
-    $ref: BuildSummary.yaml
-  green_again:
-    type: boolean
-    description: True when the job's newest build that ended green or red is green.
