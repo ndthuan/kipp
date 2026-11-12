@@ -1005,7 +1005,7 @@ func TestTheJobListShowsADotForEachOfTheLastFiveFinishedBuilds(t *testing.T) {
 	_, cell, _ := strings.Cut(row, "</td>")
 	cell, _, _ = strings.Cut(cell, "</td>")
 	var got []string
-	for _, m := range regexp.MustCompile(`<a class="dot ([a-z]+)" href="(/jobs/smoke/\d+)" title="(#\d+ [a-z]+)"></a>`).FindAllStringSubmatch(cell, -1) {
+	for _, m := range regexp.MustCompile(`<a class="dot ([a-z]+)(?: newest)?" href="(/jobs/smoke/\d+)" title="(#\d+ [a-z]+)">`).FindAllStringSubmatch(cell, -1) {
 		got = append(got, m[1]+" "+m[2]+" "+m[3])
 	}
 	want := []string{

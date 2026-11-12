@@ -10,6 +10,17 @@ lines and the data directory are the public surface.
 
 Changed:
 
+- The overview on a phone (under 48rem) opens on a status line
+  (`Nothing failing` or `N failing`, and `N unstable`), leaves out an empty
+  Failing or Unstable section, and puts what runs right after what fails. A
+  row of Failing, Unstable and the queue (also on `/queue` and the job list)
+  is two lines there, and a queued or running build is cancelled with a
+  cross named "Cancel <job> #<n>", leading to the same question as before.
+  A wider window keeps its layout.
+- Every run of recent-build dots, on the overview and the job list, says
+  which end is newest: the word `newest` at that end, a ring round the
+  newest dot, and each dot's build number and status as text for a screen
+  reader.
 - Only a live build's time ticks. A running or queued build's "For" counts
   seconds every second; every past moment (red since, unstable since, seen,
   and the relative times of the other pages) has no seconds and moves once a

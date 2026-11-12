@@ -42,15 +42,15 @@ func (e *env) ended(t *testing.T, job string, status store.Status, stages ...sta
 	return e.at(t, b.ID)
 }
 
-// The markup holds the sections in the one-column order, so keyboard and
-// screen reader order is the order a narrow screen shows: what is red, then
-// what is running, then the long lists, then the graphs.
-func TestTheOverviewPutsWhatIsRedFirstThenNowAndTheGraphsLast(t *testing.T) {
+// The markup holds the sections in a phone's order, so keyboard and screen
+// reader order is the order a phone shows: what fails, then what is running,
+// then what is unstable, then the long lists, then the graphs.
+func TestTheOverviewPutsWhatFailsFirstThenNowThenUnstableAndTheGraphsLast(t *testing.T) {
 	e := site(t)
 	e.ended(t, "smoke", store.Failed, stage{"test", store.StageFailed, new(2)})
 	page := e.overviewPage(t, "admin")
 	var at []int
-	for _, mark := range []string{"<h2>Failing now</h2>", "Unstable now</h2>", `<section id="queue"`, "<h2>Flaky</h2>", `<section class="charts`} {
+	for _, mark := range []string{"<h2>Failing now</h2>", `<section id="queue"`, "Unstable now</h2>", "<h2>Flaky</h2>", `<section class="charts`} {
 		i := strings.Index(page, mark)
 		if i < 0 {
 			t.Fatalf("%q is not on the page", mark)

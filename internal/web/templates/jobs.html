@@ -15,7 +15,7 @@
 <tbody>
 {{range .Jobs}}<tr data-name="{{.Name}}">
 <td class="lead" data-label="Job"><a class="link" href="/jobs/{{.Name}}"{{with .Description}} title="{{.}}"{{end}}>{{.Name}}</a>{{if .Disabled}} <span class="tag">disabled</span>{{end}}</td>
-<td class="lead" data-label="Last build">{{if and .Children (not .Last)}}{{$kids := .Children}}{{with .Worst}}<span class="status {{.}}">{{.}}</span> <span class="sub">worst of {{$kids}} {{if eq $kids 1}}child{{else}}children{{end}}</span>{{else}}<span class="sub">{{$kids}} {{if eq $kids 1}}child{{else}}children{{end}}, none built yet</span>{{end}}{{else}}{{with .Last}}<a class="link" href="{{buildPath .}}">#{{.Number}}</a> <span class="status {{.Status}}">{{.Status}}</span> <span class="sub">{{ago .FinishedAt}}</span>{{else}}<span class="sub">never built</span>{{end}}{{end}}{{if .Recent}} <span class="dots">{{range .Recent}}<a class="dot {{.Status}}" href="{{buildPath .}}" title="#{{.Number}} {{.Status}}"></a>{{end}}</span>{{end}}</td>
+<td class="lead" data-label="Last build">{{if and .Children (not .Last)}}{{$kids := .Children}}{{with .Worst}}<span class="status {{.}}">{{.}}</span> <span class="sub">worst of {{$kids}} {{if eq $kids 1}}child{{else}}children{{end}}</span>{{else}}<span class="sub">{{$kids}} {{if eq $kids 1}}child{{else}}children{{end}}, none built yet</span>{{end}}{{else}}{{with .Last}}<a class="link" href="{{buildPath .}}">#{{.Number}}</a> <span class="status {{.Status}}">{{.Status}}</span> <span class="sub">{{ago .FinishedAt}}</span>{{else}}<span class="sub">never built</span>{{end}}{{end}}{{if .Recent}} {{template "dots" .Recent}}{{end}}</td>
 <td data-label="Schedule">{{with .Cron}}<code>{{.}}</code>{{end}}</td>
 <td data-label="Next">{{template "when" (when .Next)}}</td>
 </tr>

@@ -101,11 +101,18 @@ before, is at `/jobs` (and `/jobs?group=<name>` for one group), linked from
 the header. An old link to `/?group=<name>` still works: it leads on to
 `/jobs?group=<name>`.
 
-On a wide window (75rem and up) the page is a strip of three graphs, then
-two columns, then the groups; on a narrower one everything is one column in
-the order graphs, running and queued, failing, unstable, flaky, groups. A
-control beside the graphs sets how far back they look (the lists above them
-are what is true now, and do not follow it):
+On a wide window (75rem and up) the page is two columns, then a strip of
+three graphs; from 48rem it is one column in the order failing, unstable,
+running and queued, flaky, graphs. On a phone (under 48rem) it opens on a
+status line, `Nothing failing` or `N failing`, and `N unstable` when any job
+is, each a link to its section; then failing, running and queued, unstable,
+flaky and the graphs, an empty Failing or Unstable section left out. There a
+row of Failing, Unstable and the queue is two lines: the job or build with
+its number or a cross that cancels it, then its state and time (`red 3h 5m`,
+`running 9m 42s`) with the dots or why it waits. A run of dots is newest
+first everywhere: the word `newest` stands at that end and the newest dot
+wears a ring. A control beside the graphs sets how far back they look (the
+lists above them are what is true now, and do not follow it):
 **24 hours** (the default, `/`) or **7 days** (`/?window=7d`); an address
 with any other window shows the 24 hours.
 

@@ -210,19 +210,18 @@ func TestTheUnstableSectionIsBetweenFailingAndFlakyAndHasItsRows(t *testing.T) {
 	contains(t, flaky, "Nothing is flaky.")
 }
 
-// A column wrapper would hold the markup to the wide layout's order; the
-// one wrapper is around Failing now and Unstable now, adjacent in both.
+// A column wrapper would hold the markup to the wide layout's order: every
+// section is a grid item of its own, and the queue refreshes once.
 func TestTheOverviewHasNoColumnWrapperAndTheQueueDoesNotRefreshTwice(t *testing.T) {
 	e := site(t)
 	page := e.overviewAt(t, "")
 	_, columns, _ := strings.Cut(page, `<div class="columns">`)
 	columns, _, _ = strings.Cut(columns, `<section class="charts stack"`)
-	lacks(t, columns, `class="col"`)
-	red, _, _ := strings.Cut(columns, `<div class="sec sec-now">`)
-	if !strings.HasPrefix(red, "\n<div class=\"red-now\">\n<section class=\"sec sec-failing\">") || !strings.Contains(red, "Unstable now</h2>") {
-		t.Fatalf("Failing now and Unstable now are one grid item:\n%s", red)
+	lacks(t, columns, `class="col"`, `class="red-now"`)
+	if !strings.HasPrefix(columns, "\n<section class=\"sec sec-failing") {
+		t.Fatalf("Failing now is the first grid item:\n%s", columns)
 	}
-	contains(t, columns, `<section id="queue" class="stack">`, "<h2>Failing now</h2>", `Unstable now</h2>`, "<h2>Flaky</h2>")
+	contains(t, columns, `<div class="sec sec-now">`, `<section id="queue" class="stack">`, "<h2>Failing now</h2>", `Unstable now</h2>`, "<h2>Flaky</h2>")
 	lacks(t, columns, "Coming up", "Failed in the last")
 	lacks(t, page, "<h2>Groups</h2>")
 	// The queue's own page and the job list still refresh it themselves.
@@ -231,29 +230,13 @@ func TestTheOverviewHasNoColumnWrapperAndTheQueueDoesNotRefreshTwice(t *testing.
 	lacks(t, page, `<section id="queue" class="stack" hx-get="/queue"`)
 }
 
-// Visual order never differs from the markup's: no section is moved with
-// order, and the wide layout is placed by grid areas.
+// No section is moved with order: the layouts from 48rem are placed by grid
+// areas (TestTheMarkupIsInThePhonesOrderAndGridAreasKeepTheWideLayout).
 func TestTheOverviewIsPlacedByGridAreasAndNeverReordered(t *testing.T) {
-	b, err := staticFS.ReadFile("static/kipp.css")
-	if err != nil {
-		t.Fatal(err)
-	}
-	css := string(b)
-	if regexp.MustCompile(`\.(sec|red-now)[\w-]*\b[^{]*\{[^}]*\border\s*:`).MatchString(css) {
+	css := kippCSS(t)
+	if regexp.MustCompile(`\.(sec|columns)[\w-]*\b[^{]*\{[^}]*\border\s*:`).MatchString(css) {
 		t.Error("kipp.css moves an overview section with order")
 	}
-	wide := `@media (min-width: 75rem) {
-    .columns {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      grid-template-rows: auto 1fr;
-      grid-template-areas: "red now" "flaky now";
-      align-items: start;
-    }
-    .red-now { grid-area: red; }
-    .sec-now { grid-area: now; }
-    .sec-flaky { grid-area: flaky; }
-  }`
-	contains(t, css, wide)
 }
 
 func TestTheGroupsAreInThePassRateGraphWithTheirNeverBuiltAndDisabledCountsAsLinks(t *testing.T) {
@@ -341,4 +324,215 @@ func TestOnAPhoneTimesNameThemselvesAndStackedBoxesDoNotScroll(t *testing.T) {
 			t.Errorf("under 48rem there is no rule %s", rule)
 		}
 	}
+}
+
+// healthLine is the status line a phone reads before every section.
+func healthLine(t *testing.T, page string) string {
+	t.Helper()
+	_, line, ok := strings.Cut(page, `<p class="health" role="status">`)
+	if !ok {
+		t.Fatalf("the overview has no status line:\n%s", page)
+	}
+	line, _, _ = strings.Cut(line, "</p>")
+	return line
+}
+
+func TestTheStatusLineSaysNothingFailingOrHowManyFailAndHowManyAreUnstable(t *testing.T) {
+	e := site(t)
+	page := e.overviewAt(t, "")
+	_, overview, _ := strings.Cut(page, `<div id="overview"`)
+	_, overview, _ = strings.Cut(overview, ">\n")
+	if !strings.HasPrefix(overview, `<p class="health" role="status">`) {
+		t.Errorf("the status line is not the overview's first thing:\n%s", overview)
+	}
+	eq(t, "nothing red", healthLine(t, page), `<span class="health-ok">Nothing failing</span>`)
+
+	e.finished(t, "smoke", "fs")
+	e.finished(t, "slow", "fs")
+	eq(t, "two failing", healthLine(t, e.overviewAt(t, "")), `<a class="link health-bad" href="#failing">2 failing</a>`)
+
+	e.finishedAgo(t, "quoted", store.Unstable, time.Minute)
+	eq(t, "two failing, one unstable", healthLine(t, e.overviewAt(t, "")),
+		`<a class="link health-bad" href="#failing">2 failing</a> <a class="link health-warn" href="#unstable">1 unstable</a>`)
+
+	e.finishedAgo(t, "smoke", store.Success, 0)
+	e.finishedAgo(t, "slow", store.Success, 0)
+	eq(t, "one unstable", healthLine(t, e.overviewAt(t, "")),
+		`<span class="health-ok">Nothing failing</span> <a class="link health-warn" href="#unstable">1 unstable</a>`)
+}
+
+// Under 48rem the status line stands for an empty Failing or Unstable
+// section, which is then not drawn; on a wide screen the line is not drawn.
+func TestOnAPhoneAnEmptyFailingOrUnstableSectionIsNotDrawnAndTheStatusLineOnlyThere(t *testing.T) {
+	e := site(t)
+	page := e.overviewAt(t, "")
+	contains(t, page, `<section class="sec sec-failing sec-quiet" id="failing">`, `<section class="sec sec-unstable sec-quiet" id="unstable">`,
+		`<section class="sec sec-flaky">`, "Nothing is failing.", "Nothing is unstable.")
+	e.finished(t, "smoke", "f")
+	e.finishedAgo(t, "quoted", store.Unstable, time.Minute)
+	page = e.overviewAt(t, "")
+	contains(t, page, `<section class="sec sec-failing" id="failing">`, `<section class="sec sec-unstable" id="unstable">`)
+	lacks(t, page, "sec-quiet")
+
+	css := kippCSS(t)
+	if !regexp.MustCompile(`\.sec-quiet\s*\{[^}]*display:\s*none`).MatchString(phoneRules(t, css)) {
+		t.Error("under 48rem an empty section is drawn")
+	}
+	if !regexp.MustCompile(`@media \(min-width: 48rem\) \{\s*\.health \{ display: none; \}`).MatchString(css) {
+		t.Error("the status line is drawn on a wide screen")
+	}
+}
+
+// The markup is in the phone's order (Failing, Now, Unstable, Flaky), so a
+// phone reads it as it is written; from 48rem grid areas place each section
+// where it stood before.
+func TestTheMarkupIsInThePhonesOrderAndGridAreasKeepTheWideLayout(t *testing.T) {
+	e := site(t)
+	page := e.overviewAt(t, "")
+	order := []string{`<p class="health"`, `id="failing"`, `<section id="queue"`, `id="unstable"`, `<section class="sec sec-flaky">`, `<section class="charts stack"`}
+	at := -1
+	for _, s := range order {
+		i := strings.Index(page, s)
+		if i <= at {
+			t.Fatalf("%s is not after %s", s, order)
+		}
+		at = i
+	}
+	lacks(t, page, "red-now")
+	css := kippCSS(t)
+	contains(t, css, `@media (min-width: 48rem) {
+    .columns { grid-template-areas: "failing" "unstable" "now" "flaky"; }
+    .sec-failing { grid-area: failing; }
+    .sec-unstable { grid-area: unstable; }
+    .sec-now { grid-area: now; }
+    .sec-flaky { grid-area: flaky; }
+  }`, `@media (min-width: 75rem) {
+    .columns {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-rows: auto auto 1fr;
+      grid-template-areas: "failing now" "unstable now" "flaky now";
+      align-items: start;
+    }
+  }`)
+}
+
+// A strip of dots is newest first, and says so to the eye (a word at its
+// newest end and a ring round the newest dot) and to a screen reader (each
+// dot's own text).
+func TestEveryStripOfDotsSaysWhichEndIsNewest(t *testing.T) {
+	e := site(t)
+	e.finished(t, "smoke", "fsss")
+	e.finished(t, "slow", "ssssfssssfsssssfsssf")
+	e.finishedAgo(t, "quoted", store.Unstable, time.Minute)
+	page := e.overviewAt(t, "")
+	_, jobs := get(t, e.login(t, "admin"), e.srv.URL+"/jobs")
+	strip := regexp.MustCompile(`<span class="dots"><span class="dots-newest" aria-hidden="true">newest</span>(<a [^>]*><span class="sr-only">[^<]*</span></a>)+</span>`)
+	for what, want := range map[string]struct {
+		page    string
+		strips  int
+		smokeAt string
+	}{"overview": {page, 3, `<a class="dot failed newest" href="/jobs/smoke/4" title="#4 failed"><span class="sr-only">#4 failed, newest</span></a><a class="dot success" href="/jobs/smoke/3" title="#3 success"><span class="sr-only">#3 success</span></a>`},
+		"jobs": {jobs, 3, `<a class="dot failed newest" href="/jobs/smoke/4" title="#4 failed"><span class="sr-only">#4 failed, newest</span></a>`}} {
+		if n := len(strip.FindAllString(want.page, -1)); n != want.strips {
+			t.Errorf("%s: %d strips with the newest cue, want %d", what, n, want.strips)
+		}
+		eq(t, what+" strips", strings.Count(want.page, `<span class="dots">`), want.strips)
+		contains(t, want.page, want.smokeAt)
+		eq(t, what+" newest dots", strings.Count(want.page, ` newest" href=`), want.strips)
+	}
+	css := kippCSS(t)
+	for _, rule := range []string{`\.dots-newest\s*\{[^}]*color:\s*var\(--fg-subtle\)`, `\.dot\.newest\s*\{[^}]*outline:`} {
+		if !regexp.MustCompile(rule).MatchString(css) {
+			t.Errorf("kipp.css has no rule %s", rule)
+		}
+	}
+}
+
+// On a phone a row of Now, Failing and Unstable is two lines: what it is and
+// what to do with it, then its state and time.
+func TestOnAPhoneTheRowsOfNowFailingAndUnstableAreTwoLines(t *testing.T) {
+	e := site(t)
+	e.lockJobs(t)
+	c := e.login(t, "admin")
+	e.build(t, c, "hold", nil)
+	e.queued(t, 1, 0)
+	e.finished(t, "smoke", "fs")
+	e.finishedAgo(t, "quoted", store.Unstable, time.Minute)
+	page := e.overviewAt(t, "")
+	contains(t, page, `<table class="queue stacked two-line">`, `<table class="rows stacked two-line">`)
+	eq(t, "two-line tables", strings.Count(page, "two-line"), 3)
+	_, flaky, _ := strings.Cut(page, `<section class="sec sec-flaky">`)
+	lacks(t, flaky, "two-line")
+	_, queue := get(t, c, e.srv.URL+"/queue")
+	contains(t, queue, `<table class="queue stacked two-line">`)
+
+	phone := phoneRules(t, kippCSS(t))
+	for _, rule := range []string{
+		`\.two-line tr\s*\{[^}]*display:\s*grid`,
+		`\.two-line \.status\s*\{[^}]*display:\s*none`,
+		`\.queue td:first-child \.link\s*\{[^}]*text-overflow:\s*ellipsis`,
+		`\.queue td:nth-child\(3\)::before\s*\{[^}]*background-color:\s*var\(--busy\)[^}]*animation:`,
+		`\.cancel-word\s*\{[^}]*display:\s*none`,
+		`\.cancel\s*\{[^}]*min-width:\s*44px[^}]*min-height:\s*44px`,
+	} {
+		if !regexp.MustCompile(rule).MatchString(phone) {
+			t.Errorf("under 48rem there is no rule %s", rule)
+		}
+	}
+	css := kippCSS(t)
+	if !regexp.MustCompile(`@media \(prefers-reduced-motion: reduce\) \{\s*\.queue td:nth-child\(3\)::before \{ animation: none; \}`).MatchString(css) {
+		t.Error("the live dot pulses under prefers-reduced-motion: reduce")
+	}
+}
+
+// The cancel control is a cross on a phone and the word on a wide screen,
+// one link named for the build it cancels, leading to the same question.
+func TestTheQueuesCancelControlIsNamedForItsBuildAndAsksTheSameQuestion(t *testing.T) {
+	e := site(t)
+	e.lockJobs(t)
+	c := e.login(t, "admin")
+	e.build(t, c, "hold", nil)
+	e.queued(t, 1, 0)
+	_, page := get(t, c, e.srv.URL+"/queue")
+	if !regexp.MustCompile(`<a class="action action-small cancel" href="/jobs/hold/1/cancel\?next=%2fqueue" aria-label="Cancel hold #1"><span class="cancel-word">Cancel...</span><svg class="icon cancel-x" viewBox="0 0 24 24" aria-hidden="true">`).MatchString(page) {
+		_, row, _ := strings.Cut(page, `data-label="Cancel"`)
+		t.Fatalf("the cancel control:\n%.400s", row)
+	}
+}
+
+func kippCSS(t *testing.T) string {
+	t.Helper()
+	b, err := staticFS.ReadFile("static/kipp.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+// phoneRules is every block of kipp.css under 48rem, one after another.
+func phoneRules(t *testing.T, css string) string {
+	t.Helper()
+	var out strings.Builder
+	for rest := css; ; {
+		_, after, ok := strings.Cut(rest, "@media (max-width: 47.99rem")
+		if !ok {
+			break
+		}
+		depth := 0
+		for i, r := range after {
+			if r == '{' {
+				depth++
+			} else if r == '}' {
+				if depth--; depth == 0 {
+					out.WriteString(after[:i+1])
+					break
+				}
+			}
+		}
+		rest = after
+	}
+	if out.Len() == 0 {
+		t.Fatal("kipp.css has no rule under 48rem")
+	}
+	return out.String()
 }

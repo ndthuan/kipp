@@ -303,10 +303,10 @@
     .rows td:first-child { min-width: calc(var(--space) * 40); overflow-wrap: anywhere; }
   }
   .rows time { font-variant-numeric: tabular-nums; }
-  /* The overview: two columns, then a strip of graphs. Under 75rem the
-     columns are one, in the order of the markup: what is red, then what is
-     running, then the long lists. No section is moved with order, so
-     keyboard and screen reader order is the order seen. */
+  /* The overview: two columns, then a strip of graphs. The markup is in a
+     phone's order: what fails, what runs, what is unstable, then the long
+     lists, so a phone reads it as it is written. No section is moved with
+     order; the wider layouts are placed by grid areas (see .columns). */
   .charts-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: calc(var(--space) * 2) calc(var(--space) * 4); }
   .charts-head h2 { margin: 0; }
   .seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: var(--radius-m); overflow: hidden; font-size: var(--size-sm); }
@@ -344,21 +344,42 @@
   .swatch-running { background-color: var(--busy); }
   .swatch-wait { background-color: var(--accent); }
   .swatch-limit { height: 0; width: 14px; border-radius: 0; background-color: transparent; border-top: 2px dashed var(--bad); }
-  .columns, .red-now { display: grid; gap: calc(var(--space) * 4); min-width: 0; }
-  .columns > *, .red-now > * { min-width: 0; }
-  /* From 75rem the red pair and Flaky are one column and Now the other.
-     Now spans both rows, so its height never stretches the red pair: Flaky
-     takes the rest of the second row and sits right under the pair. */
+  .columns { display: grid; gap: calc(var(--space) * 4); min-width: 0; }
+  .columns > * { min-width: 0; }
+  /* From 48rem Unstable stays under Failing, before Now, as a wide screen
+     has room for both. From 75rem the red pair and Flaky are one column and
+     Now the other. Now spans every row, so its height never stretches the
+     red pair: Flaky takes the rest of the last row and sits right under
+     Unstable. */
+  @media (min-width: 48rem) {
+    .columns { grid-template-areas: "failing" "unstable" "now" "flaky"; }
+    .sec-failing { grid-area: failing; }
+    .sec-unstable { grid-area: unstable; }
+    .sec-now { grid-area: now; }
+    .sec-flaky { grid-area: flaky; }
+  }
   @media (min-width: 75rem) {
     .columns {
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      grid-template-rows: auto 1fr;
-      grid-template-areas: "red now" "flaky now";
+      grid-template-rows: auto auto 1fr;
+      grid-template-areas: "failing now" "unstable now" "flaky now";
       align-items: start;
     }
-    .red-now { grid-area: red; }
-    .sec-now { grid-area: now; }
-    .sec-flaky { grid-area: flaky; }
+  }
+  /* A phone's first line says whether anything is red, so an empty Failing
+     or Unstable section need not be drawn there. A wide screen shows the
+     sections themselves. */
+  .health { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--space) * 2) calc(var(--space) * 3); padding: calc(var(--space) * 3); border: 1px solid var(--line); border-radius: var(--radius-s); background-color: var(--bg-raised); font-weight: var(--weight-medium); }
+  .health > * { display: inline-flex; align-items: center; gap: calc(var(--space) * 2); padding: calc(var(--space) * 1) calc(var(--space) * 3); border-radius: var(--radius-pill); }
+  .health > *::before { content: ""; width: 10px; height: 10px; border-radius: var(--radius-pill); }
+  .health-ok { background-color: var(--ok-soft); color: var(--on-ok-soft); }
+  .health-ok::before { background-color: var(--ok); }
+  .health-bad { background-color: var(--bad-soft); color: var(--on-bad-soft); }
+  .health-bad::before { background-color: var(--bad); border-radius: 0; }
+  .health-warn { background-color: var(--warn-soft); color: var(--on-warn-soft); }
+  .health-warn::before { background-color: var(--warn); }
+  @media (min-width: 48rem) {
+    .health { display: none; }
   }
   /* Unstable is green to every count but it is not quite right: its heading
      wears the warning colour, as the badge and the dots do. */
@@ -544,6 +565,11 @@
   .dot.unstable, .dot.timeout, .dot.lost { background-color: var(--warn); }
   .dot.failed { background-color: var(--bad); border-radius: 0; }
   .dot.none { background-color: transparent; border: 1px solid var(--line); }
+  /* A strip is newest first, and a phone has no hover title to say so. */
+  .dots-newest { margin-right: calc(var(--space) * 1.5); color: var(--fg-subtle); font-size: var(--size-xs); }
+  .dot.newest { outline: 2px solid var(--line-strong); outline-offset: 1px; }
+  .dot.newest + .dot { margin-left: 3px; }
+  .cancel-x { display: none; }
   .message { margin-top: calc(var(--space) * 1); max-height: calc(var(--space) * 40); overflow: auto; font-family: var(--font-code); font-size: var(--size-xs); color: var(--on-bad-soft); white-space: pre-wrap; overflow-wrap: anywhere; }
 
   .activity { font-size: var(--size-sm); display: flex; flex-direction: column; gap: calc(var(--space) * 1); }
@@ -595,6 +621,48 @@
   .scope-tag button:hover, .scope-tag button:focus-visible { background-color: var(--bg-raised); }
 }
 
+@layer kipp {
+  /* On a phone a row of Now, Failing and Unstable is two lines: what it is,
+     with what to do at its right end, then its state and how long it has
+     held. The status pill is not drawn there: the word before the time says
+     it, and the newest dot of the strip shows how the build ended. */
+  @media (max-width: 47.99rem) {
+    .sec-quiet { display: none; }
+    .stacked.two-line tr {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      grid-template-areas: "lead lead end" "meta rest rest";
+      align-items: center;
+    }
+    .two-line td:first-child { grid-area: lead; }
+    .two-line td:nth-child(3) { grid-area: meta; white-space: nowrap; }
+    .stacked.two-line td:not(.lead)::before { content: none; }
+    .two-line .status { display: none; }
+    .two-line .why { grid-column: 1 / -1; grid-row: 3; }
+    .rows.two-line td:nth-child(2), .rows.two-line td:nth-child(2) > .link { grid-area: end; }
+    .rows.two-line td:nth-child(4) { grid-area: rest; }
+    .rows.two-line td:nth-child(3) { color: var(--fg-muted); font-size: var(--size-sm); }
+    .queue.two-line td:nth-child(2) { grid-area: rest; }
+    .queue.two-line td:nth-child(4) { grid-area: end; }
+    .queue.two-line td:nth-child(2), .queue.two-line td:nth-child(3) { color: var(--on-busy-soft); font-size: var(--size-sm); }
+    .queue.two-line td:nth-child(2) .sub { color: inherit; }
+    .queue.two-line td:nth-child(2) br { display: none; }
+    .queue.two-line td:nth-child(2) > .sub:not(.stages) { display: block; }
+    .queue td:first-child .link { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .queue td:nth-child(3)::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: calc(var(--space) * 2); border-radius: var(--radius-pill); background-color: var(--busy); animation: live 2s ease-in-out infinite; }
+    .cancel-word { display: none; }
+    .cancel-x { display: block; width: 18px; height: 18px; }
+    .cancel { justify-content: center; min-width: 44px; min-height: 44px; margin-block: calc(var(--space) * -2); padding: 0; border-color: transparent; background-color: transparent; color: var(--fg-subtle); }
+  }
+  @media (max-width: 47.99rem) and (pointer: coarse) {
+    .queue td:first-child .link { line-height: 44px; }
+  }
+  @keyframes live { 50% { opacity: 0.3; } }
+  @media (prefers-reduced-motion: reduce) {
+    .queue td:nth-child(3)::before { animation: none; }
+  }
+}
+
 /* A finger: what is tapped is at least 44px tall. Padding does it, never the
    font size, and the overview's dots keep the size they are drawn at, their
    hit area growing round them. */
@@ -603,7 +671,7 @@
     .action, .action-small, .seg a, .navlink, .brand, .menu-toggle,
     .group > summary, .user > summary, .menu a, .menu-button, .menu li.menu-who,
     .theme > summary, .queue-badge, .sort, .link-plain, td .link, th .link, .pager .link,
-    .results > summary, .guards > summary, .artifacts > summary, .log summary, .frequent > summary, .fold > summary {
+    .results > summary, .guards > summary, .artifacts > summary, .log summary, .frequent > summary, .fold > summary, .health a {
       min-height: 44px;
     }
     .action, .seg a, .navlink, .brand, .menu a, .menu-button, .queue-badge, td .link, td .link-plain, th .link, .pager .link {
@@ -615,7 +683,7 @@
     .seg { align-items: stretch; }
     .theme > summary { min-width: 44px; align-items: center; justify-content: center; }
     .results > summary, .guards > summary, .artifacts > summary, .log summary, .frequent > summary, .fold > summary { display: flex; align-items: center; }
-    .dots { display: inline-flex; vertical-align: middle; }
+    .dots { display: inline-flex; align-items: center; vertical-align: middle; }
     .dot { position: relative; margin-right: calc(var(--space) * 3); }
     .dot::after { content: ""; position: absolute; inset: -17px calc(var(--space) * -1.5); }
     .grants .tick label { min-height: 44px; min-width: 44px; }

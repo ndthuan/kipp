@@ -1,4 +1,3 @@
-{{define "dots"}}<span class="dots">{{range .}}<a class="dot {{.Status}}" href="{{buildPath .}}" title="#{{.Number}} {{.Status}}"></a>{{end}}</span>{{end}}
 {{define "chart"}}<figure class="chart chart-{{.Key}}">
 <figcaption>{{.Heading}}</figcaption>
 <svg class="plot" viewBox="0 0 {{.W}} {{.H}}" role="img" aria-labelledby="chart-{{.Key}}-title chart-{{.Key}}-desc">
@@ -19,12 +18,12 @@
 {{$o := .Data.Overview}}{{$w := .Data.Range}}{{$why := .Data.Why}}
 <h1 class="sr-only">Overview</h1>
 <div id="overview" class="stack" hx-get="{{.Data.Self}}" hx-select="#overview" hx-target="this" hx-swap="outerHTML" hx-trigger="kipp-changed from:body, every 60s">
+{{$f := len $o.Failing}}{{$u := len $o.Unstable}}<p class="health" role="status">{{if $f}}<a class="link health-bad" href="#failing">{{$f}} failing</a>{{else}}<span class="health-ok">Nothing failing</span>{{end}}{{if $u}} <a class="link health-warn" href="#unstable">{{$u}} unstable</a>{{end}}</p>
 <div class="columns">
-<div class="red-now">
-<section class="sec sec-failing">
+<section class="sec sec-failing{{if not $f}} sec-quiet{{end}}" id="failing">
 <h2>Failing now</h2>
 {{with $o.Failing}}<div class="scroll">
-<table class="rows stacked">
+<table class="rows stacked two-line">
 <thead><tr><th>Job</th><th>Build</th><th>Red since</th><th>Recent</th></tr></thead>
 <tbody>
 {{range .}}<tr>
@@ -38,10 +37,11 @@
 </div>
 {{else}}<p class="sub">Nothing is failing.</p>
 {{end}}</section>
-<section class="sec sec-unstable">
+<div class="sec sec-now">{{template "queue" .Data.Queue}}</div>
+<section class="sec sec-unstable{{if not $u}} sec-quiet{{end}}" id="unstable">
 <h2 class="attn-unstable">Unstable now</h2>
 {{with $o.Unstable}}<div class="scroll">
-<table class="rows stacked">
+<table class="rows stacked two-line">
 <thead><tr><th>Job</th><th>Build</th><th>Unstable since</th><th>Recent</th></tr></thead>
 <tbody>
 {{range .}}<tr>
@@ -55,8 +55,6 @@
 </div>
 {{else}}<p class="sub">Nothing is unstable.</p>
 {{end}}</section>
-</div>
-<div class="sec sec-now">{{template "queue" .Data.Queue}}</div>
 <section class="sec sec-flaky">
 <h2>Flaky</h2>
 {{with $o.Flaky}}<div class="scroll">

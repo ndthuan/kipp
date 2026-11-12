@@ -46,7 +46,7 @@ func TestCancelAsksFirstAndLeadsBackToALocalNext(t *testing.T) {
 	req.Header.Set("HX-Request", "true")
 	req.Header.Set("HX-Current-URL", e.srv.URL+"/jobs/slow?x=1")
 	_, page = do(t, admin, req)
-	contains(t, page, `href="`+path+`/cancel?next=%2fjobs%2fslow%3fx%3d1"`, ">Cancel...</a>")
+	contains(t, page, `href="`+path+`/cancel?next=%2fjobs%2fslow%3fx%3d1" aria-label="Cancel slow #1">`, ">Cancel...</span>")
 	lacks(t, page, `action="`+path+`/cancel"`)
 
 	res := post(t, admin, e.srv.URL+path+"/cancel", url.Values{"csrf": {e.token(t, admin)}, "next": {"https://evil.example/"}})
