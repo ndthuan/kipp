@@ -779,6 +779,37 @@ func TestServeSweepsOldBuildsAtEveryTickOfItsDailyClock(t *testing.T) {
 	})
 }
 
+// A compact still waiting for its builds when the server stops is
+// cancelled, not waited out, and has written its end before serve returns:
+// nothing of the server's is left writing into the data directory.
+func TestServeCancelsACompactStillWaitingAndReturnsOnlyOnceItHasEnded(t *testing.T) {
+	s := start(t, map[string]string{"slow.yml": "name: slow\nstages:\n  s: {run: 'sleep 30'}\n"})
+	ok(t, "", "run", "slow", "--url", s.url, "--token", s.token)
+	eventually(t, "the build runs", func() bool {
+		return strings.Contains(kippGet(t, s, "/api/v1/builds/1"), `"status":"running"`)
+	})
+	req, err := http.NewRequest(http.MethodPost, s.url+"/api/v1/admin/storage/compact", nil)
+	must(t, err)
+	req.Header.Set("Authorization", "Bearer "+s.token)
+	res, err := http.DefaultClient.Do(req)
+	must(t, err)
+	_ = res.Body.Close()
+	eq(t, "start the compact", res.StatusCode, http.StatusAccepted)
+	eventually(t, "the compact waits for the build", func() bool {
+		return strings.Contains(kippGet(t, s, "/api/v1/admin/storage/compact"), `"holds_quiet":true`)
+	})
+
+	eq(t, "exit", s.stop(), 0)
+	st, err := store.Open(filepath.Join(s.data, "db.sqlite"))
+	must(t, err)
+	defer func() { _ = st.Close() }()
+	rows, err := st.AuditBefore(context.Background(), 0, 1)
+	must(t, err)
+	if len(rows) == 0 || rows[0].Action != "db.compact" || !strings.Contains(rows[0].Detail, "the server stopped") {
+		t.Fatalf("the newest audit is not the compact's end: %+v", rows)
+	}
+}
+
 // A deploy script greps the server's log for these two lines after it
 // sends SIGHUP, so their wording is a promise: whoever changes either
 // breaks such a script.

@@ -1102,6 +1102,9 @@ func (s *server) stop(stopWork context.CancelFunc, wg *sync.WaitGroup, srvs ...*
 	done := make(chan struct{})
 	go func() { drained.Wait(); close(done) }()
 	stopWork()
+	// Before the builds have ended: a compact waiting for them would
+	// otherwise go on to VACUUM while the server stops.
+	s.storage.Stop()
 	wg.Wait() // Run returns once its builds have ended as lost
 	select {
 	case <-done:

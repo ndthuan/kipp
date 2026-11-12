@@ -141,6 +141,11 @@ Fixed:
   page's heading share one baseline.
 - A build page's heading keeps the build number and its status pill together
   when it wraps, so the pill never stands alone on a line.
+- `serve` returns only once the measure of the tables and a compact it
+  started have ended. A compact still running when the server stops is
+  cancelled, not waited for (it may wait hours for builds; SQLite rolls back
+  a `VACUUM` it interrupts), and its row of the audit says the server
+  stopped. A compact asked for while the server stops is refused with 409.
 
 ## [1.3.0] - 2026-11-10
 

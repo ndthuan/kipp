@@ -70,7 +70,8 @@ type Options struct {
 	TempDir string
 	// Poll is how often a compact looks at the builds it waits for.
 	Poll time.Duration
-	// Go runs f apart; nil is a goroutine. A test runs it in place.
+	// Go runs f apart; nil is a goroutine. A test runs it in place. Stop
+	// waits for what it runs either way.
 	Go  func(f func())
 	Now func() time.Time
 	Log *slog.Logger
@@ -80,7 +81,14 @@ type Options struct {
 type Service struct {
 	o Options
 
+	// ctx is what the work run apart is given; Stop cancels it, then waits
+	// for that work on wg. stopped, under mu, refuses any more.
+	ctx    context.Context
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
+
 	mu         sync.Mutex
+	stopped    bool
 	objects    store.DBObjects
 	measuredAt time.Time
 	measuring  bool
@@ -119,8 +127,30 @@ func New(o Options) *Service {
 		o.Log = slog.New(slog.DiscardHandler)
 	}
 	s := &Service{o: o, changes: make(chan struct{}), compact: CompactState{State: CompactIdle}}
+	s.ctx, s.cancel = context.WithCancel(context.Background())
 	s.check = readCheck(o.Data)
 	return s
+}
+
+// Stop cancels the work the Service runs apart, a measure or a compact, and
+// returns once it has ended; it starts none after. A compact is cancelled
+// rather than waited for: it may wait hours for builds, and SQLite rolls
+// back a VACUUM it interrupts.
+func (s *Service) Stop() {
+	s.mu.Lock()
+	s.stopped = true
+	s.mu.Unlock()
+	s.cancel()
+	s.wg.Wait()
+}
+
+// apart runs f through Go with the Service's context; s.wg has been added
+// to under s.mu, while s.stopped was false, so that Stop waits for it.
+func (s *Service) apart(f func(ctx context.Context)) {
+	s.o.Go(func() {
+		defer s.wg.Done()
+		f(s.ctx)
+	})
 }
 
 // Changes is closed at the next change of the compact.
@@ -155,13 +185,14 @@ func (s *Service) Measure(ctx context.Context) error {
 // younger than MeasureAge.
 func (s *Service) MeasureSoon() {
 	s.mu.Lock()
-	if s.measuring || (!s.measuredAt.IsZero() && s.o.Now().Sub(s.measuredAt) < MeasureAge) {
+	if s.stopped || s.measuring || (!s.measuredAt.IsZero() && s.o.Now().Sub(s.measuredAt) < MeasureAge) {
 		s.mu.Unlock()
 		return
 	}
 	s.measuring = true
+	s.wg.Add(1)
 	s.mu.Unlock()
-	s.o.Go(func() { _ = s.Measure(context.Background()) })
+	s.apart(func(ctx context.Context) { _ = s.Measure(ctx) })
 }
 
 // floor is the free-space floor of a disk of total bytes.

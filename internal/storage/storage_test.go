@@ -534,3 +534,43 @@ func TestRemoveNowTakesAGoneJobsDataAndRefusesAJobWithAFile(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestStopCancelsACompactStillWaitingForBuildsAndReturnsOnceItHasEnded(t *testing.T) {
+	h := newHarness(t)
+	h.svc.o.Go = func(f func()) { go f() }
+	h.svc.o.Poll = time.Hour // only the stop can end the wait
+	h.quiet.busy = 1 << 30
+	changes := h.svc.Changes()
+	if _, err := h.svc.StartCompact(ctx, "admin"); err != nil {
+		t.Fatal(err)
+	}
+	for !h.svc.CompactState().HoldsQuiet {
+		<-changes
+		changes = h.svc.Changes()
+	}
+	h.svc.Stop()
+	c := h.svc.CompactState()
+	if c.State != CompactFailed || !strings.Contains(c.Error, "the server stopped") || c.HoldsQuiet {
+		t.Fatalf("%+v", c)
+	}
+	if h.quiet.quiet {
+		t.Fatal("a cancelled compact left the server quiet")
+	}
+	if a := h.lastAudit(t); !strings.Contains(a, "db.compact db.sqlite: failed: ") || !strings.Contains(a, "the server stopped") {
+		t.Fatalf("audit %q", a)
+	}
+}
+
+func TestAStoppedServiceStartsNoMoreWork(t *testing.T) {
+	h := newHarness(t)
+	ran := 0
+	h.svc.o.Go = func(f func()) { ran++; f() }
+	h.svc.Stop()
+	h.svc.MeasureSoon()
+	if _, err := h.svc.StartCompact(ctx, "admin"); !errors.Is(err, ErrStopped) {
+		t.Fatal(err)
+	}
+	if ran != 0 || h.svc.CompactState().State != CompactIdle || len(h.quiet.log) != 0 {
+		t.Fatalf("ran %d, %+v, quiet %v", ran, h.svc.CompactState(), h.quiet.log)
+	}
+}

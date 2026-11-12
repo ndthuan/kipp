@@ -22,6 +22,10 @@ const (
 // ErrCompactBusy refuses a compact while one runs.
 var ErrCompactBusy = errors.New("a compact of the database is already running")
 
+// ErrStopped refuses a compact once the server is stopping, and ends one
+// that was running then.
+var ErrStopped = errors.New("the server stopped; the compact did not finish")
+
 // RoomError refuses a compact the disk has no room for.
 type RoomError struct {
 	Dir        string
@@ -102,6 +106,11 @@ func (s *Service) room(ctx context.Context) error {
 // no room for it, and returns at once; Changes and CompactState follow it.
 func (s *Service) StartCompact(ctx context.Context, actor string) (CompactState, error) {
 	s.mu.Lock()
+	if s.stopped {
+		c := s.compact
+		s.mu.Unlock()
+		return c, ErrStopped
+	}
 	if s.compact.active() {
 		c := s.compact
 		s.mu.Unlock()
@@ -110,13 +119,15 @@ func (s *Service) StartCompact(ctx context.Context, actor string) (CompactState,
 	prev := s.compact
 	s.compact = CompactState{State: CompactWaiting, By: actor, StartedAt: s.o.Now()}
 	s.changedLocked()
+	s.wg.Add(1)
 	s.mu.Unlock()
 	if err := s.room(ctx); err != nil {
+		s.wg.Done()
 		s.setCompact(func(c *CompactState) { *c = prev })
 		s.audit(ctx, actor, "refused: "+err.Error())
 		return s.CompactState(), err
 	}
-	s.o.Go(func() { s.runCompact(context.WithoutCancel(ctx), actor) })
+	s.apart(func(ctx context.Context) { s.runCompact(ctx, actor) })
 	return s.CompactState(), nil
 }
 
@@ -128,7 +139,8 @@ func (s *Service) audit(ctx context.Context, actor, detail string) {
 }
 
 // runCompact is the compact: quiet, the wait, the room again, VACUUM, then
-// quiet off unless it was on before; a failure ends the same way.
+// quiet off unless it was on before; a failure, or a Stop, ends the same
+// way.
 func (s *Service) runCompact(ctx context.Context, actor string) {
 	before, err := s.o.Counts(ctx)
 	wasQuiet := before.Quiet
@@ -136,6 +148,11 @@ func (s *Service) runCompact(ctx context.Context, actor string) {
 	if err == nil {
 		res, err = s.compactQuiet(ctx)
 	}
+	if err != nil && ctx.Err() != nil {
+		err = ErrStopped
+	}
+	// What follows records the end, which a stop must not cut short.
+	ctx = context.WithoutCancel(ctx)
 	if !wasQuiet {
 		if _, qerr := s.o.SetQuiet(ctx, false); qerr != nil {
 			s.o.Log.Error("quiet could not be turned off after the compact", "err", qerr)
@@ -180,7 +197,11 @@ func (s *Service) compactQuiet(ctx context.Context) (store.Compacted, error) {
 		if !s.o.Now().Before(deadline) {
 			return store.Compacted{}, fmt.Errorf("still busy after %s (%d running, %d queued); nothing was compacted", CompactWait, c.Running, c.Queued)
 		}
-		time.Sleep(s.o.Poll)
+		select {
+		case <-ctx.Done():
+			return store.Compacted{}, ctx.Err()
+		case <-time.After(s.o.Poll):
+		}
 		if c, err = s.o.Counts(ctx); err != nil {
 			return store.Compacted{}, err
 		}

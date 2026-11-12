@@ -17,7 +17,7 @@ var errNoStorage = fmt.Errorf("%w: this server keeps no storage report", ErrConf
 func storageErr(err error) error {
 	var room *storage.RoomError
 	switch {
-	case errors.Is(err, storage.ErrCompactBusy), errors.As(err, &room), errors.Is(err, storage.ErrHasFile):
+	case errors.Is(err, storage.ErrCompactBusy), errors.Is(err, storage.ErrStopped), errors.As(err, &room), errors.Is(err, storage.ErrHasFile):
 		return fmt.Errorf("%w: %w", ErrConflict, err)
 	case errors.Is(err, storage.ErrNothingLeft):
 		return fmt.Errorf("%w: %w", ErrNotFound, err)
