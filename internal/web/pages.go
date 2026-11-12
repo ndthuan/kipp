@@ -390,6 +390,64 @@ func pastIn(zone *time.Location, now func() time.Time) func(v any, word string) 
 	return momentIn("past", zone, now)
 }
 
+// localStages are the stages of r that run on the server: the others wait
+// to be placed or run elsewhere, and placeLines say that for them.
+func localStages(r api.RunningView) []string {
+	var out []string
+	for _, s := range r.Stages {
+		_, waits := r.Waiting[s]
+		_, away := r.Remote[s]
+		if !waits && !away {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// placeLines say, in few words, what each stage of r that is not on the
+// server waits for or runs on, in the order of the stages.
+func placeLines(r api.RunningView) []string {
+	var out []string
+	for _, s := range r.Stages {
+		if why, waits := r.Waiting[s]; waits {
+			out = append(out, s+": "+placeWait(why))
+		} else if where, away := r.Remote[s]; away {
+			out = append(out, s+": "+onWhere(where))
+		}
+	}
+	return out
+}
+
+// onWhere is where a stage runs, when it is not on the server; the place
+// is "" to a user who may not be told its name.
+func onWhere(place string) string {
+	if place == "" {
+		return "on another machine"
+	}
+	return "on " + place
+}
+
+// placeWait is what a stage waits for to be placed, as the queue says it:
+// "waiting for a runner with labels [mac]" is "waiting for runner (label
+// mac)". A line it does not know stays as it is.
+func placeWait(line string) string {
+	for _, kind := range []string{"runner", "engine"} {
+		for _, art := range []string{"a ", "an "} {
+			rest, ok := strings.CutPrefix(line, "waiting for "+art+kind+" with labels [")
+			if !ok || !strings.HasSuffix(rest, "]") {
+				continue
+			}
+			labels := strings.TrimSuffix(rest, "]")
+			word := "label"
+			if strings.Contains(labels, ",") {
+				word = "labels"
+			}
+			return "waiting for " + kind + " (" + word + " " + labels + ")"
+		}
+	}
+	return line
+}
+
 // join is a list of names as a page shows it.
 func join(names []string) string { return strings.Join(names, ", ") }
 

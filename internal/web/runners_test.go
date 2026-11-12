@@ -135,7 +135,7 @@ func TestTheQueueSaysWhatAStageWaitsForToBePlaced(t *testing.T) {
 	}}}
 	e.site.render(rec, httptest.NewRequest(http.MethodGet, "/queue", nil), "queue", http.StatusOK, page{Title: "Queue", Data: queueData{Queue: q, Full: true}, Queue: q})
 	eq(t, "status", rec.Code, http.StatusOK)
-	contains(t, rec.Body.String(), `<span class="sub">s: waiting for a runner with labels [linux]</span>`)
+	contains(t, rec.Body.String(), `<span class="sub">s: waiting for runner (label linux)</span>`)
 }
 
 func TestTheBuildPageSaysHowManyTriesAStageTookOnlyWhenItWasMoreThanOne(t *testing.T) {
@@ -152,4 +152,45 @@ func TestTheBuildPageSaysHowManyTriesAStageTookOnlyWhenItWasMoreThanOne(t *testi
 	if strings.Count(page, " tries</span>") != 1 {
 		t.Fatalf("a stage that ran once says its tries:\n%s", page)
 	}
+}
+
+func renderQueue(t *testing.T, e *env, q *api.QueueView) string {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	e.site.render(rec, httptest.NewRequest(http.MethodGet, "/queue", nil), "queue", http.StatusOK, page{Title: "Queue", Data: queueData{Queue: q, Full: true}, Queue: q})
+	eq(t, "status", rec.Code, http.StatusOK)
+	return rec.Body.String()
+}
+
+func runningBuilds(n int) []api.RunningView {
+	var out []api.RunningView
+	for i := 1; i <= n; i++ {
+		out = append(out, api.RunningView{Build: &store.Build{ID: int64(i), Job: "smoke", Number: i, Status: store.Running}, Stages: []string{"s"}})
+	}
+	return out
+}
+
+func TestTheQueueHeadingCountsBuildsFirstAndSlotsHereOnlyForAnAdmin(t *testing.T) {
+	e := site(t)
+	contains(t, renderQueue(t, e, &api.QueueView{Running: runningBuilds(3), Executors: 8, Busy: 2}),
+		`<h2>Now 3 builds <span class="sub">2/8 slots here</span></h2>`)
+	body := renderQueue(t, e, &api.QueueView{Running: runningBuilds(1)})
+	contains(t, body, `<h2>Now 1 build</h2>`)
+	lacks(t, body, "slots")
+}
+
+func TestTheQueueSaysWhereAStageRunsAndWhatItWaitsForInFewWords(t *testing.T) {
+	e := site(t)
+	r := runningBuilds(1)[0]
+	r.Stages = []string{"a", "b", "c", "d"}
+	r.Waiting = map[string]string{"b": "waiting for a runner with labels [mac]", "c": "waiting for a runner with labels [linux, arm64]"}
+	r.Remote = map[string]string{"a": "mac"}
+	body := renderQueue(t, e, &api.QueueView{Running: []api.RunningView{r}})
+	contains(t, body, `<span class="sub stages">stage: d</span>`,
+		`<span class="sub">a: on mac</span>`,
+		`<span class="sub">b: waiting for runner (label mac)</span>`,
+		`<span class="sub">c: waiting for runner (labels linux, arm64)</span>`)
+	lacks(t, body, "with labels")
+	r.Remote = map[string]string{"a": ""}
+	contains(t, renderQueue(t, e, &api.QueueView{Running: []api.RunningView{r}}), `<span class="sub">a: on another machine</span>`)
 }

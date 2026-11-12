@@ -162,6 +162,14 @@ func TestAStageThatRunnersCarryButCannotTakeWaitsAndSaysWhy(t *testing.T) {
 		return err == nil && len(q.Running) == 1 && len(q.Running[0].Waiting) == 1 &&
 			(q.Running[0].Waiting["one"] == "waiting for a runner with labels [linux]" || q.Running[0].Waiting["two"] == "waiting for a runner with labels [linux]")
 	})
+	eventually(t, "the stage that holds the runner says where it runs", func() bool {
+		q, err := h.d.Queue(context.Background())
+		if err != nil || len(q.Running) != 1 {
+			return false
+		}
+		r := q.Running[0]
+		return len(r.Remote) == 1 && (r.Remote["one"] == "box" || r.Remote["two"] == "box")
+	})
 	if err := os.WriteFile(ready, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}

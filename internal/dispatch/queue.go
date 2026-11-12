@@ -44,6 +44,9 @@ type RunningBuild struct {
 	Build   *store.Build
 	Stages  []string
 	Waiting map[string]string
+	// Remote is where each running stage that runs off the server runs: a
+	// runner's name, or an engine's container.
+	Remote map[string]string
 }
 
 // QueuedBuild is a build that waits, and why. Blocker is the build it waits
@@ -87,15 +90,9 @@ func (d *Dispatcher) Queue(ctx context.Context) (*Queue, error) {
 			queued = append(queued, b)
 			continue
 		}
-		stages, err := d.st.Stages(ctx, b.ID)
+		r, err := d.runningBuild(ctx, b)
 		if err != nil {
 			return nil, err
-		}
-		r := RunningBuild{Build: b, Stages: []string{}}
-		for _, s := range stages {
-			if s.Status == store.StageRunning {
-				r.Stages = append(r.Stages, s.Name)
-			}
 		}
 		q.Running = append(q.Running, r)
 	}
@@ -113,6 +110,29 @@ func (d *Dispatcher) Queue(ctx context.Context) (*Queue, error) {
 		}
 	}
 	return q, nil
+}
+
+// runningBuild is b with the stages it runs now, and where those that are
+// not on the server run.
+func (d *Dispatcher) runningBuild(ctx context.Context, b *store.Build) (RunningBuild, error) {
+	r := RunningBuild{Build: b, Stages: []string{}}
+	stages, err := d.st.Stages(ctx, b.ID)
+	if err != nil {
+		return r, err
+	}
+	for _, s := range stages {
+		if s.Status != store.StageRunning {
+			continue
+		}
+		r.Stages = append(r.Stages, s.Name)
+		if s.RanOn != "" && s.RanOn != "local" {
+			if r.Remote == nil {
+				r.Remote = map[string]string{}
+			}
+			r.Remote[s.Name] = s.RanOn
+		}
+	}
+	return r, nil
 }
 
 // whyWaitingLocked applies mayStartLocked's rules and the executor limit

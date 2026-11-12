@@ -136,6 +136,12 @@ Changed:
 
 Fixed:
 
+- The queue's heading ("Now") counts the builds that run first and says the
+  server's slots second and briefly (`Now 11 builds`, `5/8 slots here`, the
+  slots to an admin alone). A stage that runs on a runner or an engine says
+  `on <place>` (`on another machine` to a user who is not an admin), and one
+  that waits for a place says `waiting for runner (label mac)`, in place of
+  the long line that wrapped. The count is that of the header's queue link.
 - On a narrow screen a build row's "failed in" line takes a line of its own
   under the build, status and duration, and the group, slash and name in a
   page's heading share one baseline.

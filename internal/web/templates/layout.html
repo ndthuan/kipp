@@ -82,14 +82,14 @@
 </html>
 {{define "navmetrics"}}<a class="navlink" href="/metrics"{{if eq . "/metrics"}} aria-current="page"{{end}}>Metrics</a>{{end}}
 {{define "queue"}}<section id="queue" class="stack"{{if not .Nested}} hx-get="/queue" hx-select="#queue" hx-target="this" hx-swap="outerHTML" hx-trigger="kipp-changed from:body"{{end}}>
-{{with .Queue}}{{if or .Running .Queued}}<h2>Now{{if .Executors}} <span class="sub">{{.Busy}} of {{.Executors}} build slots busy</span>{{end}}</h2>
+{{with .Queue}}{{if or .Running .Queued}}<h2>Now{{if .Running}} {{len .Running}} {{if eq (len .Running) 1}}build{{else}}builds{{end}}{{end}}{{if .Executors}} <span class="sub">{{.Busy}}/{{.Executors}} slots here</span>{{end}}</h2>
 <div class="scroll">
 <table class="queue stacked two-line">
 <thead><tr><th>Build</th><th>Status</th><th>For</th><th><span class="sr-only">Cancel</span></th></tr></thead>
 <tbody>
 {{range .Running}}<tr>
 <td class="lead" data-label="Build"><a class="link" href="{{buildPath .Build}}">{{.Build.Job}} #{{.Build.Number}}</a></td>
-<td class="lead" data-label="Status"><span class="status running">running</span>{{with .Stages}} <span class="sub stages">{{if gt (len .) 1}}stages{{else}}stage{{end}}: {{join .}}</span>{{end}}{{range $stage, $why := .Waiting}}<br><span class="sub">{{$stage}}: {{$why}}</span>{{end}}</td>
+<td class="lead" data-label="Status"><span class="status running">running</span>{{with localStages .}} <span class="sub stages">{{if gt (len .) 1}}stages{{else}}stage{{end}}: {{join .}}</span>{{end}}{{range placeLines .}}<br><span class="sub">{{.}}</span>{{end}}</td>
 <td class="lead" data-label="For">{{template "since" (elapsed .Build.StartedAt "running")}}</td>
 <td class="lead" data-label="Cancel">{{if .CanCancel}}{{template "queue-cancel" (cancelOf .Build $.Next)}}{{end}}</td>
 </tr>

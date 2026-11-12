@@ -202,3 +202,14 @@ func TestTheQueuesEventStreamKeepsItselfAlive(t *testing.T) {
 		t.Fatal("a quiet stream said nothing")
 	}
 }
+
+// Where a stage runs names a runner or a container, which only an admin is
+// told: anyone else learns that it is off the server.
+func TestToAllButAnAdminNoRunnerNameIsToldOfAStageThatRunsOnOne(t *testing.T) {
+	v := &QueueView{Running: []RunningView{{Remote: map[string]string{"s": "mac"}}}}
+	hideCapacity(v)
+	got, ok := v.Running[0].Remote["s"]
+	if !ok || got != "" {
+		t.Fatalf("remote = %v", v.Running[0].Remote)
+	}
+}

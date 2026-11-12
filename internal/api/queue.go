@@ -42,6 +42,9 @@ type RunningView struct {
 	// line its log has for an admin, and only that it waits for anyone else,
 	// to whom the names and the state of the places are not told.
 	Waiting map[string]string
+	// Remote is where each stage that runs off the server runs: the name of
+	// the runner or the container for an admin, and "" for anyone else.
+	Remote map[string]string
 }
 
 // QueuedView is a queued build and why it waits. Blocker is nil when the
@@ -67,7 +70,7 @@ func (s *Service) Queue(ctx context.Context, u *store.User) (*QueueView, error) 
 	v := &QueueView{Executors: q.Executors, Busy: q.Busy, Running: []RunningView{}, Queued: []QueuedView{}}
 	for _, r := range q.Running {
 		if p.view[r.Build.Job] {
-			v.Running = append(v.Running, RunningView{Build: r.Build, Stages: r.Stages, CanCancel: p.cancel[r.Build.Job], Waiting: r.Waiting})
+			v.Running = append(v.Running, RunningView{Build: r.Build, Stages: r.Stages, CanCancel: p.cancel[r.Build.Job], Waiting: r.Waiting, Remote: r.Remote})
 		}
 	}
 	for _, w := range q.Queued {
@@ -94,6 +97,13 @@ const WaitPlace = "waiting for a place to run"
 func hideCapacity(v *QueueView) {
 	v.Executors, v.Busy = 0, 0
 	for i, r := range v.Running {
+		if r.Remote != nil {
+			hidden := map[string]string{}
+			for stage := range r.Remote {
+				hidden[stage] = ""
+			}
+			v.Running[i].Remote = hidden
+		}
 		if r.Waiting != nil {
 			hidden := map[string]string{}
 			for stage := range r.Waiting {
