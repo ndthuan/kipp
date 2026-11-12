@@ -680,3 +680,27 @@ func TestEditsTheSetRefusesAreSetAsideOneByOne(t *testing.T) {
 	f.waits("down1")
 	f.waits("down2")
 }
+
+func TestDeletedListsTheJobsWhoseNewestVersionIsADeletionUntilOneIsMadeAgain(t *testing.T) {
+	f := newFixture(t, Store, map[string]string{"kept.yml": jobText("kept", "true")})
+	first, err := f.jobs.Create(ctx, "b", []byte(jobText("b", "echo b")), byAPI)
+	must(t, err)
+	_, err = f.jobs.Create(ctx, "a", []byte(jobText("a", "echo a")), byAPI)
+	must(t, err)
+	_, err = f.jobs.Delete(ctx, "b", f.etag("b"), byAPI)
+	must(t, err)
+	_, err = f.jobs.Delete(ctx, "a", f.etag("a"), byAPI)
+	must(t, err)
+	gone, err := f.jobs.Deleted(ctx)
+	must(t, err)
+	if len(gone) != 2 || gone[0].Job != "a" || gone[1].Job != "b" || !gone[0].Deleted {
+		t.Fatalf("deleted %+v", gone)
+	}
+	_, err = f.jobs.Restore(ctx, "b", first.ID, "", "admin")
+	must(t, err)
+	gone, err = f.jobs.Deleted(ctx)
+	must(t, err)
+	if len(gone) != 1 || gone[0].Job != "a" {
+		t.Fatalf("after a restore %+v", gone)
+	}
+}

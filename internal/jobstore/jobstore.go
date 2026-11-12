@@ -305,3 +305,20 @@ func Matches(ifMatch, hash string) bool {
 	}
 	return false
 }
+
+// Deleted are the jobs whose newest version is a deletion and that do not
+// serve, each with that version, by name.
+func (j *Jobs) Deleted(ctx context.Context) ([]*store.JobVersion, error) {
+	last, err := j.o.Store.LastJobVersions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	snap := j.Snapshot()
+	var out []*store.JobVersion
+	for _, name := range slices.Sorted(maps.Keys(last)) {
+		if _, serves := snap.Texts[name]; last[name].Deleted && !serves {
+			out = append(out, last[name])
+		}
+	}
+	return out, nil
+}

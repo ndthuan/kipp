@@ -168,6 +168,24 @@ func (s *Service) JobVersion(ctx context.Context, u *store.User, name string, id
 	return v, missing(err)
 }
 
+// DeletedJobs are the jobs deleted and not made again, each with its
+// deletion, by name.
+func (s *Service) DeletedJobs(ctx context.Context, u *store.User) ([]*store.JobVersion, error) {
+	js, err := s.jobStore(readsJobs(u))
+	if err != nil {
+		return nil, err
+	}
+	return js.Deleted(ctx)
+}
+
+// JobEditMode is serve --job-edits, off on a server with no job store.
+func (s *Service) JobEditMode() jobstore.Mode {
+	if s.deps.Jobs == nil {
+		return jobstore.Off
+	}
+	return s.deps.Jobs.Mode()
+}
+
 // JobConflicts are the edits that wait while their files serve.
 func (s *Service) JobConflicts(_ context.Context, u *store.User) ([]jobstore.Conflict, error) {
 	js, err := s.jobStore(readsJobs(u))

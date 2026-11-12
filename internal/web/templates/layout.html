@@ -165,4 +165,10 @@
 
 {{define "why"}}{{with .Why}}<div class="sub why">{{.Verb}}{{if .Stages}} in {{end}}{{range $i, $n := .Stages}}{{if $i}}, {{end}}<a class="link" href="{{buildPath $.Build}}#log-{{$n}}">{{$n}}</a>{{end}}</div>{{end}}{{end}}
 {{define "detail"}}{{with commitShort .Commit}}<code title="{{$.Commit}}">{{.}}</code>{{end}}{{if ne .TriggerDetail .Commit}}{{with .TriggerDetail}}{{if $.Commit}} {{end}}<span class="sub">{{.}}</span>{{end}}{{end}}{{end}}
+{{define "jobtabs"}}{{with .}}<nav class="seg tabs" aria-label="The job's pages"><a href="/jobs/{{.Job}}"{{if eq .Current "builds"}} aria-current="page"{{end}}>Builds</a>{{if .Edit}}<a href="/jobs/{{.Job}}/edit"{{if eq .Current "edit"}} aria-current="page"{{end}}>Edit</a>{{end}}<a href="/jobs/{{.Job}}/history"{{if eq .Current "history"}} aria-current="page"{{end}}>History</a></nav>{{end}}{{end}}
+{{define "sides"}}<div class="sides">
+<div class="side"><h3 class="side-label">{{.Left}}</h3><pre class="diff">{{range .Rows}}{{if .Left.Kind}}<span class="dl dl-{{.Left.Kind}}"><span class="dl-no">{{lineNo .Left.Old}}</span>{{.Left.Text}}</span>{{else}}<span class="dl dl-none"> </span>{{end}}{{end}}</pre></div>
+<div class="side"><h3 class="side-label">{{.Right}}</h3><pre class="diff">{{range .Rows}}{{if .Right.Kind}}<span class="dl dl-{{.Right.Kind}}"><span class="dl-no">{{lineNo .Right.New}}</span>{{.Right.Text}}</span>{{else}}<span class="dl dl-none"> </span>{{end}}{{end}}</pre></div>
+</div>{{end}}
+{{define "diff"}}<pre class="diff">{{range .Lines}}{{if eq .Kind "gap"}}<span class="dl dl-gap">{{plural .N "unchanged line"}}</span>{{else}}<span class="dl dl-{{.Kind}}"><span class="dl-no">{{lineNo .Old}}</span><span class="dl-no">{{lineNo .New}}</span><span class="dl-sign">{{.Sign}}</span>{{.Text}}</span>{{end}}{{end}}</pre>{{end}}
 {{define "when"}}{{with .}}<time class="when" datetime="{{.At}}" title="{{.Title}}" data-abs="{{.Abs}}">{{.Text}}</time>{{end}}{{end}}

@@ -114,7 +114,7 @@ func parsePages(assets map[string]asset, zone *time.Location) map[string]*templa
 	}
 	funcs := template.FuncMap{"static": static, "dag": dagOf, "ago": ago, "clock": clockIn(zone), "when": whenIn(zone, time.Now), "zoned": zoned, "elapsed": elapsedIn(zone, time.Now), "since": sinceIn(zone, time.Now), "past": pastIn(zone, time.Now), "join": join, "localStages": localStages, "placeLines": placeLines, "cancelOf": cancelOf, "exitText": exitText, "took": took, "millis": millis, "lines": lines, "buildPath": buildPath, "whyRow": whyRow, "commitShort": commitShort, "crumb": crumb,
 		"userPath": userPath, "secretPath": secretPath, "lasts": lasts, "expired": expired, "tokenList": tokenList, "appList": appList, "appScopes": appScopes, "tokenForm": tokenForm, "secretName": webhook.SecretName, "placePath": placePath, "bytes": byteSize, "scopePath": scopePath, "scopeField": scopeField, "metricsPath": metricsPath, "plural": plural, "percent": percent, "nameRule": nameRuleOf,
-		"removePath": removePath, "partLabel": partLabel, "compactTook": compactTook, "rows": rowsText}
+		"removePath": removePath, "partLabel": partLabel, "compactTook": compactTook, "rows": rowsText, "lineNo": lineNo}
 	layout := template.Must(template.New("layout.html").Funcs(funcs).ParseFS(templateFS, "templates/layout.html"))
 	files, err := fs.Glob(templateFS, "templates/*.html")
 	if err != nil {
@@ -172,6 +172,7 @@ func (s *Site) handler() http.Handler {
 	pages.HandleFunc("GET /metrics", s.withUser(s.metricsIndex))
 	pages.HandleFunc("GET /metrics/{store}", s.withUser(s.metricsStore))
 	s.accountRoutes(pages)
+	s.jobEditRoutes(pages)
 	s.adminRoutes(pages)
 	if s.oauth != nil {
 		s.oauthRoutes(pages)
@@ -453,6 +454,9 @@ func refusal(w http.ResponseWriter, err error) (int, string) {
 	case errors.Is(err, auth.ErrBusy):
 		retryAfter(w, busyWait)
 		return http.StatusServiceUnavailable, "Too many passwords are being checked at once. Wait a moment and try again."
+	}
+	if code, msg := jobRefusal(err); code != 0 {
+		return code, msg
 	}
 	return http.StatusInternalServerError, "Something went wrong on the server. Its log has the details."
 }

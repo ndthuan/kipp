@@ -62,6 +62,15 @@ Removed (breaking for the API and the MCP `overview` tool):
 
 Added:
 
+- The web UI changes jobs, for an admin in sudo mode: an Edit tab on a
+  job's page with its YAML in a text box (a change made meanwhile is shown
+  beside the text, which is kept; a refusal lists every error by line), a
+  Delete button that asks first, a History tab with each version's diff and
+  Restore, a New job button and a Deleted jobs list on the Jobs page, and,
+  on the page of a job whose edit waits in conflict, the file beside the
+  edit with Use the file and Keep my edit. Every job page says where the job
+  comes from; the Server page shows `--job-edits` and a banner counting the
+  conflicts.
 - `kipp job get|put|edit|rm|history|restore|resolve|export` reads and
   changes a server's jobs as an admin: `put` creates or replaces from a file
   or stdin, `edit` opens `$VISUAL` or `$EDITOR` and sends the result over the

@@ -2,7 +2,7 @@
 {{with .Data}}
 {{$group := crumb "" true}}{{if not .View.Removed}}{{$group = crumb .View.Job.Group false}}{{end}}
 <div class="head">
-<h1 class="crumbs"><a class="link-plain" href="{{$group.Href}}">{{$group.Label}}</a><span aria-hidden="true">/</span><span>{{.View.Name}}</span></h1>
+<h1 class="crumbs"><a class="link-plain" href="{{$group.Href}}">{{$group.Label}}</a><span aria-hidden="true">/</span><span>{{.View.Name}}</span>{{with .View.Source}} <span class="tag origin" title="Where this job comes from">{{.}}</span>{{end}}</h1>
 {{if and .CanBuild (not .View.Job.IsOwner)}}{{if .View.Job.Params}}<details class="build drop">
 <summary class="action action-main">Build</summary>
 <form class="panel stack pop" method="post" action="/jobs/{{.View.Job.Name}}/build">
@@ -39,7 +39,28 @@
 <button class="action action-main">Build</button>
 </form>
 {{end}}{{end}}</div>
-{{if .View.Removed}}<p class="notice notice-warn">This job was removed from the job files. Its builds and logs stay until retention removes them; nothing builds it any more.</p>
+{{with .Notice}}<p class="notice" role="status">{{.}}</p>
+{{end}}{{template "jobtabs" .Tabs}}
+{{if .EditsOff}}<p class="sub">Job edits are off on this server (kipp serve --job-edits off): the job files are the jobs.</p>
+{{end}}{{with .Conflict}}<section id="conflict" class="panel stack">
+<h2>An edit of this job waits</h2>
+<p>{{if .FileGone}}The job file was removed{{else}}The job file changed{{end}} under the {{if .EditDeletion}}deletion{{else}}edit{{end}} made through kipp, so the file serves and the {{if .EditDeletion}}deletion{{else}}edit{{end}} waits ({{.Reason}}). Nothing is lost: pick which one stays.</p>
+{{template "sides" .Sides}}
+<div class="actions">
+<form method="post" action="/jobs/{{$.Data.View.Name}}/resolve">
+<input type="hidden" name="csrf" value="{{$.CSRF}}">
+<input type="hidden" name="keep" value="file">
+<button class="action">Use the file</button>
+</form>
+<form method="post" action="/jobs/{{$.Data.View.Name}}/resolve">
+<input type="hidden" name="csrf" value="{{$.CSRF}}">
+<input type="hidden" name="keep" value="edit">
+<button class="action action-main">Keep my edit</button>
+</form>
+</div>
+<p class="sub">Use the file retires the edit. Keep my edit makes it over the file as it is now, so it serves again; a later change of the file waits the same way.</p>
+</section>
+{{end}}{{if .View.Removed}}<p class="notice notice-warn">This job was removed from the job files. Its builds and logs stay until retention removes them; nothing builds it any more.</p>
 {{else}}
 {{with .View.Job.Description}}<p class="lead">{{.}}</p>{{end}}
 {{if .View.Job.Disabled}}<p class="notice notice-warn">This job is disabled in its file: its triggers are ignored and nobody can build it.</p>

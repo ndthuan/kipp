@@ -669,6 +669,39 @@
   }
 }
 
+/* Changing a job: the editor, the tabs of a job's own pages, its versions
+   and the diffs between two texts. A diff's lines keep their own width and
+   scroll in their box, so a long line never widens the page. */
+@layer kipp {
+  .tabs { display: flex; width: fit-content; max-width: 100%; margin: calc(var(--space) * 3) 0; }
+  .crumbs .origin { align-self: center; font-size: var(--size-xs); font-weight: var(--weight-normal); }
+  .jobs-admin { margin-bottom: calc(var(--space) * 4); }
+  .entry-code { font-family: var(--font-code); font-size: var(--size-sm); line-height: var(--leading-snug); white-space: pre; overflow-x: auto; tab-size: 2; resize: vertical; }
+  .editor .editor-delete { margin-left: auto; }
+  .errors { padding-left: calc(var(--space) * 5); list-style: disc; overflow-wrap: anywhere; }
+  .errors li + li { margin-top: calc(var(--space) * 1); }
+  .diff { margin: 0; padding: calc(var(--space) * 2) 0; overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius-m); background-color: var(--bg-raised); font-family: var(--font-code); font-size: var(--size-xs); line-height: var(--leading-snug); }
+  .dl { display: block; min-width: max-content; padding-right: calc(var(--space) * 3); white-space: pre; }
+  .dl-no { display: inline-block; min-width: 4ch; margin-right: calc(var(--space) * 2); padding-left: calc(var(--space) * 2); color: var(--fg-subtle); text-align: right; user-select: none; }
+  .dl-sign { display: inline-block; width: 2ch; user-select: none; }
+  .dl-add { background-color: var(--ok-soft); color: var(--on-ok-soft); }
+  .dl-del { background-color: var(--bad-soft); color: var(--on-bad-soft); }
+  .dl-gap { padding-left: calc(var(--space) * 3); color: var(--fg-subtle); font-style: italic; }
+  .sides { display: grid; grid-template-columns: minmax(0, 1fr); gap: calc(var(--space) * 3); }
+  .side { min-width: 0; }
+  .side-label { margin-bottom: calc(var(--space) * 1); font-size: var(--size-sm); }
+  @media (min-width: 48rem) {
+    .sides { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  .versions { display: flex; flex-direction: column; gap: calc(var(--space) * 3); margin: calc(var(--space) * 4) 0; padding: 0; list-style: none; }
+  .version { padding: calc(var(--space) * 3); border: 1px solid var(--line); border-radius: var(--radius-m); }
+  .version-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: calc(var(--space) * 1) calc(var(--space) * 3); }
+  .version-restore { margin-left: auto; }
+  .version-diff { margin-top: calc(var(--space) * 2); }
+  .version-diff > summary { cursor: pointer; font-size: var(--size-sm); color: var(--fg-muted); }
+  .version-diff .diff { margin-top: calc(var(--space) * 2); }
+}
+
 /* A finger: what is tapped is at least 44px tall. Padding does it, never the
    font size, and the overview's dots keep the size they are drawn at, their
    hit area growing round them. */
@@ -677,7 +710,8 @@
     .action, .action-small, .seg a, .navlink, .brand, .menu-toggle,
     .group > summary, .user > summary, .menu a, .menu-button, .menu li.menu-who,
     .theme > summary, .queue-badge, .sort, .link-plain, td .link, th .link, .pager .link,
-    .results > summary, .guards > summary, .artifacts > summary, .log summary, .frequent > summary, .fold > summary, .health a {
+    .results > summary, .guards > summary, .artifacts > summary, .log summary, .frequent > summary, .fold > summary, .health a,
+    .version-diff > summary {
       min-height: 44px;
     }
     .action, .seg a, .navlink, .brand, .menu a, .menu-button, .queue-badge, td .link, td .link-plain, th .link, .pager .link {
@@ -688,7 +722,7 @@
     .entry { min-height: 44px; }
     .seg { align-items: stretch; }
     .theme > summary { min-width: 44px; align-items: center; justify-content: center; }
-    .results > summary, .guards > summary, .artifacts > summary, .log summary, .frequent > summary, .fold > summary { display: flex; align-items: center; }
+    .results > summary, .guards > summary, .artifacts > summary, .log summary, .frequent > summary, .fold > summary, .version-diff > summary { display: flex; align-items: center; }
     .dots { display: inline-flex; align-items: center; vertical-align: middle; }
     .dot { position: relative; margin-right: calc(var(--space) * 3); }
     .dot::after { content: ""; position: absolute; inset: -17px calc(var(--space) * -1.5); }
@@ -727,3 +761,4 @@
     .stacked .num { text-align: left; }
   }
 }
+

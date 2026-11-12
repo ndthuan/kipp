@@ -1,0 +1,34 @@
+{{define "content"}}
+{{with .Data}}
+{{if .Job}}<div class="head">
+<h1 class="crumbs"><a class="link-plain" href="/jobs/{{.Job}}">{{.Job}}</a><span aria-hidden="true">/</span><span>Edit</span></h1>
+</div>
+{{template "jobtabs" .Tabs}}
+{{else}}<h1>New job</h1>
+<p class="lead">Write the job file. The job takes its name from <code>name:</code>.</p>
+{{end}}{{with .Notice}}<p class="notice" role="status">{{.}}</p>
+{{end}}{{if .Stale}}<p class="notice notice-warn" role="alert">The job changed since you opened it, and nothing was saved. Your text is kept below; compare it with the job as it is now, then save again to replace it.</p>
+{{template "sides" .Sides}}
+{{end}}{{with .Errors}}<div class="notice notice-error" role="alert">
+<p>The job was refused, and nothing changed:</p>
+<ul class="errors">{{range .}}<li>{{if .Line}}<strong>Line {{.Line}}:</strong> {{end}}{{.Text}}</li>
+{{end}}</ul>
+</div>
+{{end}}<form class="stack editor" method="post" action="{{if .Job}}/jobs/{{.Job}}/edit{{else}}/admin/jobs{{end}}">
+<input type="hidden" name="csrf" value="{{$.CSRF}}">
+{{if .Job}}<input type="hidden" name="version" value="{{.Version}}">
+{{end}}<div>
+<label class="entry-label" for="yaml">Job file</label>
+<p class="entry-help" id="yaml-help">YAML, as a file in the jobs directory would hold it. kipp checks it with every other job before taking it.</p>
+<textarea class="entry entry-code" id="yaml" name="yaml" rows="24" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off" required aria-describedby="yaml-help">
+{{.YAML}}</textarea>
+</div>
+<div class="actions">
+<button class="action action-main">{{if .Job}}Save{{else}}Create the job{{end}}</button>
+{{if .Job}}<a class="link" href="/jobs/{{.Job}}">Cancel</a>
+<a class="action action-danger editor-delete" href="/jobs/{{.Job}}/delete">Delete...</a>
+{{else}}<a class="link" href="/jobs">Cancel</a>
+{{end}}</div>
+</form>
+{{end}}
+{{end}}

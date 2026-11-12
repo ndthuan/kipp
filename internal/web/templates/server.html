@@ -3,7 +3,8 @@
 <h1>Server</h1>
 {{with .Notice}}<p class="notice" role="status">{{.}}</p>{{end}}
 {{with $.Error}}<p class="notice notice-error" role="alert">{{.}}</p>{{end}}
-<p class="lead">What this server runs with. It is set by the flags of kipp serve and by the job files, not here.</p>
+{{with .Conflicts}}<p class="notice notice-warn" role="alert" id="job-conflicts">{{plural (len .) "job edit"}} {{if eq (len .) 1}}waits{{else}}wait{{end}} in conflict: the job file serves until you pick which one stays. {{range $i, $j := .}}{{if $i}}, {{end}}<a class="link" href="/jobs/{{$j}}#conflict">{{$j}}</a>{{end}}</p>
+{{end}}<p class="lead">What this server runs with. It is set by the flags of kipp serve and by the jobs, not here.</p>
 {{with .Upgrade}}{{if or .Active .Result .Offer .Manual}}<section id="upgrade" class="panel stack">
 <h2>Upgrade</h2>
 {{if .Active}}<p>Upgrading from {{$.Data.Info.Version}} to {{.Version}}.</p>
@@ -75,7 +76,8 @@
 <div><dt>Session TTL</dt><dd>{{.SessionTTL}}</dd></div>
 <div><dt>Time zone</dt><dd>{{.TimeZone}}</dd></div>
 <div><dt>Data directory</dt><dd><code>{{.DataDir}}</code></dd></div>
-<div><dt>Jobs directory</dt><dd><code>{{.JobsDir}}</code></dd></div>
+<div><dt>Jobs directory</dt><dd>{{with .JobsDir}}<code>{{.}}</code>{{else}}<span class="sub">none</span>{{end}}</dd></div>
+<div><dt>Job edits</dt><dd>{{with .JobEdits}}<code>{{.}}</code>{{else}}<code>off</code>{{end}}{{if eq .JobEdits "store"}}: a change through kipp is kept in the database{{else if eq .JobEdits "files"}}: a change through kipp writes the job file{{else}}: the job files are the jobs{{end}}</dd></div>
 </dl>
 
 <h2>Data directory</h2>

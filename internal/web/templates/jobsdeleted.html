@@ -1,0 +1,23 @@
+{{define "content"}}
+{{with .Data}}
+<div class="head">
+<h1 class="crumbs"><a class="link-plain" href="/jobs">Jobs</a><span aria-hidden="true">/</span><span>Deleted</span></h1>
+</div>
+{{with .Notice}}<p class="notice" role="status">{{.}}</p>
+{{end}}<p class="sub">Jobs deleted through kipp, or whose file is gone, with every version kept. Open one's history to restore it.</p>
+{{if .Jobs}}<div class="scroll">
+<table class="stacked">
+<thead><tr><th>Job</th><th>Deleted</th><th>By</th></tr></thead>
+<tbody>
+{{range .Jobs}}<tr>
+<td class="lead" data-label="Job"><a class="link" href="/jobs/{{.Job}}/history">{{.Job}}</a></td>
+<td data-label="Deleted">{{template "when" (when .At)}}</td>
+<td data-label="By">{{.Author}} <span class="sub">through {{.How}}</span></td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>
+{{else}}<p class="sub">No job is deleted.</p>
+{{end}}
+{{end}}
+{{end}}

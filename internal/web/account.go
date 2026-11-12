@@ -60,6 +60,11 @@ var sudoActions = map[string]sudoAction{
 	"POST /admin/secrets/{name}/scopes":           {"change a secret's scopes", at("/admin/secrets")},
 	"POST /admin/runners/engines":                 {"add an engine", at("/admin/runners")},
 	"POST /admin/runners/runners":                 {"add a standing runner", at("/admin/runners")},
+	createJobRoute:                                {"create a job", at("/admin/jobs/new")},
+	saveJobRoute:                                  {"change a job", editPage},
+	"POST /jobs/{name}/delete":                    {"delete a job", samePath},
+	"POST /jobs/{name}/history/{id}/restore":      {"restore a version of a job", historyOf},
+	"POST /jobs/{name}/resolve":                   {"settle a job's conflict", jobPage},
 }
 
 // formCarry is what of a form comes back after the password step: the name
@@ -85,6 +90,8 @@ var sudoCarries = map[string]formCarry{
 	"POST /admin/secrets/{name}/scopes": {form: "scopes", fields: []string{"scopes"}, row: true},
 	"POST /admin/runners/engines":       {form: "engine", fields: []string{"name", "url", "labels", "max", "ssh_key"}},
 	"POST /admin/runners/runners":       {form: "runner", fields: []string{"name", "labels", "executors"}},
+	createJobRoute:                      {form: "job", fields: []string{"yaml"}},
+	saveJobRoute:                        {form: "job", fields: []string{"yaml", "version"}},
 }
 
 // carryPrefix keeps a carried field apart from the password form's own
@@ -120,6 +127,9 @@ type sudoData struct {
 
 // Refills says the form comes back filled once the password is right.
 func (d sudoData) Refills() bool { return len(d.Carry) > 0 && d.Action != grantsRoute }
+
+// editsJob says the change is a job's text, which comes back in its editor.
+func (d sudoData) editsJob() bool { return d.Action == createJobRoute || d.Action == saveJobRoute }
 
 // carried is one field of a change held through the password step.
 type carried struct{ Name, Value string }
@@ -292,6 +302,8 @@ func (s *Site) sudo(w http.ResponseWriter, r *http.Request, u *store.User) {
 		switch {
 		case d.Action == grantsRoute:
 			s.applyGrants(w, r, u, d.About, r.PostForm)
+		case d.editsJob():
+			s.editorAfterSudo(w, r, d)
 		case d.Refills():
 			redirect(w, r, refilled(d.Next, d.Action, d.About, d.Carry), http.StatusSeeOther)
 		default:
@@ -340,6 +352,12 @@ var notices = map[string]string{
 	"cache-cleared":     "The scope's cache entries are removed.",
 	"compact-started":   "The compact has started. It turns quiet on, waits for the builds to end, compacts, and turns quiet off again.",
 	"storage-removed":   "The job's data is removed.",
+	"job-created":       "The job is created. It serves from now on; a schedule of its starts at its next time.",
+	"job-saved":         "The job is saved. Builds queued from now on run it; a queued or running one keeps the job it was queued with.",
+	"job-deleted":       "The job is deleted. Its versions stay here, to restore it.",
+	"job-restored":      "The version is restored, as a new version of the job.",
+	"kept-file":         "The edit is retired: the job file serves.",
+	"kept-edit":         "The edit is kept over the job file as it is now, and serves.",
 }
 
 func noticeOf(r *http.Request) string { return notices[r.URL.Query().Get("done")] }

@@ -200,3 +200,21 @@ func TestWithEditsOffAJobIsReadAndNeverChanged(t *testing.T) {
 	e.list(t, e.admin, "/api/v1/jobs/smoke/versions")
 	eq(t, "mode", e.object(t, 200, e.admin, "GET", "/api/v1/admin/server", "")["job_edits"].(string), "off")
 }
+
+func TestDeletedJobsAreForAnAdminAndTheModeIsOffWithoutAJobStore(t *testing.T) {
+	e := newEnv(t)
+	e.object(t, 201, e.admin, "POST", "/api/v1/jobs", bodyOf(t, map[string]string{"name": "fresh", "yaml": freshJob}))
+	_, h := e.call(t, 200, e.admin, "GET", "/api/v1/jobs/fresh/definition", "")
+	e.call(t, 204, e.admin, "DELETE", "/api/v1/jobs/fresh", "", "If-Match", h.Get("ETag"))
+	svc := e.api.Service()
+	gone, err := svc.DeletedJobs(context.Background(), e.user(t, "admin"))
+	must(t, err)
+	if len(gone) != 1 || gone[0].Job != "fresh" {
+		t.Fatalf("deleted %+v", gone)
+	}
+	if _, err := svc.DeletedJobs(context.Background(), e.user(t, "viewer")); err == nil {
+		t.Fatal("a viewer read the deleted jobs")
+	}
+	eq(t, "mode", svc.JobEditMode(), jobstore.Store)
+	eq(t, "no job store", (&Service{deps: &Deps{}}).JobEditMode(), jobstore.Off)
+}

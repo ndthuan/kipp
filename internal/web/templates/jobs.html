@@ -1,7 +1,8 @@
 {{define "scripts"}}<script src="{{static "jobs.js"}}" defer></script>{{end}}
 {{define "content"}}
 <h1 class="sr-only">{{.Data.Heading}}</h1>
-{{template "queue" .Data.Queue}}
+{{if .Data.Admin}}<div class="actions jobs-admin">{{if .Data.Edits}}<a class="action action-main" href="/admin/jobs/new">New job</a>{{end}}<a class="link" href="/admin/jobs/deleted">Deleted jobs</a></div>
+{{end}}{{template "queue" .Data.Queue}}
 {{if or .Data.Groups .Data.Status}}<div id="jobs-bar" class="jobs-bar">
 <nav class="seg" aria-label="Show jobs by status">{{range .Data.Statuses}}<a href="{{.Href}}"{{if .Current}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>
 </div>{{end}}

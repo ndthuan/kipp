@@ -16,6 +16,7 @@ import (
 
 	"github.com/ndthuan/kipp/internal/api"
 	"github.com/ndthuan/kipp/internal/config"
+	"github.com/ndthuan/kipp/internal/jobstore"
 	"github.com/ndthuan/kipp/internal/overview"
 	"github.com/ndthuan/kipp/internal/store"
 )
@@ -40,6 +41,8 @@ type jobsData struct {
 	Statuses []statusTab
 	// Heading names the view for a reader that goes by headings.
 	Heading string
+	// Admin: the reader may see the deleted jobs; Edits: and make a job.
+	Admin, Edits bool
 }
 
 // href is where a group's tab leads. A group's name is a job file's to
@@ -289,6 +292,8 @@ func (s *Site) jobs(w http.ResponseWriter, r *http.Request, u *store.User) {
 	all := groups(jobs)
 	d := shown(all, r.URL.Query())
 	d.Queue = queueData{Queue: q, CSRF: csrf(r), Next: thisPage(r)}
+	d.Admin = u.Admin
+	d.Edits = u.Admin && s.api.Service().JobEditMode() != jobstore.Off
 	s.render(w, r, "jobs", http.StatusOK, page{Title: d.Heading, Data: d, Here: d.Self, groups: all, Queue: q})
 }
 
@@ -495,6 +500,13 @@ type jobData struct {
 	// A multibranch job's children, apart: the ones it builds, the gone
 	// ones, and the pull requests from forks it does not build.
 	Live, Gone, Forks []api.ChildView
+	// Tabs are the tabs of a job of the server's own, for an admin; nil
+	// for anyone else. EditsOff says edits are off on this server, and
+	// Conflict is the edit that waits, for an admin.
+	Tabs     *tabsView
+	EditsOff bool
+	Conflict *conflictView
+	Notice   string
 }
 
 // split sorts a multibranch job's children into the page's three lists.
@@ -578,6 +590,10 @@ func (s *Site) job(w http.ResponseWriter, r *http.Request, u *store.User) {
 		data.Store = metricsPath(data.StoreName, "")
 	}
 	data.split(v.Children)
+	if err := s.jobEdits(r, u, &data); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	s.render(w, r, "job", http.StatusOK, page{Title: v.Name, Here: here, Job: v.Name, Data: data})
 }
 

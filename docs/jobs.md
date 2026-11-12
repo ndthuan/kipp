@@ -841,8 +841,8 @@ the conflicts below afresh.
 ## Changing jobs through kipp
 
 An admin may create, change, delete and restore a job through the API
-([Changing jobs](api.md#changing-jobs)) or `kipp job`
-([Commands](cli.md#kipp-job)). `kipp serve --job-edits` says
+([Changing jobs](api.md#changing-jobs)), `kipp job`
+([Commands](cli.md#kipp-job)) or the web UI ([In the browser](#in-the-browser)). `kipp serve --job-edits` says
 what such a change does:
 
 | Mode | A change through kipp | `--jobs` |
@@ -896,6 +896,38 @@ first", when the job file changed on disk since kipp read it. A server
 started in `files` mode on a database a `store` server left writes the
 edits that still apply to their files; the conflicts stay.
 
+### In the browser
+
+An admin sees three tabs on the page of a job of the server's own:
+Builds, Edit and History. Every viewer sees where the job comes from
+(`file`, `store` or `store over file`) beside its name. Nobody else sees
+the tabs or the YAML. Every change asks for the password once more, as a
+secret does; then for 10 minutes it does not, and a job's text sent
+without it comes back in the editor, to be sent again.
+
+- Edit holds the job's YAML in a plain text box. Save sends it with the
+  version it was opened at. When the job changed meanwhile, nothing is
+  saved: the page shows the job as it is now beside your text, which stays
+  in the box, and Save then replaces the newer one. A refusal lists every
+  error, by line where it has one, and keeps the text.
+- Delete, under Edit, asks first, naming the job.
+- History lists every version (when, who, through what) with its diff
+  against the one before, and Restore on each that would change what
+  serves.
+- New job, on the Jobs page, opens the editor with a small template; the
+  job takes its name from `name:`. Deleted jobs, beside it, lists the jobs
+  whose last version is a deletion; their history restores them.
+- When an edit waits in conflict, the job's page shows the file beside the
+  edit and the reason, with Use the file and Keep my edit. The Server page
+  shows the mode under Flags and a banner counting the conflicts, each job
+  linked.
+
+In `off` mode the page says edits are off, and there is no Edit tab, New
+job or Restore.
+
+![The Edit tab of a job: a save refused, with its error on line 4 and the text kept in the box, Save, Cancel and Delete](screenshots/job-edit.png)
+
+![An edit waiting in conflict on a job's page: the job file and the edit side by side, the changed lines marked, with Use the file and Keep my edit](screenshots/job-conflict.png)
 
 ### The example jobs
 

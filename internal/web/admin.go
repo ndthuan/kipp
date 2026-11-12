@@ -613,6 +613,8 @@ type serverData struct {
 	Quiet dispatch.QuietState
 	// Upgrade is the card's: what the engine says, nil for a build that is not a release.
 	Upgrade *upgradeView
+	// Conflicts are the jobs whose edit waits while their file serves.
+	Conflicts []string
 }
 
 // auditPage is how many audit rows the server page shows at a time.
@@ -678,6 +680,15 @@ func (s *Site) serverData(r *http.Request, u *store.User) (*serverData, error) {
 	}
 	if len(rows) == auditPage {
 		d.Older = rows[len(rows)-1].ID
+	}
+	if info.JobConflicts > 0 {
+		cs, err := svc.JobConflicts(r.Context(), u)
+		if err != nil {
+			return nil, err
+		}
+		for _, c := range cs {
+			d.Conflicts = append(d.Conflicts, c.Job)
+		}
 	}
 	return d, nil
 }
