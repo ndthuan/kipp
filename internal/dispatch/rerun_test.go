@@ -66,7 +66,9 @@ func TestARestartStopsABuildToRunAgainAndTheNextStartQueuesItWithItsParamsAndCau
 	if err != nil {
 		t.Fatal(err)
 	}
-	h.untilRunning(t, first.ID)
+	// The stage itself, not only the build: a build is running from its
+	// prepare on, and one stopped before its stage starts has no stage log.
+	h.untilStage(t, first.ID, "s", store.StageRunning)
 	if _, err := h.d.SetQuiet(ctx, true); err != nil {
 		t.Fatal(err)
 	}
