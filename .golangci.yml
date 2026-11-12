@@ -91,6 +91,9 @@ linters:
       # Running a job's command is what kipp is for.
       - path: ^internal/runner/local\.go$
         text: "G204"
+      # kipp job edit runs the user's own $VISUAL or $EDITOR, as git does.
+      - path: ^internal/cli/job\.go$
+        text: "G204"
       # git on the repo and ref of a job file; a leading dash is refused.
       - path: ^internal/dispatch/build\.go$
         text: "G204"

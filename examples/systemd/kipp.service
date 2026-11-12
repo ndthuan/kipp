@@ -9,6 +9,14 @@
 #
 # `systemctl reload kipp` re-reads the job files, as `kipp reload` does.
 #
+# It runs in store mode, the default of --job-edits: a job changed through
+# kipp (kipp job, the API) is kept in the database in /var/lib/kipp, and
+# /etc/kipp/jobs stays read-only to it. For files mode, where such a change
+# is written to the job file, use the second ExecStart below and add the
+# jobs directory to ReadWritePaths, owned by kipp
+# (chown -R kipp:kipp /etc/kipp/jobs); kipp refuses to start in files mode
+# on a directory it cannot write.
+#
 # A stage runs as the user kipp, with what this unit allows it. The
 # filesystem is read-only to it but for /var/lib/kipp (its home, the data
 # directory and the build workspaces in it) and a private /tmp: a job whose
@@ -28,6 +36,7 @@ Type=simple
 User=kipp
 Group=kipp
 ExecStart=/usr/local/bin/kipp serve --data /var/lib/kipp/data --jobs /etc/kipp/jobs --listen 127.0.0.1:8085 --base-url https://ci.example.com
+#ExecStart=/usr/local/bin/kipp serve --data /var/lib/kipp/data --jobs /etc/kipp/jobs --job-edits files --listen 127.0.0.1:8085 --base-url https://ci.example.com
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=5
@@ -44,6 +53,7 @@ PrivateDevices=yes
 ProtectSystem=strict
 ProtectHome=yes
 ReadWritePaths=/var/lib/kipp
+# files mode: ReadWritePaths=/var/lib/kipp /etc/kipp/jobs
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectControlGroups=yes

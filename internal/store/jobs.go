@@ -53,12 +53,18 @@ type JobChanges struct {
 	Edits  map[string]JobEdit
 	Retire []string
 	Files  map[string]string
+	// Mark is set in the same transaction, when not empty.
+	Mark string
 }
+
+// MarkSeed is the mark of a data directory whose first start in store mode
+// decided whether to create the example jobs: it never decides again.
+const MarkSeed = "seed"
 
 // ApplyJobChanges writes c.
 func (s *Store) ApplyJobChanges(ctx context.Context, c JobChanges) error {
 	return s.inTx(ctx, func(tx *sql.Tx) error {
-		for _, step := range []func(context.Context, *sql.Tx, JobChanges) error{addVersions, putEdits, retireEdits, putFiles} {
+		for _, step := range []func(context.Context, *sql.Tx, JobChanges) error{addVersions, putEdits, retireEdits, putFiles, putMark} {
 			if err := step(ctx, tx, c); err != nil {
 				return err
 			}
@@ -114,6 +120,25 @@ func putFiles(ctx context.Context, tx *sql.Tx, c JobChanges) error {
 		}
 	}
 	return nil
+}
+
+func putMark(ctx context.Context, tx *sql.Tx, c JobChanges) error {
+	if c.Mark == "" {
+		return nil
+	}
+	_, err := tx.ExecContext(ctx, `INSERT INTO marks (name, at) VALUES (?, ?) ON CONFLICT (name) DO NOTHING`, c.Mark, ts(time.Now()))
+	return err
+}
+
+// SeedDue reports whether the example jobs may still be created: the seed
+// was never decided, no build was ever made, and no job was ever kept in
+// the store (a version through kipp, not one a load found on disk).
+func (s *Store) SeedDue(ctx context.Context) (bool, error) {
+	var due bool
+	err := s.db.QueryRowContext(ctx, `SELECT NOT EXISTS (SELECT 1 FROM marks WHERE name = ?)
+		AND NOT EXISTS (SELECT 1 FROM builds)
+		AND NOT EXISTS (SELECT 1 FROM job_versions WHERE how != ?)`, MarkSeed, HowFiles).Scan(&due)
+	return due, err
 }
 
 const versionColumns = `v.id, v.job, v.text, v.deleted, v.hash, v.author, v.how, v.created_at`

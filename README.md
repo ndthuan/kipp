@@ -16,10 +16,11 @@ everything else (builds, users, secrets) is kept in one SQLite file.
   since when and in which stage, what is unstable or flaky, and what is
   running. A failed build opens on the lines that
   broke it, and its log walks from one problem to the next.
-- **Jobs are files.** One `<name>.yml` per job in a directory, shared
-  variables in `_vars.yml`, checked offline with `kipp check` and read
-  again on `kipp reload` or `SIGHUP`. A directory with one bad file is
-  refused whole, and the server keeps the jobs it had.
+- **Jobs are YAML, with a history.** Change a job through kipp (`kipp job
+  edit`, the API) and every version is kept, or keep `<name>.yml` files in
+  a directory, shared variables in `_vars.yml`, checked offline with `kipp
+  check` and read again on `kipp reload` or `SIGHUP`. A change the job set
+  would refuse is refused whole, and the server keeps the jobs it had.
 - **Pipelines, not only commands.** Stages form a DAG with `needs`,
   conditions, retries, locks and timeouts, started by cron (Jenkins' `H`,
   a time zone per job), a GitHub push or tag, another job, or by hand
@@ -50,17 +51,19 @@ brew install ndthuan/tap/kipp
 brew services start kipp
 ```
 
-The service keeps the job files in `$(brew --prefix)/etc/kipp` and the
-data in `$(brew --prefix)/var/kipp`, and listens on `127.0.0.1:8085`.
+The service keeps the data, and the jobs changed through kipp, in
+`$(brew --prefix)/var/kipp`, reads job files from
+`$(brew --prefix)/etc/kipp`, and listens on `127.0.0.1:8085`.
 
 With Docker:
 
 ```sh
-docker run -d --name kipp -p 8085:8085 \
-  -v kipp-data:/var/lib/kipp -v ./jobs:/etc/kipp ghcr.io/ndthuan/kipp
+docker run -d --name kipp -p 8085:8085 -v kipp-data:/var/lib/kipp ghcr.io/ndthuan/kipp
 ```
 
-`/var/lib/kipp` is the data directory and `/etc/kipp` the job files.
+`/var/lib/kipp` is the data directory, jobs included; a directory of job
+files may be mounted at `/etc/kipp` as well
+([Docker](docs/install.md#docker)).
 
 Release archives for Linux and macOS on amd64 and arm64, with
 `SHA256SUMS` with its signature `SHA256SUMS.sig`, and a build provenance
@@ -79,29 +82,29 @@ install beyond what any HTTP request does, and says on its Server page when a ne
 
 ## Quick start
 
-Write a job and start the server. `serve` stays in the foreground, so
-this is one terminal (a Homebrew service started above listens on the
-same port: stop it first with `brew services stop kipp`):
+Start the server. `serve` stays in the foreground, so this is one terminal
+(a Homebrew service started above listens on the same port: stop it first
+with `brew services stop kipp`):
 
 ```sh
-mkdir jobs
-printf 'name: hello\nstages:\n  greet: {run: echo hello}\n' > jobs/hello.yml
-kipp serve --data ./data --jobs ./jobs
+kipp serve --data ./data
 ```
 
 It prints where it listens:
 
 ```
-kipp v1.2.0 listening on http://127.0.0.1:8085, 1 job from ./jobs, data in /home/alice/data
+kipp v1.2.0 listening on http://127.0.0.1:8085, 2 jobs from the store, data in /home/alice/data
 ```
 
-In a second terminal, in the same directory, make the first admin and a
-token, and run the job:
+A new server starts with two example jobs: `hello`, built by hand, and
+`hello-schedule`, built once an hour. In a second terminal, in the same
+directory, make the first admin and a token, and run `hello`:
 
 ```sh
 kipp user add admin --admin --data ./data
 kipp token create admin --label laptop --data ./data
-KIPP_TOKEN=<the token> kipp run hello --wait
+export KIPP_TOKEN=<the token>
+kipp run hello --wait
 ```
 
 which print, in turn:
@@ -111,14 +114,22 @@ admin password: <a generated password, shown once>
 token for admin (laptop), shown once:
 kipp_<the token>
 hello #1 queued (build 1)
-[greet] hello
+[greet] hello, world
 hello #1: success
 ```
 
-Log in at the address `serve` printed, as `admin` with that password, to
-see the build. `kipp check <jobs-dir>` says what is wrong with a
-directory of job files without starting anything, and `kipp <command> -h`
-prints a command's flags.
+Then make it yours: `kipp job edit hello` opens the job in your editor and
+keeps what you save as its next version (`kipp job history hello` lists
+them). Log in at the address `serve` printed, as `admin` with that
+password, to see the build. `kipp <command> -h` prints a command's flags.
+
+Where a change of a job goes is `kipp serve --job-edits`: `store`, the
+default, keeps it in the database, and job files given with `--jobs <dir>`
+serve beside it; `files` writes it to the job file in `--jobs`, for jobs
+kept in git; `off` refuses it, and the job files are the whole truth.
+`kipp check <dir>` says what is wrong with a directory of job files
+without starting anything, and `kipp job import` moves one into the
+database ([Changing jobs through kipp](docs/jobs.md#changing-jobs-through-kipp)).
 
 ## The first admin
 

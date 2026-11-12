@@ -25,6 +25,7 @@ const usage = `usage: kipp <command> [flags]
   upgrade   upgrade a running server to the latest release, or return it to the version before
   db        compact: compact a running server's database, quiet while it runs
   run       start a build and optionally wait for it
+  job       get, put, edit, rm, history, restore, resolve, export: a server's jobs; import: job files into the store
   user      add, passwd, delete, grant, revoke, list
   token     create, revoke, list
   secret    set, unset, list
@@ -44,6 +45,7 @@ var commands = map[string]Command{
 	"upgrade": cmdUpgrade,
 	"db":      cmdDB,
 	"run":     cmdRun,
+	"job":     cmdJob,
 	"user":    cmdUser,
 	"token":   cmdToken,
 	"secret":  cmdSecret,

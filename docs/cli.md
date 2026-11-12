@@ -13,6 +13,7 @@ or `--name`.
 | [`kipp db`](#kipp-db) | Compacts a running server's database. | the server |
 | [`kipp upgrade`](#kipp-upgrade) | Upgrades a running server to the latest release, or back to the version before. | the server |
 | [`kipp run`](#kipp-run) | Starts a build, and optionally waits for it. | the server |
+| [`kipp job`](#kipp-job) | Reads, changes, exports and restores a server's jobs; imports job files into the store. | the server, or the data directory |
 | [`kipp user`](#kipp-user) | Adds, changes and lists users and their grants. | the data directory |
 | [`kipp token`](#kipp-token) | Makes, revokes and lists API tokens. | the data directory |
 | [`kipp secret`](#kipp-secret) | Sets, scopes, removes and lists secrets. | the data directory |
@@ -22,18 +23,19 @@ or `--name`.
 | [`kipp cache`](#kipp-cache) | A stage's keyed cache; lists and removes entries. | the server, or the data directory |
 | `kipp version` | Prints the version, and on a second line where the binary was installed from. | nothing |
 
-**Talking to a server.** `reload`, `quiet`, `db`, `upgrade` and `run` take `--url` (else
+**Talking to a server.** `reload`, `quiet`, `db`, `upgrade`, `run` and `job` (but `job import`) take `--url` (else
 `$KIPP_URL`, else `http://127.0.0.1:8085`) and `--token` (else
 `$KIPP_TOKEN`, else the file `$XDG_CONFIG_HOME/kipp/token`, mode 600). An
 argument shows in the process list, so prefer either of the others.
 
 **Working on the data directory.** `user`, `token`, `secret`, `engine`,
-`runner add|set|token|rm|ls`, `metrics put|forget|ls` and `cache ls|rm`
+`runner add|set|token|rm|ls`, `metrics put|forget|ls`, `cache ls|rm` and
+`job import`
 open the database in `--data` themselves, on the server's machine, as the
 user the server runs as, while it runs or not. Only `kipp serve` makes the
 data directory; these refuse one that does not exist, and one whose
 schema is not theirs ([Upgrading](operations.md#upgrading)). A running
-server takes a change to engines and runners at its next reload; users,
+server takes a change to engines, runners and jobs at its next reload; users,
 tokens and secrets at once. Every change they make is a row of the audit
 with the actor `cli`.
 
@@ -59,7 +61,7 @@ directory.
 |---|---|---|
 | `--data <dir>` | required | The data directory: the database, the secrets' key, logs and workspaces. Made, mode 700, if it is not there ([The data directory](operations.md#the-data-directory)). |
 | `--jobs <dir>` | none | The directory of job files; required with `--job-edits files` or `off`. |
-| `--job-edits <mode>` | `store` | What a change of a job through kipp does: `store` keeps it in the database, `files` writes the job file, `off` refuses it ([Changing jobs through kipp](jobs.md#changing-jobs-through-kipp)). |
+| `--job-edits <mode>` | `store` | What a change of a job through kipp does: `store` keeps it in the database, `files` writes the job file, `off` refuses it ([Changing jobs through kipp](jobs.md#changing-jobs-through-kipp)). On its first start in `store` mode a data directory that never held a job of the store or a build, serving no job, gets two example jobs, `hello` and `hello-schedule`, once ([The example jobs](jobs.md#the-example-jobs)). |
 | `--listen <addr>` | `127.0.0.1:8085` | The address to listen on, in plain HTTP. |
 | `--base-url <url>` | `http://<listen>` | The URL stages see as `KIPP_URL`. Build links, commit statuses' links, webhook URLs and GitHub App manifests need it given. |
 | `--executors <n>` | 4 | Stages the server runs itself at once; 0 runs none ([Runners and engines](runners.md#the-servers-flags)). |
@@ -254,6 +256,72 @@ and prints `<job> #<n> queued (build <id>)`.
 | 2 | A command line kipp would not take. |
 | 3 | The server refused the token. |
 | 4 | The build was queued and its end could not be learned (the server stopped answering, or no longer knows the build); it may still be running, and stderr says where to look. |
+
+## kipp job
+
+```
+kipp job get <name>
+kipp job put <name> [-f <file>|-] [--if-match <etag>]
+kipp job edit <name>
+kipp job rm <name> [--if-match <etag>]
+kipp job history <name>
+kipp job restore <name> <version> [--if-match <etag>]
+kipp job resolve <name> file|edit
+kipp job export <dir> [--force]
+kipp job import <dir> --data <dir>
+```
+
+Every subcommand but `import` talks to a server, as an admin's token: a
+job's YAML may hold what only an admin may read
+([Changing jobs through kipp](jobs.md#changing-jobs-through-kipp)). What a
+change does on the server (kept in its database, written to the job file,
+or refused) is its `serve --job-edits`.
+
+- `get` prints the job's YAML as it serves, comments and all.
+- `put` creates the job, or replaces it, with the YAML of `-f <file>`, or
+  of stdin without `-f` or with `-f -`. A replace sends the `ETag` of a read
+  made just before, or `--if-match <etag>` when given, so that a change made
+  in between is refused. A job the set would refuse is refused with every
+  error, one to a line. It prints `job <name> created (<source>)` or
+  `job <name> changed (<source>)`, the source being `store`, `file` or
+  `store over file`.
+- `edit` opens the job's YAML in `$VISUAL`, else `$EDITOR`, else `vi`, and
+  sends what the editor leaves when it exits, over the `ETag` it read
+  before. A buffer left unchanged sends nothing (`job <name>: no change,
+  nothing sent`). When the server refuses the change (somebody changed the
+  job meanwhile, or the set refuses it), the edited YAML is kept in its
+  file and stderr names the path: edit again, or `put -f` that file.
+- `rm` deletes the job, over a fresh `ETag` or `--if-match`.
+- `history` prints each version of the job, newest first, one to a line:
+  the version, the time (UTC), the author and how it was made, and
+  `deleted` for a deletion ([History](jobs.md#history)).
+- `restore` makes the YAML of a version the job's newest version, and brings
+  back a job that was deleted.
+- `resolve` settles an edit that waits in conflict: `file` retires the edit,
+  `edit` makes it over the file as it is now
+  ([When a file and an edit meet](jobs.md#when-a-file-and-an-edit-meet)).
+- `export` writes every job of the server into `<dir>` as `<name>.yml`
+  (mode 600), the YAML each serves from the store or its file. `<dir>` is
+  made when it is not there, in a directory that is. It refuses a directory
+  that holds anything, unless `--force`, which removes the `*.yml` job files
+  in it first and leaves every other file, `_vars.yml` among them. Every job
+  is read before one is written, so a refusal leaves the directory as it
+  was.
+- `import` works on the data directory, as `kipp user` does: every job file
+  of `<dir>` becomes a job of the store, with no file under it, version
+  `import`, author `cli`. The directory is checked first as `kipp check`
+  does, and the import is all or nothing: nothing is written when the
+  directory has an error, or when the store already holds a job of one of
+  its names. `_vars.yml` is not a job and is not imported. A running server
+  takes the jobs at its next reload or restart
+  ([Moving file jobs into the store](jobs.md#moving-file-jobs-into-the-store)).
+
+| Code | Meaning |
+|---|---|
+| 0 | Done, or an edit left unchanged. |
+| 1 | The server refused the change (a stale `ETag`, an error in the set, edits off, a conflict), had no such job, or the import was refused. |
+| 2 | A command line kipp would not take, or `export` into a directory in use without `--force`. |
+| 3 | The server refused the token, or the token is not an admin's. |
 
 ## kipp user
 

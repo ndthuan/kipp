@@ -8,11 +8,23 @@ lines and the data directory are the public surface.
 
 ## Unreleased
 
+Upgrading: the default of the new `kipp serve --job-edits` is `store`, so
+a job created or changed through kipp is kept in the database, over a job
+file of the same name. A server that loads its job files keeps loading them,
+and creates no example job. To keep kipp refusing every change of a job, as
+before, start it with `--job-edits off`.
+
 Changed:
 
 - `kipp serve` no longer needs `--jobs`: with the default
   `--job-edits store` a server without one serves the jobs of its
   database.
+- The quick start and the container need no jobs directory:
+  `docker run -v kipp-data:/var/lib/kipp ghcr.io/ndthuan/kipp` is enough.
+  `docs/install.md` says how to mount one, read-only in `store` mode and
+  writable by uid 10001 with `--job-edits files`, with a Compose example;
+  the systemd and launchd examples say which mode they run and what `files`
+  needs.
 - Each stage log on a build page scrolls in a box of its own, at most 70% of
   the window tall, instead of stretching the page. A live log keeps its box
   at the end until the reader scrolls it up, and the page no longer jumps to
@@ -49,6 +61,19 @@ Removed (breaking for the API and the MCP `overview` tool):
   list and in `GET /api/v1/jobs/<name>`.
 
 Added:
+
+- `kipp job get|put|edit|rm|history|restore|resolve|export` reads and
+  changes a server's jobs as an admin: `put` creates or replaces from a file
+  or stdin, `edit` opens `$VISUAL` or `$EDITOR` and sends the result over the
+  `ETag` it read (a change made meanwhile is refused, and the edit is kept
+  in a file whose path is printed), `export` writes every job as
+  `<name>.yml`. `kipp job import <dir> --data <dir>` makes the job files of a
+  directory jobs of the store, all or nothing (docs/jobs.md, Moving file
+  jobs into the store).
+- A new server in `store` mode, on a data directory that never held a job
+  of the store or a build and serving no job, starts with two example jobs,
+  `hello` and `hello-schedule` (examples/jobs), once; a deleted one does not
+  come back. The database gains a table `marks` (a new schema).
 
 - Jobs can be created, changed, deleted and restored through the API, by
   an admin's token or an admin's browser session in sudo mode, never a

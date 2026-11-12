@@ -29,13 +29,19 @@ Its service runs:
 kipp serve --data $(brew --prefix)/var/kipp --jobs $(brew --prefix)/etc/kipp --listen 127.0.0.1:8085
 ```
 
-as your own user, and keeps it running. Job files go in
-`$(brew --prefix)/etc/kipp`; the data directory is
+as your own user, and keeps it running. The data directory is
 `$(brew --prefix)/var/kipp`; the server's log is
 `$(brew --prefix)/var/log/kipp.log`.
 
-After a change to the job files, `kipp reload` (with a token, see
-[Commands](cli.md#kipp-reload)) has the server read them again. To
+It runs in `store` mode, the default of `--job-edits`: a job created or
+changed through kipp (`kipp job`, the API) is kept in the database, and a
+new install starts with the two example jobs `hello` and `hello-schedule`.
+Job files you put in `$(brew --prefix)/etc/kipp` serve beside them, and
+kipp never writes there; after a change to them, `kipp reload` (with a
+token, see [Commands](cli.md#kipp-reload)) has the server read them again.
+To have changes through kipp written to those files instead, run the
+command above yourself with `--job-edits files`
+([Changing jobs through kipp](jobs.md#changing-jobs-through-kipp)). To
 upgrade, see [Upgrading](#upgrading).
 
 `brew install --HEAD ndthuan/tap/kipp` builds the `main` branch from
@@ -44,9 +50,12 @@ source instead, with Go.
 ## Docker
 
 ```sh
-docker run -d --name kipp -p 8085:8085 \
-  -v kipp-data:/var/lib/kipp -v ./jobs:/etc/kipp ghcr.io/ndthuan/kipp
+docker run -d --name kipp -p 8085:8085 -v kipp-data:/var/lib/kipp ghcr.io/ndthuan/kipp
 ```
+
+That is enough: the server keeps its jobs in its database (`store` mode,
+the default of `--job-edits`) and starts with the two example jobs `hello`
+and `hello-schedule` ([The example jobs](jobs.md#the-example-jobs)).
 
 The image `ghcr.io/ndthuan/kipp` is built for `linux/amd64` and
 `linux/arm64`. Each release `vX.Y.Z` is tagged `X.Y.Z`, `X.Y`, `X` and
@@ -54,24 +63,97 @@ The image `ghcr.io/ndthuan/kipp` is built for `linux/amd64` and
 
 It has two volumes, one for each kind of state:
 
-- `/var/lib/kipp` is the data directory: the database, the secrets' key,
-  logs, artifacts, the cache and the workspaces. kipp alone writes it;
-  back it up as a whole ([Backups](operations.md#backups)).
-- `/etc/kipp` is the jobs directory: the job files and `_vars.yml`. kipp
-  only reads it.
+- `/var/lib/kipp` is the data directory: the database (with the jobs
+  changed through kipp and their history), the secrets' key, logs,
+  artifacts, the cache and the workspaces. kipp alone writes it; back it up
+  as a whole ([Backups](operations.md#backups)).
+- `/etc/kipp` is the jobs directory: job files and `_vars.yml`, optional.
+  The image has it empty, so a server with nothing mounted there loads no
+  file.
 
-The server runs as the user `kipp` (uid 10001), so a directory mounted at
-`/etc/kipp` must be readable by that uid. Its command is:
+The server runs as the user `kipp` (uid 10001). Its command is:
 
 ```sh
 kipp serve --data /var/lib/kipp --jobs /etc/kipp --listen 0.0.0.0:8085 --shell /bin/bash
 ```
 
+### Mounting a jobs directory
+
+Job files kept beside the database, in git say, are mounted at
+`/etc/kipp`, readable by uid 10001. What a change through kipp then does
+decides how:
+
+- **`store`** (the image's default): the change is kept in the database,
+  over the job file of the same name, and kipp never writes the files.
+  Mount the directory read-only:
+
+  ```sh
+  docker run -d --name kipp -p 8085:8085 \
+    -v kipp-data:/var/lib/kipp -v ./jobs:/etc/kipp:ro ghcr.io/ndthuan/kipp
+  ```
+
+- **`files`**: the change is written to the job file, which stays the job.
+  The mount must be writable (no `:ro`) by uid 10001: give the directory to
+  that uid (`sudo chown -R 10001:10001 ./jobs`), or run the container as
+  the host user who owns it (`--user "$(id -u):$(id -g)"`, with a data
+  volume that user can write).
+
+  ```sh
+  docker run -d --name kipp -p 8085:8085 \
+    -v kipp-data:/var/lib/kipp -v ./jobs:/etc/kipp ghcr.io/ndthuan/kipp \
+    serve --data /var/lib/kipp --jobs /etc/kipp --job-edits files --listen 0.0.0.0:8085 --shell /bin/bash
+  ```
+
+  A server in `files` mode checks at start that it can write there, and
+  refuses to start when it cannot. With the mount left `:ro` it says:
+
+  ```
+  kipp serve: --job-edits files cannot write job files in /etc/kipp as uid 10001: open /etc/kipp/.kipp-check-2509782686: read-only file system
+  Make the directory writable by that user, drop :ro from a container's mount of it, or start with --job-edits store
+  ```
+
+  and `permission denied` in place of `read-only file system` when the
+  directory is not writable by that uid.
+
+A server that finds a job file at its first start does not create the
+example jobs. One that ran before this kipp had `--job-edits` keeps loading
+its mounted files after the upgrade, and creates no example job either.
+`--job-edits off` refuses every change through kipp, as kipp did before.
+
+With Compose, the two variants:
+
+```yaml
+services:
+  kipp:
+    image: ghcr.io/ndthuan/kipp
+    ports: ["8085:8085"]
+    volumes:
+      - kipp-data:/var/lib/kipp
+      - ./jobs:/etc/kipp:ro          # store mode: optional, read-only
+    restart: unless-stopped
+
+  # files mode: changes through kipp are written to ./jobs, owned by
+  # uid 10001 (sudo chown -R 10001:10001 ./jobs).
+  # kipp:
+  #   image: ghcr.io/ndthuan/kipp
+  #   command: serve --data /var/lib/kipp --jobs /etc/kipp --job-edits files --listen 0.0.0.0:8085 --shell /bin/bash
+  #   ports: ["8085:8085"]
+  #   volumes:
+  #     - kipp-data:/var/lib/kipp
+  #     - ./jobs:/etc/kipp
+  #   restart: unless-stopped
+
+volumes:
+  kipp-data:
+```
+
+### Flags and the rest
+
 To give `serve` more flags, pass the whole command after the image name:
 
 ```sh
 docker run -d --name kipp -p 8085:8085 \
-  -v kipp-data:/var/lib/kipp -v ./jobs:/etc/kipp ghcr.io/ndthuan/kipp \
+  -v kipp-data:/var/lib/kipp ghcr.io/ndthuan/kipp \
   serve --data /var/lib/kipp --jobs /etc/kipp --listen 0.0.0.0:8085 --shell /bin/bash \
   --base-url https://ci.example.com
 ```

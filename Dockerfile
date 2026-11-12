@@ -2,14 +2,17 @@
 # stages it runs itself. The image is built for linux/amd64 and
 # linux/arm64; Docker on a Mac runs the one of its CPU.
 #
-#   docker run -d --name kipp -p 8085:8085 \
-#     -v kipp-data:/var/lib/kipp -v ./jobs:/etc/kipp ghcr.io/ndthuan/kipp
+#   docker run -d --name kipp -p 8085:8085 -v kipp-data:/var/lib/kipp ghcr.io/ndthuan/kipp
 #
 # Two volumes, one per kind of state: /var/lib/kipp is the data directory
-# (the database, the secrets' key, logs, workspaces), written by kipp
-# alone and backed up as a whole; /etc/kipp is the jobs directory (the job
-# files and _vars.yml), read by kipp and written by whoever manages the
-# jobs.
+# (the database with the jobs changed through kipp, the secrets' key, logs,
+# workspaces), written by kipp alone and backed up as a whole; /etc/kipp is
+# the jobs directory (job files and _vars.yml), optional, read by kipp in
+# store mode and written by it only with --job-edits files.
+#
+# The command keeps --jobs /etc/kipp: empty, it loads no file and a new
+# server starts with the example jobs; a directory mounted there before
+# --job-edits existed keeps loading after an upgrade.
 
 # The build runs on the builder's own platform and cross-compiles: no
 # emulated Go toolchain, and the Linux runners every kipp embeds are the

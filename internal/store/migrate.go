@@ -192,6 +192,8 @@ CREATE INDEX job_versions_job ON job_versions(job, id);
 CREATE TABLE job_edits (
   job TEXT PRIMARY KEY, version_id INTEGER NOT NULL REFERENCES job_versions(id), base TEXT);
 CREATE TABLE job_files (job TEXT PRIMARY KEY, hash TEXT NOT NULL);
+`, `
+CREATE TABLE marks (name TEXT PRIMARY KEY, at TEXT NOT NULL);
 `}
 
 // Upgrade is what Open did to the schema of the database it opened.

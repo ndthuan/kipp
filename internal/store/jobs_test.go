@@ -71,3 +71,33 @@ func TestAJobsVersionsArePagedNewestFirst(t *testing.T) {
 		t.Fatalf("another job's version: %v", err)
 	}
 }
+
+func TestTheSeedIsDueOnlyOnADataDirectoryThatNeverHeldAJobOrABuild(t *testing.T) {
+	due := func(s *Store, want bool) {
+		t.Helper()
+		got, err := s.SeedDue(ctx)
+		must(t, err)
+		if got != want {
+			t.Fatalf("seed due: %v, want %v", got, want)
+		}
+	}
+	s := open(t)
+	due(s, true)
+	// A job file a load found is not a job kept in the store.
+	found := &JobVersion{Job: "docs", Text: "name: docs\n", Hash: "h", Author: AuthorKipp, How: HowFiles, At: time.Now()}
+	must(t, s.ApplyJobChanges(ctx, JobChanges{Versions: []*JobVersion{found}}))
+	due(s, true)
+	must(t, s.ApplyJobChanges(ctx, JobChanges{Mark: MarkSeed}))
+	due(s, false)
+	// Marking twice is no error.
+	must(t, s.ApplyJobChanges(ctx, JobChanges{Mark: MarkSeed}))
+
+	kept := open(t)
+	made := &JobVersion{Job: "site", Text: "name: site\n", Hash: "h", Author: "admin", How: HowAPI, At: time.Now()}
+	must(t, kept.ApplyJobChanges(ctx, JobChanges{Versions: []*JobVersion{made}}))
+	due(kept, false)
+
+	built := open(t)
+	must(t, built.CreateBuild(ctx, &Build{Job: "site", Status: Queued, Trigger: "manual", QueuedAt: time.Now()}))
+	due(built, false)
+}

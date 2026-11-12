@@ -841,7 +841,8 @@ the conflicts below afresh.
 ## Changing jobs through kipp
 
 An admin may create, change, delete and restore a job through the API
-([Changing jobs](api.md#changing-jobs)). `kipp serve --job-edits` says
+([Changing jobs](api.md#changing-jobs)) or `kipp job`
+([Commands](cli.md#kipp-job)). `kipp serve --job-edits` says
 what such a change does:
 
 | Mode | A change through kipp | `--jobs` |
@@ -886,7 +887,7 @@ A conflict is logged as a warning at each load, counted in
 `GET /api/v1/admin/server` (`job_conflicts`), and listed by
 `GET /api/v1/admin/job-conflicts`. An admin chooses
 the file (the edit is retired) or the edit (made over the file as it is
-now). Should an edit make the set fail once a file has changed, the edit
+now), with `kipp job resolve <name> file|edit` or the API. Should an edit make the set fail once a file has changed, the edit
 is set aside as a conflict with the check's error and the load goes on; a
 job file that is bad itself still refuses the load.
 
@@ -894,3 +895,44 @@ In `files` mode a change is refused with 409 `files_changed`, "reload
 first", when the job file changed on disk since kipp read it. A server
 started in `files` mode on a database a `store` server left writes the
 edits that still apply to their files; the conflicts stay.
+
+
+### The example jobs
+
+A server in `store` mode, started for the first time on a data directory
+that never held a job of the store or a build, and serving no job (no
+`--jobs`, or an empty one), creates two jobs of the store, version `seed`,
+author `kipp`, and logs `example jobs created`:
+
+- `hello`, built by hand: one stage greets `$WHO`, a param.
+- `hello-schedule`, built by `cron` once an hour: one stage says the time.
+
+Their YAML is [examples/jobs/hello.yml](../examples/jobs/hello.yml) and
+[examples/jobs/hello-schedule.yml](../examples/jobs/hello-schedule.yml).
+Change or delete them like any other job; a deleted one does not come back.
+That first start decides for good: a server that served a job then (a job
+file, say) never creates them later, and neither does a server that has
+built anything, so an upgraded server whose jobs directory is empty for a
+moment does not grow them. `files` and `off` never create them.
+
+### Moving file jobs into the store
+
+To keep the jobs of a directory in the database, and change them through
+kipp from then on:
+
+```sh
+kipp job import ./jobs --data <data-dir>
+```
+
+Then restart the server without `--jobs` (and without `--job-edits files`
+or `off`, which need it). Every job file has become a job of the store, its
+history starting at a version `import`. `kipp job import` refuses the whole
+directory when one file has an error or the store already holds a job of
+one of its names. Restarted with `--jobs` still given, a job file of the
+same name as an imported job wins, and the stored job waits as a conflict
+(the last row of the table in
+[When a file and an edit meet](#when-a-file-and-an-edit-meet)) until the
+file is gone. `_vars.yml` is
+not imported: its variables reach the jobs only while `--jobs` names a
+directory that holds it. `kipp job export <dir>` goes the other way, and
+writes every job the server serves as a file.

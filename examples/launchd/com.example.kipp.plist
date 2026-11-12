@@ -8,6 +8,15 @@
     launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.example.kipp.plist
     kipp user add admin --admin --data /Users/you/kipp/data
 
+  It runs in store mode, the default of the job-edits flag of serve: a
+  job changed through kipp (kipp job, the API) is kept in the database in
+  /Users/you/kipp/data, and kipp never writes /Users/you/kipp/jobs. For
+  files mode, where such a change is written to the job file, add two
+  strings to ProgramArguments after the jobs directory: the flag
+  job-edits, with its two leading dashes, and files. The jobs directory
+  must then be writable by the user kipp runs as; kipp refuses to start
+  in files mode when it is not.
+
   Re-read the job files with `kipp reload`, or
   `launchctl kill HUP gui/$(id -u)/com.example.kipp`. Stop it with
   `launchctl bootout gui/$(id -u)/com.example.kipp`.

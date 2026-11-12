@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -113,16 +114,21 @@ func (c *client) do(method, path string, body io.Reader) (*http.Response, []byte
 			return nil, nil, err
 		}
 	}
-	res, data, err := c.send(method, api.PrefixV1+path, sent)
+	return c.doWith(method, path, sent, nil)
+}
+
+// doWith is do with headers of the request's own.
+func (c *client) doWith(method, path string, body []byte, hdr http.Header) (*http.Response, []byte, error) {
+	res, data, err := c.sendWith(method, api.PrefixV1+path, body, hdr)
 	if err != nil || res.StatusCode < 300 {
 		return res, data, err
 	}
 	return nil, nil, refusal(res, data)
 }
 
-// send makes one request and returns the answer whatever its status; the
-// error is for a request that got none.
-func (c *client) send(method, path string, body []byte) (*http.Response, []byte, error) {
+// sendWith makes one request and returns the answer whatever its status;
+// the error is for a request that got none.
+func (c *client) sendWith(method, path string, body []byte, hdr http.Header) (*http.Response, []byte, error) {
 	var sent io.Reader
 	if body != nil {
 		sent = bytes.NewReader(body)
@@ -131,6 +137,7 @@ func (c *client) send(method, path string, body []byte) (*http.Response, []byte,
 	if err != nil {
 		return nil, nil, err
 	}
+	maps.Copy(req.Header, hdr)
 	req.Header.Set("Authorization", "Bearer "+c.token)
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
@@ -150,13 +157,33 @@ func (c *client) send(method, path string, body []byte) (*http.Response, []byte,
 	return res, data, nil
 }
 
+// answered is a 4xx other than a refused token: the server's message, and
+// the status, which a command may act on.
+type answered struct {
+	status int
+	msg    string
+}
+
+func (e *answered) Error() string { return e.msg }
+
+// answeredWith reports whether err is the server's answer with status.
+func answeredWith(err error, status int) bool {
+	a, ok := errors.AsType[*answered](err)
+	return ok && a.status == status
+}
+
 // refusal is the error for an answer that is not a 2xx: the server's own
 // message (a problem's detail) when it sent one, the status line when not.
+// A problem that lists its errors gives them one to a line.
 func refusal(res *http.Response, data []byte) error {
 	var e struct {
-		Detail string `json:"detail"`
+		Detail string   `json:"detail"`
+		Errors []string `json:"errors"`
 	}
 	_ = json.Unmarshal(data, &e)
+	if len(e.Errors) > 0 {
+		e.Detail = "refused:\n  " + strings.Join(e.Errors, "\n  ")
+	}
 	if e.Detail == "" {
 		e.Detail = res.Status
 	}
@@ -166,7 +193,7 @@ func refusal(res *http.Response, data []byte) error {
 	case res.StatusCode == http.StatusUnauthorized || res.StatusCode == http.StatusForbidden:
 		return fmt.Errorf("%w: %s", errRefused, e.Detail)
 	}
-	return errors.New(e.Detail)
+	return &answered{status: res.StatusCode, msg: e.Detail}
 }
 
 // call sends body as JSON, when there is one, and decodes the answer into

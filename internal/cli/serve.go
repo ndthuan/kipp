@@ -700,7 +700,7 @@ func (s *server) listen(ctx context.Context) (net.Listener, error) {
 	_, err = s.jobs.Load(ctx)
 	if err != nil {
 		err = fmt.Errorf("the job set has errors; not starting:\n%w", err)
-	} else {
+	} else if _, err = s.jobs.Seed(ctx); err == nil {
 		s.loadPlaces(ctx)
 		err = s.d.Recover(ctx)
 	}
