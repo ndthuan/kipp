@@ -10,6 +10,11 @@ lines and the data directory are the public surface.
 
 Changed:
 
+- Each stage log on a build page scrolls in a box of its own, at most 70% of
+  the window tall, instead of stretching the page. A live log keeps its box
+  at the end until the reader scrolls it up, and the page no longer jumps to
+  the end of a long log; Previous and Next problem scroll the box to the
+  line.
 - The overview on a phone (under 48rem) opens on a status line
   (`Nothing failing` or `N failing`, and `N unstable`), leaves out an empty
   Failing or Unstable section, and puts what runs right after what fails. A

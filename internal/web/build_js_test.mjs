@@ -156,7 +156,7 @@ const first = opened[0];
 first.onmessage({ data: "line", lastEventId: "5" });
 check(pre.text() === "line\n" && pre.dataset.offset === "5", "a line is appended and its offset kept");
 check(pre.times() === "-", "a line no time came for carries none");
-check(revealed.length === 1 && revealed[0] === "s end", "the page is taken to the end of the open log, got " + revealed);
+check(revealed.length === 1 && revealed[0] === "s nearest", "the page is taken to the open log, not to its end, got " + revealed);
 
 // Progress written with carriage returns comes as events with no id of
 // their own, then the piece that ends the line: only the last stays.
@@ -276,7 +276,7 @@ await settle();
 revealed.length = 0;
 opened[opened.length - 2].onmessage({ data: "a", lastEventId: "2" });
 opened[opened.length - 1].onmessage({ data: "b", lastEventId: "2" });
-check(revealed.length === 1 && revealed[0] === "second end", "the page follows the log opened last, got " + revealed);
+check(revealed.length === 1 && revealed[0] === "second nearest", "the page follows the log opened last, got " + revealed);
 logs.second.open = false;
 afterSwap();
 check(!logs.second.open, "a log the reader closed is not opened again");
@@ -286,6 +286,20 @@ windowListeners.wheel();
 revealed.length = 0;
 opened[opened.length - 1].onmessage({ data: "c", lastEventId: "4" });
 check(revealed.length === 0, "the page is not moved after the reader moved it");
+
+// The log is a scroll box of its own: a line that arrives keeps the box at
+// its end when it was there, and leaves it alone when the reader scrolled
+// it up.
+const box = logs.second.pre;
+box.scrollHeight = 1000;
+box.clientHeight = 300;
+box.scrollTop = 700;
+box.stream.onmessage({ data: "d", lastEventId: "5" });
+check(box.scrollTop === box.scrollHeight, "a new line keeps a box that was at its end at its end");
+box.scrollTop = 100;
+box.stream.onmessage({ data: "e", lastEventId: "6" });
+check(box.scrollTop === 100, "a box the reader scrolled up stays where it is when lines arrive");
+
 
 // Colours and bold a build printed are drawn: each run of text with the
 // same style is a span of classes, a run with none is a text node, and the
@@ -410,10 +424,17 @@ check(!logs.prob.problems.hidden && logs.prob.count.textContent === total + " pr
 // the line reached is marked, scrolled to and given the keyboard.
 const lines = prob.childNodes.filter((n) => n.problem);
 check(lines.length === total, "the problem lines are the ones counted");
+prob.clientHeight = 300;
+prob.scrollTop = 0;
+lines[0].offsetTop = 900;
+lines[0].offsetHeight = 20;
+revealed.length = 0;
 logs.prob.click1();
+check(prob.scrollTop === 760, "problem navigation puts the line in the middle of the box, got " + prob.scrollTop);
+check(revealed.length === 1 && revealed[0] === "prob nearest", "problem navigation moves the page only as far as it takes to show the box, got " + revealed);
 check(prob.current === lines[0] && lines[0].dataset.current === "1", "next from nowhere is the first problem");
 check(logs.prob.count.textContent === "1 of " + total, "the position is shown, got " + logs.prob.count.textContent);
-check(lines[0].tabIndex === -1 && focused.at(-1).node === lines[0] && scrolled.at(-1).node === lines[0], "the line is focusable, focused and scrolled to");
+check(lines[0].tabIndex === -1 && focused.at(-1).node === lines[0], "the line is focusable and focused");
 logs.prob.click1();
 check(prob.current === lines[1] && lines[0].dataset.current === undefined, "next moves on and the mark moves with it");
 check(logs.prob.count.textContent === "2 of " + total, "the position follows");

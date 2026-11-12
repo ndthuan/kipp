@@ -285,7 +285,9 @@ function goProblem(details, pre, step) {
   line.dataset.current = "1";
   line.tabIndex = -1;
   following = false;
-  line.scrollIntoView({ block: "center" });
+  // The box scrolls to the line, the page only far enough to show the box.
+  pre.scrollTop = line.offsetTop - (pre.clientHeight - line.offsetHeight) / 2;
+  details.scrollIntoView({ block: "nearest" });
   line.focus({ preventScroll: true });
   showProblems(details, pre);
 }
@@ -355,9 +357,10 @@ function syncChips(live) {
   });
 }
 
-// The page is taken down to the end of the log a reader came for, the
-// last one open, and kept there as it grows, until the reader moves the
-// page themselves.
+// The page is taken to the log a reader came for, the last one open, and
+// kept showing it as it grows, until the reader moves the page themselves.
+// The log scrolls in a box of its own, so the page never has to follow it
+// to its end.
 let focus = null;
 let following = true;
 let revealing = false;
@@ -370,7 +373,7 @@ function reveal(details) {
   revealing = true;
   requestAnimationFrame(() => {
     revealing = false;
-    if (following) details.scrollIntoView({ block: "end" });
+    if (following) details.scrollIntoView({ block: "nearest" });
   });
 }
 

@@ -482,7 +482,13 @@
   .notice-tail { margin: calc(var(--space) * 2) 0 0; padding: calc(var(--space) * 2) calc(var(--space) * 3); font-family: var(--font-code); font-size: var(--size-xs); line-height: var(--leading-snug); white-space: pre-wrap; overflow-wrap: anywhere; background-color: var(--bg-raised); color: var(--fg); border-radius: var(--radius-s); }
   .log-note { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--space) * 1) calc(var(--space) * 4); padding: calc(var(--space) * 2) calc(var(--space) * 3); border-top: 1px solid var(--line); }
   .log-note .check { margin-left: auto; font-weight: var(--weight-normal); }
+  /* A long log scrolls in its own box, so it never sets the page's height;
+     position makes the box the offsetParent of its lines, which the
+     problem buttons measure. */
   .log pre {
+    position: relative;
+    max-height: 70vh;
+    overflow: auto;
     padding: calc(var(--space) * 3);
     border-top: 1px solid var(--line);
     background-color: var(--bg-sunken);
