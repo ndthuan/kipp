@@ -27,7 +27,7 @@ security:
 tags:
   - description: Whether the server answers, and what it runs with.
     name: server
-  - description: Jobs, their builds, activity and children.
+  - description: Jobs, their builds, activity and children, and the YAML and versions of a job of the server's own.
     name: jobs
   - description: One build, its stages, logs, results and artifacts.
     name: builds
@@ -35,7 +35,7 @@ tags:
     name: metrics
   - description: What runs and what waits.
     name: queue
-  - description: Reads of users, secrets, engines, runners, the cache and the audit, the server's quiet mode, its upgrade and its storage; for an admin.
+  - description: Reads of users, secrets, engines, runners, the cache and the audit, the server's quiet mode, its upgrade and its storage, and the conflicts of job edits; for an admin.
     name: admin
   - description: Deliveries from GitHub.
     name: webhooks
@@ -115,6 +115,68 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
       summary: The Docker engines
+      tags:
+        - admin
+      x-kipp-package: api
+  /admin/job-conflicts:
+    get:
+      description: For an admin; works whatever `--job-edits` is.
+      operationId: listJobConflicts
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobConflictList"
+          description: Every conflict, by job name.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: The edits of the store that wait while their files serve
+      tags:
+        - admin
+      x-kipp-package: api
+  /admin/job-conflicts/{name}/resolve:
+    post:
+      description: |
+        For an admin, as a change of a job is. `file` retires the edit and the
+        file serves; `edit` makes the edit over the file as it is now, checked
+        on the whole set as a change is (422 `job_refused`). 404 when no edit of
+        the job waits. One row of the audit.
+      operationId: resolveJobConflict
+      parameters:
+        - $ref: "#/components/parameters/JobName"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JobResolve"
+        required: true
+      responses:
+        "204":
+          description: The conflict is resolved.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/JobRefused"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - bearerToken: []
+        - csrfToken: []
+          sessionCookie: []
+      summary: Choose the file or the edit of a conflict
       tags:
         - admin
       x-kipp-package: api
@@ -1487,7 +1549,104 @@ paths:
       tags:
         - jobs
       x-kipp-package: api
+    post:
+      description: |
+        For an admin: an admin's API token, or an admin's browser session in
+        sudo mode. A build's token (`KIPP_TOKEN`) never may, whatever its
+        `permissions:`. On a server started with `--job-edits off` it is 409
+        `edits_off`; with `--job-edits files` the job file is written first,
+        and a file changed on disk since kipp read it is 409 `files_changed`
+        (reload first), one that cannot be written 500 `job_write_failed`. The
+        change is checked on the whole job set with it, as `kipp check` checks
+        a directory: 422 `job_refused` lists every error. A child of a
+        multibranch job, or a repo of an owner job, is 409. One row of the
+        audit.
+        A name the job set has, or a child uses, is 409.
+      operationId: createJob
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JobCreate"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobDefinition"
+          description: The job, created.
+          headers:
+            ETag:
+              description: The job's decoded hash, in quotes.
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/JobRefused"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - bearerToken: []
+        - csrfToken: []
+          sessionCookie: []
+      summary: Create a job
+      tags:
+        - jobs
+      x-kipp-package: api
   /jobs/{name}:
+    delete:
+      description: |
+        For an admin: an admin's API token, or an admin's browser session in
+        sudo mode. A build's token (`KIPP_TOKEN`) never may, whatever its
+        `permissions:`. On a server started with `--job-edits off` it is 409
+        `edits_off`; with `--job-edits files` the job file is written first,
+        and a file changed on disk since kipp read it is 409 `files_changed`
+        (reload first), one that cannot be written 500 `job_write_failed`. The
+        change is checked on the whole job set with it, as `kipp check` checks
+        a directory: 422 `job_refused` lists every error. A child of a
+        multibranch job, or a repo of an owner job, is 409. One row of the
+        audit.
+        `If-Match` with the job's `ETag` is required. The job's builds and its
+        versions stay; a restore brings it back.
+      operationId: deleteJob
+      parameters:
+        - $ref: "#/components/parameters/JobName"
+        - $ref: "#/components/parameters/IfMatch"
+      responses:
+        "204":
+          description: The job is deleted.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+        "422":
+          $ref: "#/components/responses/JobRefused"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - bearerToken: []
+        - csrfToken: []
+          sessionCookie: []
+      summary: Delete a job
+      tags:
+        - jobs
+      x-kipp-package: api
     get:
       operationId: getJob
       parameters:
@@ -1498,7 +1657,11 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/JobDetail"
-          description: The job. A job that was removed from the job files still answers while it has builds.
+          description: |
+            The job. A job that was removed from the job files still answers
+            while it has builds. `source` says where a job of the server's own
+            comes from, null for a child and a removed job; `edit_waits` that an
+            edit of the store waits in conflict for it.
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
@@ -1709,6 +1872,102 @@ paths:
       tags:
         - jobs
       x-kipp-package: api
+  /jobs/{name}/definition:
+    get:
+      description: |
+        For an admin; works whatever `--job-edits` is. A child of a multibranch
+        job, or a repo of an owner job, has none of its own: 409.
+      operationId: getJobDefinition
+      parameters:
+        - $ref: "#/components/parameters/JobName"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobDefinition"
+          description: The job.
+          headers:
+            ETag:
+              description: The job's decoded hash, in quotes.
+              schema:
+                type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: A job's YAML as it serves, with its ETag
+      tags:
+        - jobs
+      x-kipp-package: api
+    put:
+      description: |
+        For an admin: an admin's API token, or an admin's browser session in
+        sudo mode. A build's token (`KIPP_TOKEN`) never may, whatever its
+        `permissions:`. On a server started with `--job-edits off` it is 409
+        `edits_off`; with `--job-edits files` the job file is written first,
+        and a file changed on disk since kipp read it is 409 `files_changed`
+        (reload first), one that cannot be written 500 `job_write_failed`. The
+        change is checked on the whole job set with it, as `kipp check` checks
+        a directory: 422 `job_refused` lists every error. A child of a
+        multibranch job, or a repo of an owner job, is 409. One row of the
+        audit.
+        `If-Match` with the job's `ETag` is required (428 without, 412 when it
+        is not the job's now).
+      operationId: replaceJobDefinition
+      parameters:
+        - $ref: "#/components/parameters/JobName"
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JobReplace"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobDefinition"
+          description: The job as it now serves.
+          headers:
+            ETag:
+              description: The job's decoded hash, in quotes.
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+        "422":
+          $ref: "#/components/responses/JobRefused"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - bearerToken: []
+        - csrfToken: []
+          sessionCookie: []
+      summary: Change a job's YAML
+      tags:
+        - jobs
+      x-kipp-package: api
   /jobs/{name}/scan:
     post:
       description: Needs the `build` permission on the job.
@@ -1737,6 +1996,122 @@ paths:
         - csrfToken: []
           sessionCookie: []
       summary: Have a multibranch job's repo read now
+      tags:
+        - jobs
+      x-kipp-package: api
+  /jobs/{name}/versions:
+    get:
+      description: |
+        For an admin; works whatever `--job-edits` is, and for a job that is
+        deleted. Every version is kept.
+      operationId: listJobVersions
+      parameters:
+        - $ref: "#/components/parameters/JobName"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobVersionList"
+          description: Up to `limit` versions, 50 by default, without their YAML.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: A job's versions, newest first
+      tags:
+        - jobs
+      x-kipp-package: api
+  /jobs/{name}/versions/{id}:
+    get:
+      description: For an admin.
+      operationId: getJobVersion
+      parameters:
+        - $ref: "#/components/parameters/JobName"
+        - $ref: "#/components/parameters/VersionId"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobVersionDetail"
+          description: The version.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      summary: One version of a job, with its YAML
+      tags:
+        - jobs
+      x-kipp-package: api
+  /jobs/{name}/versions/{id}/restore:
+    post:
+      description: |
+        For an admin: an admin's API token, or an admin's browser session in
+        sudo mode. A build's token (`KIPP_TOKEN`) never may, whatever its
+        `permissions:`. On a server started with `--job-edits off` it is 409
+        `edits_off`; with `--job-edits files` the job file is written first,
+        and a file changed on disk since kipp read it is 409 `files_changed`
+        (reload first), one that cannot be written 500 `job_write_failed`. The
+        change is checked on the whole job set with it, as `kipp check` checks
+        a directory: 422 `job_refused` lists every error. A child of a
+        multibranch job, or a repo of an owner job, is 409. One row of the
+        audit.
+        The restore is a new version with the old one's YAML; it rewrites
+        nothing. Over a job that serves it is a change and needs `If-Match`; a
+        deleted job comes back without one. A deletion cannot be restored: 409.
+      operationId: restoreJobVersion
+      parameters:
+        - $ref: "#/components/parameters/JobName"
+        - $ref: "#/components/parameters/VersionId"
+        - $ref: "#/components/parameters/IfMatch"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobDefinition"
+          description: The job as it now serves.
+          headers:
+            ETag:
+              description: The job's decoded hash, in quotes.
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+        "422":
+          $ref: "#/components/responses/JobRefused"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "500":
+          $ref: "#/components/responses/InternalError"
+      security:
+        - bearerToken: []
+        - csrfToken: []
+          sessionCookie: []
+      summary: Make an older version of a job its newest
       tags:
         - jobs
       x-kipp-package: api
@@ -2255,6 +2630,12 @@ components:
       name: cursor
       schema:
         type: string
+    IfMatch:
+      description: The `ETag` of the job as the caller read it (`GET /jobs/{name}/definition`).
+      in: header
+      name: If-Match
+      schema:
+        type: string
     JobName:
       description: The job's name.
       in: path
@@ -2297,6 +2678,15 @@ components:
       required: true
       schema:
         type: string
+    VersionId:
+      description: A version's id, from the job's versions.
+      in: path
+      name: id
+      required: true
+      schema:
+        format: int64
+        minimum: 1
+        type: integer
   responses:
     BadRequest:
       content:
@@ -2325,6 +2715,12 @@ components:
           schema:
             $ref: "#/components/schemas/Problem"
       description: Something failed inside the server; the reason is in its log, not in the answer.
+    JobRefused:
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemWithErrors"
+      description: The job set would refuse the change (`job_refused`); `errors` lists every problem. Nothing changed.
     NotFound:
       content:
         application/problem+json:
@@ -2339,6 +2735,18 @@ components:
           schema:
             $ref: "#/components/schemas/Problem"
       description: The request body is over the limit, 64 KiB for the JSON API and the webhook's own cap for a delivery.
+    PreconditionFailed:
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+      description: The `If-Match` is not the job's `ETag` now (`precondition_failed`); read the job again.
+    PreconditionRequired:
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+      description: The change sent no `If-Match` (`precondition_required`).
     RunnerRefusal:
       content:
         application/json:
@@ -3268,6 +3676,105 @@ components:
         - children_count
         - worst
       type: object
+    JobConflict:
+      additionalProperties: false
+      description: |
+        An edit of the store that waits while the job file serves (or while the
+        job is absent, its file gone). Worked out at each load, never stored.
+      properties:
+        base:
+          description: The decoded hash of the job file the edit was made over, null when there was none.
+          type:
+            - string
+            - "null"
+        edit:
+          description: The edit's YAML, null for a deletion.
+          type:
+            - string
+            - "null"
+        edit_deletion:
+          type: boolean
+        edit_version:
+          description: The version the edit is.
+          format: int64
+          type: integer
+        file:
+          description: The job file's YAML, null when there is none.
+          type:
+            - string
+            - "null"
+        file_hash:
+          type:
+            - string
+            - "null"
+        job:
+          type: string
+        reason:
+          type: string
+      required:
+        - job
+        - reason
+        - file
+        - file_hash
+        - edit
+        - edit_version
+        - edit_deletion
+        - base
+      type: object
+    JobConflictList:
+      additionalProperties: false
+      description: The edits that wait, by job name. Not paged; `next_cursor` is always null.
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/JobConflict"
+          type: array
+        next_cursor:
+          $ref: "#/components/schemas/NextCursor"
+      required:
+        - items
+        - next_cursor
+      type: object
+    JobCreate:
+      additionalProperties: false
+      description: A new job; the YAML's `name:` must be `name`.
+      properties:
+        name:
+          type: string
+        yaml:
+          description: The job file, as `docs/jobs.md` describes it.
+          type: string
+      required:
+        - name
+        - yaml
+      type: object
+    JobDefinition:
+      additionalProperties: false
+      description: |
+        A job of the server's own as it serves: its YAML as it was written,
+        comments and all, and its `etag`, which a replace, a delete or a restore
+        sends back as `If-Match`. For an admin, as a job's `env` may hold what a
+        viewer never saw.
+      properties:
+        conflict:
+          description: An edit of the store waits in conflict for this job (`GET /admin/job-conflicts`).
+          type: boolean
+        etag:
+          description: The job's decoded hash, in quotes, as the `ETag` header has it. A comment or a reformat of the file leaves it as it is.
+          type: string
+        name:
+          type: string
+        source:
+          $ref: "#/components/schemas/JobSource"
+        yaml:
+          type: string
+      required:
+        - name
+        - yaml
+        - etag
+        - source
+        - conflict
+      type: object
     JobDetail:
       additionalProperties: false
       description: |
@@ -3287,6 +3794,9 @@ components:
         description:
           type: string
         disabled:
+          type: boolean
+        edit_waits:
+          description: An edit of the store waits in conflict for this job.
           type: boolean
         folder:
           description: The owner job a repo's job belongs to.
@@ -3327,6 +3837,11 @@ components:
           oneOf:
             - $ref: "#/components/schemas/Scan"
             - type: "null"
+        source:
+          description: Where a job of the server's own comes from; null for a child and a removed job.
+          oneOf:
+            - $ref: "#/components/schemas/JobSource"
+            - type: "null"
         timezone:
           description: The zone the cron is read in, the job's own, else the server's, else `Local`.
           type: string
@@ -3349,6 +3864,8 @@ components:
         - scan
         - folder
         - owner
+        - source
+        - edit_waits
       type: object
     JobList:
       additionalProperties: false
@@ -3360,6 +3877,147 @@ components:
         items:
           items:
             $ref: "#/components/schemas/Job"
+          type: array
+        next_cursor:
+          $ref: "#/components/schemas/NextCursor"
+      required:
+        - items
+        - next_cursor
+      type: object
+    JobReplace:
+      additionalProperties: false
+      description: A job's new YAML; its `name:` must be the job's in the path.
+      properties:
+        yaml:
+          description: The job file, as `docs/jobs.md` describes it.
+          type: string
+      required:
+        - yaml
+      type: object
+    JobResolve:
+      additionalProperties: false
+      description: |
+        Which side of a conflict serves: `file` retires the edit of the store and
+        the job file serves; `edit` makes the edit over the job file as it is now,
+        so that it serves (with `--job-edits files`, writes it to the file).
+      properties:
+        keep:
+          enum:
+            - file
+            - edit
+          type: string
+      required:
+        - keep
+      type: object
+    JobSource:
+      description: |
+        Where a job comes from: its job file, the database (created through kipp,
+        imported or seeded), or the database over a job file it was changed from.
+      enum:
+        - file
+        - store
+        - store over file
+      type: string
+    JobVersion:
+      additionalProperties: false
+      description: |
+        One text a job had, made through kipp or found on disk by a load. A
+        deletion has no hash.
+      properties:
+        at:
+          $ref: "#/components/schemas/Timestamp"
+        author:
+          description: The user who made it, `kipp` for what a load found on disk, `cli` for an offline import.
+          type: string
+        deleted:
+          type: boolean
+        hash:
+          description: The job's decoded hash, null for a deletion.
+          type:
+            - string
+            - "null"
+        how:
+          description: |
+            Through what it came: the API, the web UI, MCP, `kipp job import`, a
+            seed job, a job file a load found changed, a restore of an older
+            version, or the choice of a conflict.
+          enum:
+            - api
+            - web
+            - mcp
+            - import
+            - seed
+            - files
+            - revert
+            - resolve
+          type: string
+        id:
+          format: int64
+          type: integer
+        job:
+          type: string
+      required:
+        - id
+        - job
+        - deleted
+        - hash
+        - author
+        - how
+        - at
+      type: object
+    JobVersionDetail:
+      additionalProperties: false
+      description: One version with its YAML, null for a deletion.
+      properties:
+        at:
+          $ref: "#/components/schemas/Timestamp"
+        author:
+          type: string
+        deleted:
+          type: boolean
+        hash:
+          type:
+            - string
+            - "null"
+        how:
+          enum:
+            - api
+            - web
+            - mcp
+            - import
+            - seed
+            - files
+            - revert
+            - resolve
+          type: string
+        id:
+          format: int64
+          type: integer
+        job:
+          type: string
+        yaml:
+          type:
+            - string
+            - "null"
+      required:
+        - id
+        - job
+        - deleted
+        - hash
+        - author
+        - how
+        - at
+        - yaml
+      type: object
+    JobVersionList:
+      additionalProperties: false
+      description: |
+        A job's versions, newest first. `next_cursor` is the `cursor` that reads
+        the page after this one, and null when this is the last.
+      properties:
+        items:
+          items:
+            $ref: "#/components/schemas/JobVersion"
           type: array
         next_cursor:
           $ref: "#/components/schemas/NextCursor"
@@ -3919,6 +4577,34 @@ components:
         - status
         - detail
         - code
+      type: object
+    ProblemWithErrors:
+      additionalProperties: false
+      description: |
+        A problem document with the list of what was refused, one item each;
+        `detail` is them joined by newlines.
+      properties:
+        code:
+          type: string
+        detail:
+          type: string
+        errors:
+          items:
+            type: string
+          type: array
+        status:
+          type: integer
+        title:
+          type: string
+        type:
+          type: string
+      required:
+        - type
+        - title
+        - status
+        - detail
+        - code
+        - errors
       type: object
     Queue:
       additionalProperties: false
@@ -4501,6 +5187,17 @@ components:
             - "null"
         go_version:
           type: string
+        job_conflicts:
+          description: How many edits of the store wait while their job files serve.
+          type: integer
+        job_edits:
+          description: What a change of a job through kipp does, `serve --job-edits`; empty on a server that keeps no job store.
+          enum:
+            - off
+            - store
+            - files
+            - ""
+          type: string
         jobs:
           description: How many jobs are loaded.
           type: integer
@@ -4580,6 +5277,8 @@ components:
         - last_reload_at
         - last_reload_error
         - jobs
+        - job_edits
+        - job_conflicts
         - origin
         - update_check
         - latest

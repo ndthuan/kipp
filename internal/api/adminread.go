@@ -261,6 +261,10 @@ type ServerInfo struct {
 	LastReloadError string
 	// Jobs is how many jobs are loaded.
 	Jobs int
+	// JobEdits is serve --job-edits, and JobConflicts how many edits of
+	// the store wait while their files serve; the Service fills both in.
+	JobEdits     string
+	JobConflicts int
 	// Origin is where the running binary came from, for people to read.
 	Origin string
 	// UpdateCheck is whether the server looks for newer releases at all.
@@ -283,6 +287,9 @@ func (s *Service) ServerInfo(_ context.Context, u *store.User) (*ServerInfo, err
 	}
 	info := s.deps.ServerInfo()
 	info.Jobs = len(s.deps.Dispatch.Snapshot().Names)
+	if s.deps.Jobs != nil {
+		info.JobEdits, info.JobConflicts = string(s.deps.Jobs.Mode()), len(s.deps.Jobs.Conflicts())
+	}
 	if s.deps.Storage != nil {
 		info.SelfCheck = s.deps.Storage.LastCheck()
 	}

@@ -24,6 +24,8 @@ required:
   - last_reload_at
   - last_reload_error
   - jobs
+  - job_edits
+  - job_conflicts
   - origin
   - update_check
   - latest
@@ -91,6 +93,13 @@ properties:
   jobs:
     type: integer
     description: How many jobs are loaded.
+  job_edits:
+    type: string
+    enum: [off, store, files, ""]
+    description: What a change of a job through kipp does, `serve --job-edits`; empty on a server that keeps no job store.
+  job_conflicts:
+    type: integer
+    description: How many edits of the store wait while their job files serve.
   origin:
     type: string
     description: Where the running binary came from, such as Homebrew, Docker image, or release archive or build; `data directory (the executable's own is vA.B.C)` when the server runs a newer binary kept in the data directory.

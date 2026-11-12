@@ -253,11 +253,14 @@ type jobDetailV1 struct {
 	Scan        *scanV1                  `json:"scan"`
 	Folder      *string                  `json:"folder"`
 	Owner       *ownerV1                 `json:"owner"`
+	Source      *string                  `json:"source"`
+	EditWaits   bool                     `json:"edit_waits"`
 }
 
 func toJobDetailV1(v *JobView) jobDetailV1 {
 	out := jobDetailV1{Name: v.Name, Removed: v.Removed, Params: []paramV1{}, Locks: []string{}, Next: stampPtr(v.Next), Parent: orNil(v.Parent), Folder: orNil(v.Folder),
-		Builds: listJSON[buildSummaryV1]{Items: toBuildsV1(v.Builds)}, Activity: listJSON[activityJSON]{Items: toActivityJSON(v.Activity)}}
+		Builds: listJSON[buildSummaryV1]{Items: toBuildsV1(v.Builds)}, Activity: listJSON[activityJSON]{Items: toActivityJSON(v.Activity)},
+		Source: orNil(string(v.Source)), EditWaits: v.EditWaits}
 	if v.Older > 0 {
 		out.Builds.NextCursor = new(cursorFor("builds", int64(v.Older)))
 	}

@@ -1,0 +1,21 @@
+type: object
+additionalProperties: false
+description: |
+  A job of the server's own as it serves: its YAML as it was written,
+  comments and all, and its `etag`, which a replace, a delete or a restore
+  sends back as `If-Match`. For an admin, as a job's `env` may hold what a
+  viewer never saw.
+required: [name, yaml, etag, source, conflict]
+properties:
+  name:
+    type: string
+  yaml:
+    type: string
+  etag:
+    type: string
+    description: The job's decoded hash, in quotes, as the `ETag` header has it. A comment or a reformat of the file leaves it as it is.
+  source:
+    $ref: JobSource.yaml
+  conflict:
+    type: boolean
+    description: An edit of the store waits in conflict for this job (`GET /admin/job-conflicts`).

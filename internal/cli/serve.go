@@ -31,6 +31,7 @@ import (
 	"github.com/ndthuan/kipp/internal/enginepool"
 	"github.com/ndthuan/kipp/internal/github"
 	"github.com/ndthuan/kipp/internal/index"
+	"github.com/ndthuan/kipp/internal/jobstore"
 	"github.com/ndthuan/kipp/internal/mcp"
 	"github.com/ndthuan/kipp/internal/oauth"
 	"github.com/ndthuan/kipp/internal/overview"
@@ -52,7 +53,7 @@ import (
 	"github.com/ndthuan/kipp/internal/webhook"
 )
 
-const serveUsage = `serve --data <dir> --jobs <dir> [flags]
+const serveUsage = `serve --data <dir> [--jobs <dir>] [flags]
 
 kipp speaks plain HTTP and leaves TLS to a reverse proxy in front of it.
 A browser keeps the session cookie only over HTTPS (or, with no proxy
@@ -60,11 +61,18 @@ between, on the server's own machine at http://127.0.0.1 or localhost), and
 the login form is refused as cross-origin unless the proxy passes the
 request's Host header through unchanged.
 
-SIGHUP re-reads the jobs directory, as kipp reload does. SIGINT and SIGTERM
-stop the server; a build running then ends as lost. A second one kills a
-server that is still stopping, and leaves what its stages started running.
-So does a crash. The next serve on the data directory kills what it finds
-of those stages before it runs anything.
+--job-edits says what a job created, changed or deleted through kipp (the
+API, the web UI, MCP) does. store, the default, keeps it in the database
+with every version, over the job files of --jobs, which is then optional;
+files writes the job file and needs --jobs writable; off refuses every
+change. A job file changed under an edit of the store serves, and the edit
+waits as a conflict for an admin to resolve.
+
+SIGHUP re-reads the jobs directory and the store, as kipp reload does.
+SIGINT and SIGTERM stop the server; a build running then ends as lost. A
+second one kills a server that is still stopping, and leaves what its
+stages started running. So does a crash. The next serve on the data
+directory kills what it finds of those stages before it runs anything.
 
 A stage is given of the server's environment only what --pass-env names,
 then the job's env, its params, its secrets and the KIPP_ variables. A
@@ -168,13 +176,16 @@ type serveFlags struct {
 	mcpOAuth bool
 	// oauthBase is --base-url as the OAuth issuer is written.
 	oauthBase string
+	// jobEdits is --job-edits: what a change of a job through kipp does.
+	jobEdits jobstore.Mode
 }
 
 func parseServeFlags(args []string, stderr io.Writer) (*serveFlags, error) {
 	f := &serveFlags{artifactsMax: 50 * config.GB, cacheMax: 20 * config.GB}
 	fs := newFlags(serveUsage, stderr)
 	fs.StringVar(&f.data, "data", "", "`directory` for the database, the secrets' key, logs and workspaces (required)")
-	fs.StringVar(&f.jobs, "jobs", "", "`directory` of job files (required)")
+	fs.StringVar(&f.jobs, "jobs", "", "`directory` of job files (required with --job-edits off or files)")
+	jobEdits := fs.String("job-edits", string(jobstore.Store), "what a job created, changed or deleted through kipp does: `store` keeps it in the database, files writes its file in --jobs, off refuses it")
 	fs.StringVar(&f.listen, "listen", "127.0.0.1:8085", "`address` to listen on, in plain HTTP")
 	fs.IntVar(&f.flakyFlips, "flaky-flips", overview.DefaultFlips, "changes of colour among a job's last 20 builds that make it flaky on the front page, at least 5 builds being needed; 0 hides the section")
 	fs.StringVar(&f.baseURL, "base-url", "", "`URL` stages see as KIPP_URL (default http://<listen>); commit statuses link to builds under it only when it is given")
@@ -209,8 +220,8 @@ func parseServeFlags(args []string, stderr io.Writer) (*serveFlags, error) {
 	case len(positional) != 0:
 		fs.Usage()
 		return nil, refused("it takes flags only")
-	case f.data == "" || f.jobs == "":
-		return nil, refused("--data and --jobs are required")
+	case f.data == "":
+		return nil, refused("--data is required")
 	case f.executors < 0:
 		return nil, refused("--executors is 0 or more")
 	case f.builds < 0:
@@ -219,6 +230,12 @@ func parseServeFlags(args []string, stderr io.Writer) (*serveFlags, error) {
 		return nil, refused("--flaky-flips is 0, to hide the section, or more")
 	case f.sessionTTL <= 0:
 		return nil, refused("--session-ttl is a time to come")
+	}
+	if f.jobEdits, err = jobstore.ParseMode(*jobEdits); err != nil {
+		return nil, refused(err.Error())
+	}
+	if f.jobs == "" && f.jobEdits != jobstore.Store {
+		return nil, refused("--jobs is required with --job-edits " + string(f.jobEdits))
 	}
 	if f.clientIP.Trusted, err = parsePrefixes(*trusted); err != nil {
 		return nil, refused("--trusted-proxy " + err.Error())
@@ -393,6 +410,8 @@ type server struct {
 	// ix is the children of the multibranch jobs, which it adds to the
 	// job set it hands the dispatcher.
 	ix *index.Index
+	// jobs is the job files and the jobs of the store, which it hands ix.
+	jobs *jobstore.Jobs
 	// scanner reads the multibranch jobs' repos, now and then; it is made
 	// when the server runs, and ends with its work.
 	scanner *index.Scanner
@@ -549,16 +568,30 @@ func (s *server) close() {
 }
 
 // open reads the jobs, opens the data directory and takes the address. On
-// an error nothing is left open. The jobs come first: a bad set starts
-// nothing and creates nothing.
+// an error nothing is left open. The jobs come first: a bad file starts
+// nothing and creates nothing, nor does a jobs directory files mode
+// cannot write.
 func (s *server) open(ctx context.Context) (net.Listener, error) {
 	s.startedAt = time.Now()
 	s.reloadAt = s.startedAt
-	snap, err := config.Load(s.f.jobs)
+	if s.f.jobEdits == jobstore.Files {
+		if err := jobstore.CheckWritable(s.f.jobs); err != nil {
+			return nil, err
+		}
+	}
+	// With edits off the files are the whole set, checked as one; with
+	// edits on a job of the store may be part of it, so the set is checked
+	// once the store is open.
+	var err error
+	if s.f.jobEdits == jobstore.Off {
+		_, err = config.Load(s.f.jobs)
+	} else {
+		err = jobstore.Precheck(s.f.jobs)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("the jobs directory has errors; not starting:\n%w", err)
 	}
-	ln, err := s.openData(ctx, snap)
+	ln, err := s.openData(ctx)
 	if err != nil {
 		s.close()
 	}
@@ -569,7 +602,7 @@ func (s *server) open(ctx context.Context) (net.Listener, error) {
 // opens what it holds. The lock comes before anything is read or written:
 // a second server on the same directory would call the first one's running
 // builds lost and remove the workspaces they run in.
-func (s *server) openData(ctx context.Context, snap *config.Snapshot) (net.Listener, error) {
+func (s *server) openData(ctx context.Context) (net.Listener, error) {
 	var err error
 	// Absolute, because a stage reads KIPP_WORKSPACE from inside it.
 	if s.f.data, err = filepath.Abs(s.f.data); err != nil {
@@ -602,7 +635,7 @@ func (s *server) openData(ctx context.Context, snap *config.Snapshot) (net.Liste
 		return nil, err
 	}
 	logUpgrade(s.log, s.st.Upgrade())
-	return s.listen(ctx, snap)
+	return s.listen(ctx)
 }
 
 // logUpgrade says when the database was brought up from an older schema,
@@ -617,7 +650,7 @@ func logUpgrade(log *slog.Logger, up store.Upgrade) {
 // listen takes the address, then makes the dispatcher and has it clear
 // what the last process left. The address comes first, so that a server
 // that cannot be reached changes nothing.
-func (s *server) listen(ctx context.Context, snap *config.Snapshot) (net.Listener, error) {
+func (s *server) listen(ctx context.Context) (net.Listener, error) {
 	ln, err := listen("tcp", s.f.listen)
 	if err != nil {
 		return nil, err
@@ -663,11 +696,15 @@ func (s *server) listen(ctx context.Context, snap *config.Snapshot) (net.Listene
 	s.storage = s.newStorage()
 	// Before anything can ask: the dispatcher has no jobs until it is given some.
 	s.ix = index.New(s.st, s.d.SetSnapshot)
-	if err := s.ix.SetBase(ctx, snap); err != nil {
-		s.log.Error("reading the children of the multibranch jobs; they build again once a push makes them", "err", err)
+	s.jobs = jobstore.New(jobstore.Options{Mode: s.f.jobEdits, Dir: s.f.jobs, Store: s.st, Log: s.log, Publish: s.publish})
+	_, err = s.jobs.Load(ctx)
+	if err != nil {
+		err = fmt.Errorf("the job set has errors; not starting:\n%w", err)
+	} else {
+		s.loadPlaces(ctx)
+		err = s.d.Recover(ctx)
 	}
-	s.loadPlaces(ctx)
-	if err := s.d.Recover(ctx); err != nil {
+	if err != nil {
 		_ = ln.Close()
 		if s.runnerLn != nil {
 			_ = s.runnerLn.Close()
@@ -804,32 +841,42 @@ func (s *server) openSecretRecord(ctx context.Context, name string) (dispatch.Se
 	return dispatch.Secret{Kind: rec.Kind, User: rec.User, Value: string(value), Scopes: rec.Scopes}, nil
 }
 
-// reload re-reads the jobs directory. A set with an error in it changes
-// nothing: the jobs stay as they were and the error is kept for the banner.
+// reload re-reads the jobs directory and the store. A set with an error
+// in it changes nothing: the jobs stay as they were and the error is kept
+// for the banner.
 //
 // The two messages below, "jobs reloaded" and "reload refused", are read
 // from the log by deploy scripts: their wording is part of what kipp
-// promises. TestTheTwoReloadLinesInTheLogKeepTheirWording holds them.
+// promises. TestTheTwoReloadLinesInTheLogKeepTheirWording holds them. A
+// change through kipp logs a line of its own and neither of them, as a
+// script waiting for "jobs reloaded" after its SIGHUP would take it for
+// its own.
 func (s *server) reload(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.reloadAt = time.Now()
 	s.loadPlaces(ctx)
-	snap, err := config.Load(s.f.jobs)
+	r, err := s.jobs.Load(ctx)
 	if err != nil {
 		s.reloadErr = err.Error()
 		s.log.Error("reload refused; the previous job set stays", "err", err)
 		return &api.JobsRefused{Err: err}
 	}
 	s.reloadErr = ""
+	s.log.Info("jobs reloaded", "count", r.Jobs, "conflicts", r.Conflicts)
+	return nil
+}
+
+// publish hands a job set to the index, which adds the children and hands
+// it on to the dispatcher, at the start, at a reload and at every change
+// through kipp.
+func (s *server) publish(ctx context.Context, snap *config.Snapshot) {
 	if err := s.ix.SetBase(ctx, snap); err != nil {
 		s.log.Error("reading the children of the multibranch jobs; the ones read before stay", "err", err)
 	}
 	if s.scanner != nil {
-		s.scanner.Reload() // a new file, or a new token, is read at once
+		s.scanner.Reload() // a new job, or a new token, is read at once
 	}
-	s.log.Info("jobs reloaded", "count", len(snap.Names))
-	return nil
 }
 
 func (s *server) reloadError() string {
@@ -916,7 +963,7 @@ func (s *server) deps(au *auth.Service) api.Deps {
 		ServerInfo: s.info, Listen: s.listenAddr,
 		Engines: s.pool.Status, Runners: s.hub.Runners, PlacesChanged: s.loadPlaces,
 		Cache: s.cache, Scanner: s.scanner, Upgrade: s.upgrades, FlakyFlips: s.f.flakyFlips,
-		Storage: s.storage, Restart: s.restartNow,
+		Storage: s.storage, Restart: s.restartNow, Jobs: s.jobs,
 	}
 }
 
@@ -1014,7 +1061,7 @@ func (s *server) run(ctx context.Context, ln net.Listener, stdout io.Writer) int
 	wg.Go(func() { s.hooks.Replay(work) })
 	runnerSrv := s.serveRunners(failed)
 	say(stdout, "kipp %s listening on http://%s, %s from %s, data in %s",
-		version.Version, ln.Addr(), jobCount(len(s.d.Snapshot().Names)), s.f.jobs, s.f.data)
+		version.Version, ln.Addr(), jobCount(len(s.d.Snapshot().Names)), s.jobsFrom(), s.f.data)
 
 	code := 0
 	select {
@@ -1033,6 +1080,18 @@ func (s *server) run(ctx context.Context, ln net.Listener, stdout io.Writer) int
 	}
 	s.stop(stopWork, &wg, srv, runnerSrv)
 	return code
+}
+
+// jobsFrom is where the jobs come from, for the line that says the server
+// listens.
+func (s *server) jobsFrom() string {
+	switch {
+	case s.f.jobs == "":
+		return "the store"
+	case s.f.jobEdits == jobstore.Store:
+		return s.f.jobs + " and the store"
+	}
+	return s.f.jobs
 }
 
 // serveRunners serves /api/v1/runner/ on --runner-listen, when there is one; its

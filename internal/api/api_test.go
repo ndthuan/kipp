@@ -29,6 +29,7 @@ import (
 	"github.com/ndthuan/kipp/internal/auth"
 	"github.com/ndthuan/kipp/internal/config"
 	"github.com/ndthuan/kipp/internal/dispatch"
+	"github.com/ndthuan/kipp/internal/jobstore"
 	"github.com/ndthuan/kipp/internal/logtime"
 	"github.com/ndthuan/kipp/internal/overview"
 	"github.com/ndthuan/kipp/internal/runner"
@@ -57,6 +58,7 @@ type env struct {
 	api    *API
 	client *http.Client
 	dir    string
+	jobs   *jobstore.Jobs
 	active atomic.Int64 // handlers that have not returned
 	admin  string       // tokens
 	aide   string       // build on smoke
@@ -77,19 +79,20 @@ func newEnv(t *testing.T, tune ...func(*API)) *env {
 	for name, body := range jobFiles {
 		must(t, os.WriteFile(filepath.Join(jobs, name), []byte(body), 0o600))
 	}
-	snap, err := config.Load(jobs)
-	must(t, err)
 	st, err := store.Open(filepath.Join(dir, "db"))
 	must(t, err)
 	quiet := slog.New(slog.DiscardHandler)
 	ctx, stop := context.WithCancel(context.Background())
 	d := dispatch.New(st, runner.Local{}, dispatch.Options{DataDir: dir, Logger: quiet})
-	d.SetSnapshot(snap)
+	js := jobstore.New(jobstore.Options{Mode: jobstore.Store, Dir: jobs, Store: st, Log: quiet,
+		Publish: func(_ context.Context, snap *config.Snapshot) { d.SetSnapshot(snap) }})
+	_, err = js.Load(ctx)
+	must(t, err)
 	stopped := make(chan struct{})
 	go func() { d.Run(ctx); close(stopped) }()
 	// The timeout turns a stream or a long-poll that never ends into a failure.
-	e := &env{st: st, dir: dir, client: &http.Client{Timeout: waitfor.Safety, Transport: &http.Transport{DisableKeepAlives: true}}}
-	e.api = New(Deps{Auth: auth.New(st, time.Hour, []byte("an obvious test device key 32 b.")), Dispatch: d, Store: st, Version: "test", Logger: quiet,
+	e := &env{st: st, dir: dir, jobs: js, client: &http.Client{Timeout: waitfor.Safety, Transport: &http.Transport{DisableKeepAlives: true}}}
+	e.api = New(Deps{Auth: auth.New(st, time.Hour, []byte("an obvious test device key 32 b.")), Dispatch: d, Store: st, Jobs: js, Version: "test", Logger: quiet,
 		Reload: func(context.Context) error {
 			if err := e.reloadErr.Load(); err != nil {
 				return *err
@@ -1147,9 +1150,8 @@ func TestABuildIsCompleteOnlyOnceTheHookIsDone(t *testing.T) {
 // reload has the dispatcher read the job files again, as serve does.
 func (e *env) reload(t *testing.T) {
 	t.Helper()
-	snap, err := config.Load(filepath.Join(e.dir, "jobs"))
+	_, err := e.jobs.Load(context.Background())
 	must(t, err)
-	e.api.deps.Dispatch.SetSnapshot(snap)
 }
 
 func (e *env) writeJob(t *testing.T, name, body string) {

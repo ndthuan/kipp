@@ -1,0 +1,5 @@
+description: The change sent no `If-Match` (`precondition_required`).
+content:
+  application/problem+json:
+    schema:
+      $ref: ../schemas/Problem.yaml

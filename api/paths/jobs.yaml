@@ -14,3 +14,54 @@ get:
       $ref: ../responses/Unauthorized.yaml
     "500":
       $ref: ../responses/InternalError.yaml
+post:
+  operationId: createJob
+  tags: [jobs]
+  summary: Create a job
+  description: |
+    For an admin: an admin's API token, or an admin's browser session in
+    sudo mode. A build's token (`KIPP_TOKEN`) never may, whatever its
+    `permissions:`. On a server started with `--job-edits off` it is 409
+    `edits_off`; with `--job-edits files` the job file is written first,
+    and a file changed on disk since kipp read it is 409 `files_changed`
+    (reload first), one that cannot be written 500 `job_write_failed`. The
+    change is checked on the whole job set with it, as `kipp check` checks
+    a directory: 422 `job_refused` lists every error. A child of a
+    multibranch job, or a repo of an owner job, is 409. One row of the
+    audit.
+    A name the job set has, or a child uses, is 409.
+  x-kipp-package: api
+  security:
+    - bearerToken: []
+    - sessionCookie: []
+      csrfToken: []
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: ../schemas/JobCreate.yaml
+  responses:
+    "201":
+      description: The job, created.
+      headers:
+        ETag:
+          description: The job's decoded hash, in quotes.
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/JobDefinition.yaml
+    "400":
+      $ref: ../responses/BadRequest.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "403":
+      $ref: ../responses/Forbidden.yaml
+    "409":
+      $ref: ../responses/Conflict.yaml
+    "422":
+      $ref: ../responses/JobRefused.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

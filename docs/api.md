@@ -133,6 +133,11 @@ an admin may read is below `/admin/`.
 | `GET /openapi.yaml` | nothing | The description. |
 | `GET /jobs` | login | The jobs the caller may view, each with its last build and next run. |
 | `GET /jobs/<name>` | `view` | The job, its params, the first pages of its builds and activity. |
+| `POST /jobs` | admin | Creates a job: body `{"name", "yaml"}`. 201 with its definition ([Changing jobs](#changing-jobs)). |
+| `DELETE /jobs/<name>` | admin | Deletes a job, with `If-Match`; 204. |
+| `GET`, `PUT /jobs/<name>/definition` | admin | A job's YAML as written and its `ETag`; `PUT {"yaml"}` with `If-Match` changes it. |
+| `GET /jobs/<name>/versions`, `.../versions/<id>`, `POST .../versions/<id>/restore` | admin | A job's versions, newest first, paged; one with its YAML; a restore of one as the newest. |
+| `GET /admin/job-conflicts`, `POST /admin/job-conflicts/<name>/resolve` | admin | The edits that wait while their files serve, and the choice of one side (`{"keep": "file"}` or `"edit"`). |
 | `GET /jobs/<name>/builds` | `view` | Its builds, newest first, paged. |
 | `POST /jobs/<name>/builds` | `build` | Starts a build: body `{"params": {"KEY": "value"}}` or none. 201 with the build. |
 | `GET /jobs/<name>/builds/<number>` | `view` | One build by its number in the job. |
@@ -195,7 +200,8 @@ and none answers a password, a token, a hash or a secret's value.
   `session_ttl_seconds`, `timezone`, `data_dir`, `jobs_dir`,
   `free_disk_bytes` and `db_size_bytes` (null when they cannot be read),
   `last_reload_at`, `last_reload_error` (empty when the last reload was
-  taken), `jobs`, how many are loaded, `origin` (where the binary came
+  taken), `jobs`, how many are loaded, `job_edits` (`serve --job-edits`)
+  and `job_conflicts`, how many edits wait in conflict, `origin` (where the binary came
   from: Homebrew, Docker image, or release archive or build),
   `update_check` (false with `--no-update-check`), `latest` and
   `notes_url` (the newest release and its page when it is newer than
@@ -225,6 +231,47 @@ and none answers a password, a token, a hash or a secret's value.
   `"restart": true` the server restarts now, and answers 409 without
   restarting while any other build runs or waits. 409 too when the server
   is not quiet or a build does not run. The answer is the quiet as above.
+
+## Changing jobs
+
+An admin creates, changes, deletes and restores jobs through the API, as
+[Changing jobs through kipp](jobs.md#changing-jobs-through-kipp) tells.
+An admin's token may, and an admin's browser session in sudo mode; a
+build's token (`KIPP_TOKEN`) never may, whatever its `permissions:`, nor
+read a job's YAML, as its `env` may hold what a viewer never saw. Each
+change is a row of the audit (`job.create`, `job.update`, `job.delete`,
+`job.revert`, `job.resolve`).
+
+- `GET /api/v1/jobs/<name>/definition`: `name`, `yaml` as written,
+  comments and all, `etag`, `source` (`file`, `store`, `store over file`)
+  and `conflict`. The `ETag` header is the same `etag`: the job's decoded
+  hash, so that a comment or a reformat leaves it as it is.
+- A change sends the `ETag` it read as `If-Match`: 428
+  `precondition_required` without it, 412 `precondition_failed` when the
+  job changed since. A create needs none.
+- The job set is checked with the change, as `kipp check` checks a
+  directory: 422 `job_refused` lists every error in `errors`, and nothing
+  changed. The YAML's `name:` must be the job's.
+- 409 `conflict` for a create of a name the set has or a child uses, for a
+  child of a multibranch job or a repo of an owner job (its repo declares
+  it), and for a restore of a deletion; 409 `edits_off` on a server started
+  with `--job-edits off`; 409 `files_changed` with `--job-edits files` when
+  the job file changed on disk since kipp read it (reload first); 500
+  `job_write_failed` when the file could not be written.
+- `GET /api/v1/jobs/<name>/versions`: `id`, `job`, `deleted`, `hash` (null
+  for a deletion), `author` (a user, `kipp` for what a load found on disk,
+  `cli`), `how` (`api`, `web`, `mcp`, `import`, `seed`, `files`, `revert`,
+  `resolve`) and `at`, newest first, paged. `.../versions/<id>` adds
+  `yaml`, null for a deletion. `POST .../versions/<id>/restore` makes that
+  YAML the newest version; over a job that serves it needs `If-Match`, a
+  deleted job comes back without.
+- `GET /api/v1/admin/job-conflicts`: `job`, `reason`, `file` and
+  `file_hash` (null when there is no file), `edit`, `edit_version`,
+  `edit_deletion` and `base`, the hash of the file the edit was made over.
+  `POST .../<name>/resolve` with `{"keep": "file"}` retires the edit, with
+  `{"keep": "edit"}` makes it over the file as it is now; 204.
+
+These reads work whatever `--job-edits` is.
 
 ## Storage
 

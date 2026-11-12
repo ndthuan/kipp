@@ -161,12 +161,33 @@ Title: The delivery was received before
 
 A webhook delivery with an id (or a body) the server has seen before. It is not built twice.
 
+## edits_off
+
+Status: 409
+Title: Job edits are off on this server
+
+A create, change, delete, restore or conflict choice of a job on a server started with `--job-edits off`. The job files are the only source there; reading a job's YAML and its versions still works.
+
+## files_changed
+
+Status: 409
+Title: The job file changed on disk; reload first
+
+A change of a job on a server started with `--job-edits files` whose file on disk no longer says what kipp read (or is there when kipp read none). Reload, then make the change again.
+
 ## precondition_failed
 
 Status: 412
 Title: A condition of the request does not hold
 
 A conditional request (`If-Match` and the like) whose condition does not hold.
+
+## precondition_required
+
+Status: 428
+Title: The change needs If-Match
+
+A replace, delete or restore of a job that sent no `If-Match`. Send the `ETag` of the job as read, so that two changes made from the same reading cannot overwrite each other.
 
 ## too_large
 
@@ -189,6 +210,13 @@ Title: The job files were refused
 
 A reload read the job files and refused them; `detail` says why, and the jobs stay as they were.
 
+## job_refused
+
+Status: 422
+Title: The job was refused
+
+A job created, changed, deleted or restored through kipp that the job set would refuse, checked as `kipp check` checks a directory, with the change in it. `errors` lists every problem, one per item; `detail` is them joined by newlines. Nothing changed.
+
 ## too_many_streams
 
 Status: 429
@@ -209,6 +237,13 @@ Status: 500
 Title: Something failed inside the server
 
 Something failed inside the server. The reason is in its log, never in the answer.
+
+## job_write_failed
+
+Status: 500
+Title: The job file could not be written
+
+A change on a server started with `--job-edits files` whose job file could not be written or removed (a full disk, a directory turned read-only). `detail` names the file and the error. Nothing changed in memory.
 
 ## quiet
 

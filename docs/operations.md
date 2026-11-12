@@ -154,11 +154,29 @@ A reload (`kipp reload`, `SIGHUP`, the Server page) writes one of two
 lines to the server's log, which a deploy script may wait for:
 
 ```
-level=INFO msg="jobs reloaded" count=12
+level=INFO msg="jobs reloaded" count=12 conflicts=0
 level=ERROR msg="reload refused; the previous job set stays" err="..."
 ```
 
-The wording of these two lines is kept from release to release.
+The wording of these two lines is kept from release to release;
+`conflicts`, the edits that wait while their job files serve, comes after
+`count`. A load may also write these, one per job:
+
+```
+level=WARN msg="job edit waits in conflict; the file serves" job=site reason="..."
+level=INFO msg="job edit retired; the file now says the same" job=site
+level=INFO msg="job edit of the store written to its file" job=site version=7
+```
+
+A change through kipp writes its own line, never "jobs reloaded":
+
+```
+level=INFO msg="job changed through kipp" job=site version=8 how=api by=admin
+```
+
+with `created`, `changed`, `deleted`, `restored` or `resolved, the edit
+kept`; keeping the file of a conflict writes `job edit retired; the file
+serves`.
 
 ## The data directory
 

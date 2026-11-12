@@ -74,6 +74,13 @@ linters:
       # A restore into a directory the process cannot write is the subject.
       - path: ^internal/upgrade/backup/backup_test\.go$
         text: "G302"
+      # Job files are read and written in the jobs directory the server was
+      # started with, by the names of its jobs.
+      - path: ^internal/jobstore/files\.go$
+        text: "G304"
+      # A jobs directory the server cannot write is the subject.
+      - path: ^internal/(jobstore/jobstore|cli/jobedits)_test\.go$
+        text: "G302|G304"
       # The state files are read at fixed names under the data directory.
       - path: ^internal/upgrade/state/state\.go$
         text: "G304"

@@ -65,16 +65,21 @@ var (
 	NoToken           = define("no_token", http.StatusConflict, "The job names no token to scan with")
 	NotCancellable    = define("not_cancellable", http.StatusConflict, "The build can no longer be cancelled")
 	DuplicateDelivery = define("duplicate_delivery", http.StatusConflict, "The delivery was received before")
+	EditsOff          = define("edits_off", http.StatusConflict, "Job edits are off on this server")
+	FilesChanged      = define("files_changed", http.StatusConflict, "The job file changed on disk; reload first")
 
 	PreconditionFailed  = define("precondition_failed", http.StatusPreconditionFailed, "A condition of the request does not hold")
+	PreconditionNeeded  = define("precondition_required", http.StatusPreconditionRequired, "The change needs If-Match")
 	TooLarge            = define("too_large", http.StatusRequestEntityTooLarge, "The body is too large")
 	RangeNotSatisfiable = define("range_not_satisfiable", http.StatusRequestedRangeNotSatisfiable, "The range is outside the file")
 	JobsRefused         = define("jobs_refused", http.StatusUnprocessableEntity, "The job files were refused")
+	JobRefused          = define("job_refused", http.StatusUnprocessableEntity, "The job was refused")
 
 	TooManyStreams  = define("too_many_streams", http.StatusTooManyRequests, "Too many streams are open for this caller")
 	TooManyAttempts = define("too_many_attempts", http.StatusTooManyRequests, "Too many wrong passwords; wait and try again")
 
-	Internal = define("internal", http.StatusInternalServerError, "Something failed inside the server")
+	Internal       = define("internal", http.StatusInternalServerError, "Something failed inside the server")
+	JobWriteFailed = define("job_write_failed", http.StatusInternalServerError, "The job file could not be written")
 
 	Quiet = define("quiet", http.StatusServiceUnavailable, "The server is quiet and takes no new builds")
 	Busy  = define("busy", http.StatusServiceUnavailable, "The server is busy; send the request again")
@@ -91,12 +96,31 @@ type Doc struct {
 
 // Write answers c with detail, which is for a person.
 func Write(w http.ResponseWriter, c Code, detail string) {
+	write(w, c.Status, c.doc(detail))
+}
+
+func (c Code) doc(detail string) Doc {
+	return Doc{Type: TypeBase + c.Name, Title: c.Title, Status: c.Status, Detail: detail, Code: c.Name}
+}
+
+func write(w http.ResponseWriter, status int, v any) {
 	h := w.Header()
 	h.Set("Content-Type", MediaType)
 	h.Set("X-Content-Type-Options", "nosniff")
 	h.Set("Cache-Control", "no-store")
-	w.WriteHeader(c.Status)
-	_ = json.NewEncoder(w).Encode(Doc{Type: TypeBase + c.Name, Title: c.Title, Status: c.Status, Detail: detail, Code: c.Name})
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+// Listed is a problem with the list of what was refused, one item each.
+type Listed struct {
+	Doc
+	Errors []string `json:"errors"`
+}
+
+// WriteErrors answers c with detail and every error in errs.
+func WriteErrors(w http.ResponseWriter, c Code, detail string, errs []string) {
+	write(w, c.Status, Listed{c.doc(detail), errs})
 }
 
 // NotFoundHandler answers every request with 404.

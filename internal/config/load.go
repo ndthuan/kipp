@@ -1,18 +1,24 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"slices"
 	"strings"
 )
 
-// Snapshot is every job in a directory, read at one moment.
+// Snapshot is every job of a set, read at one moment.
 type Snapshot struct {
 	Jobs  map[string]*Job
 	Names []string // sorted
 	Vars  *Vars    // from VarsFile; nil when there is none
 	Hash  string   // of every file's content; changes when any file does
+	// Texts are the YAML each job was read from, by job name, comments
+	// and all; Hashes are each job's DecodedHash. Neither holds a child.
+	Texts  map[string][]byte
+	Hashes map[string]string
 	// Warnings are what Load accepted and the author should still read.
 	Warnings []string
 }
@@ -30,10 +36,31 @@ func (e *Errors) Error() string {
 	return strings.Join(lines, "\n")
 }
 
+// Files are the texts of a job set by file name, as a jobs directory
+// holds them: <job>.yml for each job, and VarsFile.
+type Files map[string][]byte
+
+// FileName is the file a job of that name is read from.
+func FileName(job string) string { return job + ".yml" }
+
 // Load reads every *.yml in dir. One bad file fails the whole load, with
-// every file's error listed, so the caller keeps its previous snapshot. A
-// *.yaml file is one of them: read as no job at all it would go unnoticed.
+// every file's error listed, so the caller keeps its previous snapshot.
 func Load(dir string) (*Snapshot, error) {
+	files, err := ReadDir(dir)
+	errs, refused := errors.AsType[*Errors](err)
+	if err != nil && !refused {
+		return nil, err
+	}
+	return check(files, errs)
+}
+
+// Check runs on files every check Load runs on a directory.
+func Check(files Files) (*Snapshot, error) { return check(files, nil) }
+
+// ReadDir reads the job files of dir. A file it cannot read, and a *.yaml
+// file (read as no job at all it would go unnoticed), is an *Errors beside
+// the files it read.
+func ReadDir(dir string) (Files, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
@@ -43,9 +70,8 @@ func Load(dir string) (*Snapshot, error) {
 		return nil, err
 	}
 	defer func() { _ = root.Close() }()
-	snap := &Snapshot{Jobs: map[string]*Job{}}
+	files := Files{}
 	var errs Errors
-	var contents [][]byte
 	for _, e := range entries {
 		if stem, ok := strings.CutSuffix(e.Name(), ".yaml"); ok && !e.IsDir() {
 			errs.Items = append(errs.Items, fmt.Errorf("%s: a job file ends in .yml; rename it to %s.yml", e.Name(), stem))
@@ -53,15 +79,36 @@ func Load(dir string) (*Snapshot, error) {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".yml") {
 			continue
 		}
-		read := readJob
-		if e.Name() == VarsFile {
-			read = readVars
-		}
-		data, err := read(snap, root, e.Name())
+		data, err := root.ReadFile(e.Name())
 		if err != nil {
 			errs.Items = append(errs.Items, fmt.Errorf("%s: %w", e.Name(), err))
+			continue
 		}
-		contents = append(contents, []byte(e.Name()), data)
+		files[e.Name()] = data
+	}
+	if len(errs.Items) > 0 {
+		return files, &errs
+	}
+	return files, nil
+}
+
+func check(files Files, prior *Errors) (*Snapshot, error) {
+	snap := &Snapshot{Jobs: map[string]*Job{}, Texts: map[string][]byte{}, Hashes: map[string]string{}}
+	var errs Errors
+	if prior != nil {
+		errs.Items = append(errs.Items, prior.Items...)
+	}
+	names := slices.Sorted(maps.Keys(files))
+	contents := make([][]byte, 0, 2*len(names))
+	for _, name := range names {
+		read := readJob
+		if name == VarsFile {
+			read = readVars
+		}
+		if err := read(snap, name, files[name]); err != nil {
+			errs.Items = append(errs.Items, fmt.Errorf("%s: %w", name, err))
+		}
+		contents = append(contents, []byte(name), files[name])
 	}
 	slices.Sort(snap.Names)
 	errs.Items = append(errs.Items, checkVars(snap)...)
@@ -81,29 +128,24 @@ func Load(dir string) (*Snapshot, error) {
 	return snap, nil
 }
 
-// readJob parses one file into snap and returns its raw content.
-func readJob(snap *Snapshot, root *os.Root, name string) ([]byte, error) {
-	data, err := root.ReadFile(name)
-	if err != nil {
-		return nil, err
-	}
+// readJob parses one file into snap.
+func readJob(snap *Snapshot, name string, data []byte) error {
 	j, err := ParseJob(name, data)
 	if err != nil {
-		return data, err
+		return err
 	}
 	snap.Jobs[j.Name] = j
 	snap.Names = append(snap.Names, j.Name)
-	return data, nil
+	snap.Texts[j.Name] = data
+	snap.Hashes[j.Name] = DecodedHash(j)
+	return nil
 }
 
-// readVars parses VarsFile into snap and returns its raw content.
-func readVars(snap *Snapshot, root *os.Root, name string) ([]byte, error) {
-	data, err := root.ReadFile(name)
-	if err != nil {
-		return nil, err
-	}
+// readVars parses VarsFile into snap.
+func readVars(snap *Snapshot, _ string, data []byte) error {
+	var err error
 	snap.Vars, err = ParseVars(data)
-	return data, err
+	return err
 }
 
 // checkVars refuses what only the jobs and VarsFile together show: two

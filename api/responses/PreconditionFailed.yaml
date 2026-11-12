@@ -1,0 +1,5 @@
+description: The `If-Match` is not the job's `ETag` now (`precondition_failed`); read the job again.
+content:
+  application/problem+json:
+    schema:
+      $ref: ../schemas/Problem.yaml

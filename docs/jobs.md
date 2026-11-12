@@ -1,8 +1,10 @@
 # Job files
 
 A job is one YAML file, `<name>.yml`, in the jobs directory the server
-is started with (`kipp serve --jobs <dir>`). This page is the reference
-for that file.
+is started with (`kipp serve --jobs <dir>`), or the same YAML created or
+changed through kipp and kept in its database
+([Changing jobs through kipp](#changing-jobs-through-kipp)). This page is
+the reference for that file.
 
 - [The file](#the-file)
 - [An example](#an-example)
@@ -19,6 +21,7 @@ for that file.
 - [Secrets in a stage](#secrets-in-a-stage)
 - [The build's token: permissions](#the-builds-token-permissions)
 - [Reloading](#reloading)
+- [Changing jobs through kipp](#changing-jobs-through-kipp)
 
 Two more kinds of job have pages of their own:
 [multibranch jobs](multibranch.md), which build every branch and pull
@@ -832,3 +835,62 @@ re-reads the directory. A directory with an error in it changes nothing:
 the server keeps the jobs it had, and the error is on the Server page and
 in the log ([Reload lines](operations.md#reload-lines)). A build already
 queued keeps its params.
+Each reload also reads the jobs kept in the database again, and works out
+the conflicts below afresh.
+
+## Changing jobs through kipp
+
+An admin may create, change, delete and restore a job through the API
+([Changing jobs](api.md#changing-jobs)). `kipp serve --job-edits` says
+what such a change does:
+
+| Mode | A change through kipp | `--jobs` |
+|---|---|---|
+| `store` (the default) | Is kept in the database, over the job file of the same name if there is one. | Optional: a server with none serves only the jobs of its database. |
+| `files` | Writes the job file first (to a temporary file, then renamed over it), and the file is the job. | Required, and writable: the server checks at start that it can create, rename and remove a file there, and refuses to start otherwise. |
+| `off` | Is refused (409 `edits_off`). | Required. |
+
+Reading a job's YAML, its versions and the conflicts works in every mode.
+`_vars.yml` is changed in its file only. A child of a multibranch job, or
+a repo of an owner job, is declared by its repo and is never changed here.
+
+Every change is checked on the whole job set, as `kipp check` checks a
+directory, and is refused with every error when the set would not load.
+A change sends the `ETag` of the job it read, so that two admins never
+overwrite each other unseen.
+
+### History
+
+Every change is a version, kept forever: the YAML as it was given,
+comments and all, its decoded hash (the job as kipp reads it, so that a
+comment or a reformat is the same job), who made it (a user, `kipp` for a
+job file a reload found changed, `cli`) and through what (`api`, `web`,
+`mcp`, `import`, `seed`, `files`, `revert`, `resolve`). A restore makes an
+older version's YAML the newest; it rewrites nothing.
+
+### When a file and an edit meet
+
+In `store` mode a job file can change after a job was edited through kipp.
+Each load compares the edit with the file as it is now; the edit
+remembers the hash of the file it was made over, its base:
+
+| The file now | What serves |
+|---|---|
+| Is still the base | The edit. |
+| Says what the edit says | The file; the edit is retired. |
+| Differs from the base and from the edit | The file; the edit waits in conflict. |
+| Is gone, the edit having been made over it | The file's absence; the edit waits in conflict. |
+| Has the name of a job created through kipp, with no base | The file; the edit waits in conflict, never retired. |
+
+A conflict is logged as a warning at each load, counted in
+`GET /api/v1/admin/server` (`job_conflicts`), and listed by
+`GET /api/v1/admin/job-conflicts`. An admin chooses
+the file (the edit is retired) or the edit (made over the file as it is
+now). Should an edit make the set fail once a file has changed, the edit
+is set aside as a conflict with the check's error and the load goes on; a
+job file that is bad itself still refuses the load.
+
+In `files` mode a change is refused with 409 `files_changed`, "reload
+first", when the job file changed on disk since kipp read it. A server
+started in `files` mode on a database a `store` server left writes the
+edits that still apply to their files; the conflicts stay.

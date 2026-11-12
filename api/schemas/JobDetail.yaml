@@ -3,7 +3,7 @@ additionalProperties: false
 description: |
   One job with its latest builds and activity. A removed job holds its name,
   its builds and its activity; what the job file said went with the file.
-required: [name, removed, disabled, group, description, params, cron, next, timezone, concurrency, locks, builds, activity, parent, multibranch, scan, folder, owner]
+required: [name, removed, disabled, group, description, params, cron, next, timezone, concurrency, locks, builds, activity, parent, multibranch, scan, folder, owner, source, edit_waits]
 properties:
   name:
     type: string
@@ -55,3 +55,11 @@ properties:
     oneOf:
       - $ref: Owner.yaml
       - type: "null"
+  source:
+    oneOf:
+      - $ref: JobSource.yaml
+      - type: "null"
+    description: Where a job of the server's own comes from; null for a child and a removed job.
+  edit_waits:
+    type: boolean
+    description: An edit of the store waits in conflict for this job.

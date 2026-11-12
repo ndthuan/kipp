@@ -1,0 +1,39 @@
+post:
+  operationId: resolveJobConflict
+  tags: [admin]
+  summary: Choose the file or the edit of a conflict
+  description: |
+    For an admin, as a change of a job is. `file` retires the edit and the
+    file serves; `edit` makes the edit over the file as it is now, checked
+    on the whole set as a change is (422 `job_refused`). 404 when no edit of
+    the job waits. One row of the audit.
+  x-kipp-package: api
+  security:
+    - bearerToken: []
+    - sessionCookie: []
+      csrfToken: []
+  parameters:
+    - $ref: ../parameters/JobName.yaml
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: ../schemas/JobResolve.yaml
+  responses:
+    "204":
+      description: The conflict is resolved.
+    "400":
+      $ref: ../responses/BadRequest.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "403":
+      $ref: ../responses/Forbidden.yaml
+    "404":
+      $ref: ../responses/NotFound.yaml
+    "409":
+      $ref: ../responses/Conflict.yaml
+    "422":
+      $ref: ../responses/JobRefused.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

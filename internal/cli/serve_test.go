@@ -192,8 +192,10 @@ func TestServeSaysWhatItCannotStartWith(t *testing.T) {
 		code int
 		says string
 	}{
-		"no data directory":          {[]string{"--jobs", jobs}, 2, "--data and --jobs are required"},
-		"no jobs directory":          {[]string{"--data", data}, 2, "--data and --jobs are required"},
+		"no data directory":          {[]string{"--jobs", jobs}, 2, "--data is required"},
+		"no jobs directory, off":     {[]string{"--data", data, "--job-edits", "off"}, 2, "--jobs is required with --job-edits off"},
+		"no jobs directory, files":   {[]string{"--data", data, "--job-edits", "files"}, 2, "--jobs is required with --job-edits files"},
+		"a mode that is none":        {[]string{"--data", data, "--jobs", jobs, "--job-edits", "git"}, 2, "--job-edits is off, store or files"},
 		"executors below zero":       {[]string{"--data", data, "--jobs", jobs, "--executors", "-1"}, 2, "--executors is 0 or more"},
 		"builds below zero":          {[]string{"--data", data, "--jobs", jobs, "--builds", "-1"}, 2, "--builds"},
 		"flaky flips below zero":     {[]string{"--data", data, "--jobs", jobs, "--flaky-flips", "-1"}, 2, "--flaky-flips is 0"},
@@ -817,7 +819,7 @@ func TestTheTwoReloadLinesInTheLogKeepTheirWording(t *testing.T) {
 	s := start(t, map[string]string{"plain.yml": "name: plain\nstages:\n  s: {run: 'true'}\n"})
 	must(t, syscall.Kill(os.Getpid(), syscall.SIGHUP))
 	eventually(t, "a reload that is taken is logged", func() bool {
-		return strings.Contains(s.stderr.String(), `level=INFO msg="jobs reloaded" count=1`)
+		return strings.Contains(s.stderr.String(), `level=INFO msg="jobs reloaded" count=1 conflicts=0`)
 	})
 	lacks(t, s.stderr.String(), "reload refused")
 	write(t, filepath.Join(s.jobs, "wrong.yml"), "name: other\nstages:\n  s: {run: 'true'}\n", 0o600)

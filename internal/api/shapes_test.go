@@ -365,7 +365,7 @@ func TestNoListOfV1IsNullAndNoOptionalFieldIsLeftOut(t *testing.T) {
 	e, owner := shapeEnv(t)
 	detail := e.object(t, 200, e.admin, "GET", "/api/v1/jobs/plain", "")
 	eqKeys(t, "detail keys", detail,
-		"activity,builds,concurrency,cron,description,disabled,folder,group,locks,multibranch,name,next,owner,parent,params,removed,scan,timezone")
+		"activity,builds,concurrency,cron,description,disabled,edit_waits,folder,group,locks,multibranch,name,next,owner,parent,params,removed,scan,source,timezone")
 	for _, k := range []string{"parent", "multibranch", "scan", "folder", "owner"} {
 		eq(t, k, detail[k], nil)
 	}

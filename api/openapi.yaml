@@ -28,7 +28,7 @@ tags:
   - name: server
     description: Whether the server answers, and what it runs with.
   - name: jobs
-    description: Jobs, their builds, activity and children.
+    description: Jobs, their builds, activity and children, and the YAML and versions of a job of the server's own.
   - name: builds
     description: One build, its stages, logs, results and artifacts.
   - name: metrics
@@ -36,7 +36,7 @@ tags:
   - name: queue
     description: What runs and what waits.
   - name: admin
-    description: Reads of users, secrets, engines, runners, the cache and the audit, the server's quiet mode, its upgrade and its storage; for an admin.
+    description: Reads of users, secrets, engines, runners, the cache and the audit, the server's quiet mode, its upgrade and its storage, and the conflicts of job edits; for an admin.
   - name: webhooks
     description: Deliveries from GitHub.
   - name: internal
@@ -50,6 +50,14 @@ paths:
     $ref: paths/jobs.yaml
   /jobs/{name}:
     $ref: paths/jobs_name.yaml
+  /jobs/{name}/definition:
+    $ref: paths/jobs_name_definition.yaml
+  /jobs/{name}/versions:
+    $ref: paths/jobs_name_versions.yaml
+  /jobs/{name}/versions/{id}:
+    $ref: paths/jobs_name_versions_id.yaml
+  /jobs/{name}/versions/{id}/restore:
+    $ref: paths/jobs_name_versions_id_restore.yaml
   /jobs/{name}/builds:
     $ref: paths/jobs_name_builds.yaml
   /jobs/{name}/builds/{number}:
@@ -136,6 +144,10 @@ paths:
     $ref: paths/admin_cache.yaml
   /admin/audit:
     $ref: paths/admin_audit.yaml
+  /admin/job-conflicts:
+    $ref: paths/admin_job_conflicts.yaml
+  /admin/job-conflicts/{name}/resolve:
+    $ref: paths/admin_job_conflicts_name_resolve.yaml
   /hooks/github/{job}:
     $ref: paths/hooks_github_job.yaml
   /hooks/github-app/{app}:

@@ -1,7 +1,8 @@
 // Package index keeps the children of multibranch jobs: which branches and
 // pull requests of a repo are built, as which child job, and what an event
 // from the repo builds. It adds the live children to the job set the
-// dispatcher holds; the job files stay the only place a job is declared.
+// dispatcher holds; a child is declared by its repo's file, never by the
+// server's own job set.
 package index
 
 import (

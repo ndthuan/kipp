@@ -1,0 +1,13 @@
+type: object
+additionalProperties: false
+description: |
+  A job's versions, newest first. `next_cursor` is the `cursor` that reads
+  the page after this one, and null when this is the last.
+required: [items, next_cursor]
+properties:
+  items:
+    type: array
+    items:
+      $ref: JobVersion.yaml
+  next_cursor:
+    $ref: NextCursor.yaml

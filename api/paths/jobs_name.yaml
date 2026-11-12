@@ -7,7 +7,11 @@ get:
     - $ref: ../parameters/JobName.yaml
   responses:
     "200":
-      description: The job. A job that was removed from the job files still answers while it has builds.
+      description: |
+        The job. A job that was removed from the job files still answers
+        while it has builds. `source` says where a job of the server's own
+        comes from, null for a child and a removed job; `edit_waits` that an
+        edit of the store waits in conflict for it.
       content:
         application/json:
           schema:
@@ -16,5 +20,49 @@ get:
       $ref: ../responses/Unauthorized.yaml
     "404":
       $ref: ../responses/NotFound.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml
+delete:
+  operationId: deleteJob
+  tags: [jobs]
+  summary: Delete a job
+  description: |
+    For an admin: an admin's API token, or an admin's browser session in
+    sudo mode. A build's token (`KIPP_TOKEN`) never may, whatever its
+    `permissions:`. On a server started with `--job-edits off` it is 409
+    `edits_off`; with `--job-edits files` the job file is written first,
+    and a file changed on disk since kipp read it is 409 `files_changed`
+    (reload first), one that cannot be written 500 `job_write_failed`. The
+    change is checked on the whole job set with it, as `kipp check` checks
+    a directory: 422 `job_refused` lists every error. A child of a
+    multibranch job, or a repo of an owner job, is 409. One row of the
+    audit.
+    `If-Match` with the job's `ETag` is required. The job's builds and its
+    versions stay; a restore brings it back.
+  x-kipp-package: api
+  security:
+    - bearerToken: []
+    - sessionCookie: []
+      csrfToken: []
+  parameters:
+    - $ref: ../parameters/JobName.yaml
+    - $ref: ../parameters/IfMatch.yaml
+  responses:
+    "204":
+      description: The job is deleted.
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "403":
+      $ref: ../responses/Forbidden.yaml
+    "404":
+      $ref: ../responses/NotFound.yaml
+    "409":
+      $ref: ../responses/Conflict.yaml
+    "412":
+      $ref: ../responses/PreconditionFailed.yaml
+    "422":
+      $ref: ../responses/JobRefused.yaml
+    "428":
+      $ref: ../responses/PreconditionRequired.yaml
     "500":
       $ref: ../responses/InternalError.yaml

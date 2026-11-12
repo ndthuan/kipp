@@ -22,6 +22,7 @@ import (
 	"github.com/ndthuan/kipp/internal/dispatch"
 	"github.com/ndthuan/kipp/internal/enginepool"
 	"github.com/ndthuan/kipp/internal/index"
+	"github.com/ndthuan/kipp/internal/jobstore"
 	"github.com/ndthuan/kipp/internal/runnerhub"
 	"github.com/ndthuan/kipp/internal/sched"
 	"github.com/ndthuan/kipp/internal/storage"
@@ -124,6 +125,9 @@ type Deps struct {
 	// it flaky on the overview: 0 for no such section. kipp serve sets it
 	// (default overview.DefaultFlips).
 	FlakyFlips int
+	// Jobs is where the jobs come from and what changes them through kipp;
+	// without it no job can be read as YAML or changed.
+	Jobs *jobstore.Jobs
 }
 
 // API holds the handlers and the Service.
@@ -244,6 +248,11 @@ type JobView struct {
 	// requests from forks it lists and does not build.
 	Parent   string
 	Children []ChildView
+	// Source is where a job of the server's own comes from (a file, the
+	// store, or the store over a file), empty for a child and a job that
+	// is gone; EditWaits says an edit of it waits in conflict.
+	Source    jobstore.Origin
+	EditWaits bool
 	// Folder is the owner job a repo's job belongs to, and Owner and Repos
 	// an owner job's own page: how its scanning stands, and its repos.
 	Folder string
@@ -443,6 +452,9 @@ func (s *Service) Job(ctx context.Context, u *store.User, name string, before in
 		return nil, err
 	}
 	v := &JobView{Name: name, Job: job, Removed: job == nil, Before: before}
+	if s.deps.Jobs != nil {
+		v.Source, v.EditWaits = s.deps.Jobs.Where(name)
+	}
 	// One more than the page shows says whether there is a page after it.
 	if v.Builds, err = s.page(ctx, name, before, defaultBuilds+1); err != nil {
 		return nil, err

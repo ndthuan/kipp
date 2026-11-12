@@ -1,0 +1,5 @@
+type: string
+enum: [file, store, store over file]
+description: |
+  Where a job comes from: its job file, the database (created through kipp,
+  imported or seeded), or the database over a job file it was changed from.

@@ -35,6 +35,12 @@ import (
 //     branch, pull request or repo is gone;
 //   - owner_repos.hook_fp is a fingerprint of the webhook as kipp last
 //     wrote it, since GitHub never hands a secret back.
+//
+// And the job store's: job_versions keeps every text a job had, through
+// kipp or found on disk, and is never pruned; job_edits is a job kept in
+// the store, its base the decoded hash of the file it was made over (NULL
+// for none); job_files is the decoded hash of each job file as the last
+// load saw it, so that a load records a version only when a file changed.
 var migrations = []string{`
 CREATE TABLE users (
   id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, hash TEXT NOT NULL,
@@ -176,6 +182,16 @@ CREATE TABLE pending_reruns (build_id INTEGER PRIMARY KEY REFERENCES builds(id) 
 ALTER TABLE builds ADD COLUMN upstream_commit TEXT NOT NULL DEFAULT '';
 `, `
 ALTER TABLE builds ADD COLUMN upstream_tag TEXT NOT NULL DEFAULT '';
+`, `
+CREATE TABLE job_versions (
+  id INTEGER PRIMARY KEY, job TEXT NOT NULL, text TEXT NOT NULL, deleted INTEGER NOT NULL DEFAULT 0,
+  hash TEXT NOT NULL, author TEXT NOT NULL,
+  how TEXT NOT NULL CHECK (how IN ('api','web','mcp','import','seed','files','revert','resolve')),
+  created_at TEXT NOT NULL);
+CREATE INDEX job_versions_job ON job_versions(job, id);
+CREATE TABLE job_edits (
+  job TEXT PRIMARY KEY, version_id INTEGER NOT NULL REFERENCES job_versions(id), base TEXT);
+CREATE TABLE job_files (job TEXT PRIMARY KEY, hash TEXT NOT NULL);
 `}
 
 // Upgrade is what Open did to the schema of the database it opened.

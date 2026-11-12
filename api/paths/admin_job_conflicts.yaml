@@ -1,0 +1,19 @@
+get:
+  operationId: listJobConflicts
+  tags: [admin]
+  summary: The edits of the store that wait while their files serve
+  description: For an admin; works whatever `--job-edits` is.
+  x-kipp-package: api
+  responses:
+    "200":
+      description: Every conflict, by job name.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/JobConflictList.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "403":
+      $ref: ../responses/Forbidden.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

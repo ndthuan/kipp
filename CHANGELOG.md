@@ -10,6 +10,9 @@ lines and the data directory are the public surface.
 
 Changed:
 
+- `kipp serve` no longer needs `--jobs`: with the default
+  `--job-edits store` a server without one serves the jobs of its
+  database.
 - Each stage log on a build page scrolls in a box of its own, at most 70% of
   the window tall, instead of stretching the page. A live log keeps its box
   at the end until the reader scrolls it up, and the page no longer jumps to
@@ -46,6 +49,24 @@ Removed (breaking for the API and the MCP `overview` tool):
   list and in `GET /api/v1/jobs/<name>`.
 
 Added:
+
+- Jobs can be created, changed, deleted and restored through the API, by
+  an admin's token or an admin's browser session in sudo mode, never a
+  build's token: `POST /api/v1/jobs`, `GET` and `PUT
+  /api/v1/jobs/<name>/definition` (the YAML as written, with an `ETag`
+  that a change sends as `If-Match`), `DELETE /api/v1/jobs/<name>`,
+  `/api/v1/jobs/<name>/versions` and a restore of one. Each change is
+  checked on the whole job set (422 `job_refused` lists every error) and
+  kept as a version with its author, forever.
+- `kipp serve --job-edits store|files|off` says what such a change does:
+  `store` (the default) keeps it in the database, over the job file of the
+  same name, and makes `--jobs` optional; `files` writes the job file and
+  refuses to start on a directory it cannot write; `off` refuses changes.
+  A job file that changes under an edit makes a conflict, which the file
+  wins until an admin chooses (`/api/v1/admin/job-conflicts`).
+- `GET /api/v1/jobs/<name>` has `source` and `edit_waits`;
+  `GET /api/v1/admin/server` has `job_edits` and `job_conflicts`; the
+  "jobs reloaded" line ends in `conflicts=N`.
 
 - `triggers.after` may name a repo of an owner job, `<owner job>.<key>`
   (`after: [acme.site]`): the job runs when the build of the repo's

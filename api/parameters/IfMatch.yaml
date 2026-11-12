@@ -1,0 +1,5 @@
+name: If-Match
+in: header
+description: The `ETag` of the job as the caller read it (`GET /jobs/{name}/definition`).
+schema:
+  type: string

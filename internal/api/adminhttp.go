@@ -72,6 +72,8 @@ type serverJSON struct {
 	LastReloadAt    stamp          `json:"last_reload_at"`
 	LastReloadError string         `json:"last_reload_error"`
 	Jobs            int            `json:"jobs"`
+	JobEdits        string         `json:"job_edits"`
+	JobConflicts    int            `json:"job_conflicts"`
 	Origin          string         `json:"origin"`
 	UpdateCheck     bool           `json:"update_check"`
 	Latest          string         `json:"latest"`
@@ -125,6 +127,7 @@ func toServerJSON(info *ServerInfo) serverJSON {
 		RunnerURL: info.RunnerURL, RunnerListen: info.RunnerListen, Shell: info.Shell,
 		SessionTTLSeconds: int64(info.SessionTTL / time.Second), TimeZone: info.TimeZone, DataDir: info.DataDir, JobsDir: info.JobsDir,
 		LastReloadAt: stampOf(info.LastReloadAt), LastReloadError: info.LastReloadError, Jobs: info.Jobs,
+		JobEdits: info.JobEdits, JobConflicts: info.JobConflicts,
 		Origin: info.Origin, UpdateCheck: info.UpdateCheck, Latest: info.Latest, NotesURL: info.NotesURL, Upgradable: info.Upgradable,
 		CheckedAt: stampSince(info.CheckedAt), SelfCheck: toSelfCheckJSON(info.SelfCheck)}
 	if info.FreeDiskKnown {

@@ -346,7 +346,7 @@ func (s *Snapshot) DefaultChild(parent string) *Job {
 // WithJobs is the snapshot with jobs added, its names sorted again; the
 // receiver is not changed. The hash stays the files'.
 func (s *Snapshot) WithJobs(jobs ...*Job) *Snapshot {
-	out := &Snapshot{Jobs: make(map[string]*Job, len(s.Jobs)+len(jobs)), Names: slices.Clone(s.Names), Hash: s.Hash, Vars: s.Vars}
+	out := &Snapshot{Jobs: make(map[string]*Job, len(s.Jobs)+len(jobs)), Names: slices.Clone(s.Names), Hash: s.Hash, Vars: s.Vars, Texts: s.Texts, Hashes: s.Hashes}
 	maps.Copy(out.Jobs, s.Jobs)
 	for _, j := range jobs {
 		if _, dup := out.Jobs[j.Name]; dup {

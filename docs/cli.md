@@ -44,7 +44,7 @@ refused.
 ## kipp serve
 
 ```
-kipp serve --data <dir> --jobs <dir> [flags]
+kipp serve --data <dir> [--jobs <dir>] [--job-edits store|files|off] [flags]
 ```
 
 Stays in the foreground and logs to stderr. `SIGHUP` re-reads the jobs
@@ -58,7 +58,8 @@ directory.
 | Flag | Default | Does |
 |---|---|---|
 | `--data <dir>` | required | The data directory: the database, the secrets' key, logs and workspaces. Made, mode 700, if it is not there ([The data directory](operations.md#the-data-directory)). |
-| `--jobs <dir>` | required | The directory of job files. |
+| `--jobs <dir>` | none | The directory of job files; required with `--job-edits files` or `off`. |
+| `--job-edits <mode>` | `store` | What a change of a job through kipp does: `store` keeps it in the database, `files` writes the job file, `off` refuses it ([Changing jobs through kipp](jobs.md#changing-jobs-through-kipp)). |
 | `--listen <addr>` | `127.0.0.1:8085` | The address to listen on, in plain HTTP. |
 | `--base-url <url>` | `http://<listen>` | The URL stages see as `KIPP_URL`. Build links, commit statuses' links, webhook URLs and GitHub App manifests need it given. |
 | `--executors <n>` | 4 | Stages the server runs itself at once; 0 runs none ([Runners and engines](runners.md#the-servers-flags)). |
