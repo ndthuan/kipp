@@ -185,7 +185,11 @@ func (j *Jobs) diskUnchanged(name string) error {
 		return nil
 	}
 	want := lookup(j.disk, name)
-	data, err := os.ReadFile(filepath.Join(j.o.Dir, config.FileName(name)))
+	path, err := jobFile(j.o.Dir, config.FileName(name))
+	if err != nil {
+		return err
+	}
+	data, err := os.ReadFile(filepath.Clean(path))
 	switch {
 	case errors.Is(err, fs.ErrNotExist) && want == nil:
 		return nil

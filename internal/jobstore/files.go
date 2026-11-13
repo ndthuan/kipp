@@ -41,7 +41,10 @@ func tryWrite(dir string) error {
 // file in the same directory, synced, then renamed over the old one, whose
 // mode it keeps.
 func writeFile(dir, name string, text []byte) error {
-	path := filepath.Join(dir, name)
+	path, err := jobFile(dir, name)
+	if err != nil {
+		return err
+	}
 	mode := fs.FileMode(0o600)
 	if fi, err := os.Stat(path); err == nil {
 		mode = fi.Mode().Perm()
@@ -89,10 +92,25 @@ func syncDir(dir string) {
 
 // removeFile removes the job file of name in dir.
 func removeFile(dir, name string) error {
-	path := filepath.Join(dir, name)
+	path, err := jobFile(dir, name)
+	if err != nil {
+		return err
+	}
 	if err := os.Remove(path); err != nil {
 		return &WriteError{Path: path, Err: err}
 	}
 	syncDir(dir)
 	return nil
+}
+
+// jobFile is the path of the job file name in dir. Every caller has
+// checked the job's name already; this refuses anything but a plain name
+// again where the file system is touched, so that no path a request
+// carries can reach out of dir.
+func jobFile(dir, name string) (string, error) {
+	base := filepath.Base(name)
+	if base != name || !filepath.IsLocal(base) || base == "." {
+		return "", &WriteError{Path: filepath.Join(dir, name), Err: fmt.Errorf("%q is not a plain file name", name)}
+	}
+	return filepath.Join(dir, base), nil
 }
