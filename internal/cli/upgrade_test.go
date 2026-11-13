@@ -179,9 +179,10 @@ func TestAnUpgradeFollowsEveryStepWaitsForTheBuildAndTheNewServerSaysItIsDone(t 
 	s2 := launcherDone(t, s, et.Newer)
 	r := result(t, cmd)
 	eq(t, "exit", r.code, 0)
-	// The backup is over too soon for every poll to see it, so its line is
-	// not asked for; the backup itself was checked above.
-	contains(t, r.out, "upgrade: preflight", "upgrade: waiting", "1 running", "upgrade: done", "kipp "+et.Newer+" is running")
+	// The preflight and the backup are over too soon for every poll to see
+	// them, so their lines are not asked for; the backup itself was checked
+	// above.
+	contains(t, r.out, "upgrade: waiting", "1 running", "upgrade: done", "kipp "+et.Newer+" is running")
 	// Quiet ended with the process that held it.
 	_, out, _ := s2.kipp("quiet", "status")
 	contains(t, out, "quiet off")
