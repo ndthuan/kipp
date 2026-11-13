@@ -191,7 +191,7 @@ func parseServeFlags(args []string, stderr io.Writer) (*serveFlags, error) {
 	fs.StringVar(&f.baseURL, "base-url", "", "`URL` stages see as KIPP_URL (default http://<listen>); commit statuses link to builds under it only when it is given")
 	fs.StringVar(&f.shell, "shell", "sh", "shell that runs stages, as <shell> -c <command>")
 	fs.IntVar(&f.executors, "executors", 4, "stages the server runs itself at once; 0 runs none, and every stage goes to a runner")
-	fs.IntVar(&f.builds, "builds", 0, "builds with something running at once: preparing, a stage on the server, or a stage started on a runner or engine; one waiting to be placed counts for none (default --executors, or 4 when that is 0)")
+	fs.IntVar(&f.builds, "builds", 0, "refused: no limit counts builds across runners; --executors is the built-in runner's, and each runner and engine has its own")
 	defaultRunsOn := fs.String("default-runs-on", "", "`labels`, comma-separated, where a stage that names no runs_on goes on a server with --executors 0")
 	runnerEnv := fs.String("runner-env", "", "`names`, comma-separated, of the server's environment variables a stage on a runner is also given")
 	fs.StringVar(&f.runnerURL, "runner-url", "", "`URL` a container's runner dials the server at (default --base-url)")
@@ -224,8 +224,8 @@ func parseServeFlags(args []string, stderr io.Writer) (*serveFlags, error) {
 		return nil, refused("--data is required")
 	case f.executors < 0:
 		return nil, refused("--executors is 0 or more")
-	case f.builds < 0:
-		return nil, refused("--builds is 0, for the default, or more")
+	case given(fs)["builds"]:
+		return nil, refused("--builds is gone: no limit counts builds across runners; --executors is the built-in runner's, and each runner and engine has its own (kipp runner set, kipp engine set, or the Runners page)")
 	case f.flakyFlips < 0:
 		return nil, refused("--flaky-flips is 0, to hide the section, or more")
 	case f.sessionTTL <= 0:
@@ -684,7 +684,7 @@ func (s *server) listen(ctx context.Context) (net.Listener, error) {
 		s.updates = update.New(updateOptions(version.Version, s.f.data, s.log))
 	}
 	s.d = dispatch.New(s.st, runner.Local{Shell: s.f.shell}, dispatch.Options{
-		DataDir: s.f.data, Executors: s.f.executors, RunsNoStages: s.f.executors == 0, Builds: s.f.builds,
+		DataDir: s.f.data, Executors: s.f.executors, RunsNoStages: s.f.executors == 0,
 		BaseURL: s.f.baseURL, TimeZone: s.f.zone,
 		Secrets: s.secrets, Retain: retain.Job, Logger: s.log, PassEnv: s.f.passEnv,
 		Hub: s.hub, Engines: s.pool, DefaultRunsOn: s.f.defaultRunsOn, RunnerEnv: s.f.runnerEnv,
@@ -985,7 +985,7 @@ func (s *server) info() api.ServerInfo {
 		Origin: update.ServerOrigin(), Latest: up.Latest, NotesURL: up.NotesURL, Upgradable: up.Upgradable, CheckedAt: up.CheckedAt,
 		UpdateCheck: s.updates != nil,
 		Version:     version.Version, GoVersion: runtime.Version(), Schema: s.st.Upgrade().To, StartedAt: s.startedAt,
-		Listen: s.listenAddr, BaseURL: s.f.baseURL, Executors: s.f.executors, Builds: s.d.Builds(), Shell: s.f.shell, SessionTTL: s.f.sessionTTL,
+		Listen: s.listenAddr, BaseURL: s.f.baseURL, Executors: s.f.executors, Shell: s.f.shell, SessionTTL: s.f.sessionTTL,
 		DefaultRunsOn: s.f.defaultRunsOn, RunnerEnv: s.f.runnerEnv, RunnerURL: s.f.runnerURL, RunnerListen: s.runnerListenAddr(),
 		TimeZone: s.d.Zone(nil).String(), DataDir: s.f.data, JobsDir: s.f.jobs,
 		FreeDisk: free, FreeDiskKnown: known, DBSize: dbSize, LastReloadAt: reloadAt, LastReloadError: reloadErr,

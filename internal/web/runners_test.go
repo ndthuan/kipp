@@ -171,13 +171,31 @@ func runningBuilds(n int) []api.RunningView {
 	return out
 }
 
-func TestTheQueueHeadingCountsBuildsFirstAndSlotsHereOnlyForAnAdmin(t *testing.T) {
+// loads is the built-in runner at busy of limit, as an admin's queue has it.
+func loads(busy, limit int, more ...api.RunnerLoad) []api.RunnerLoad {
+	return append([]api.RunnerLoad{{Name: "built-in", Kind: api.KindBuiltIn, Busy: busy, Limit: limit, State: api.StateOnline}}, more...)
+}
+
+func TestTheQueueHeadingCountsBuildsFirstAndEachRunnersLoadOnlyForAnAdmin(t *testing.T) {
 	e := site(t)
-	contains(t, renderQueue(t, e, &api.QueueView{Running: runningBuilds(3), Executors: 8, Busy: 2}),
-		`<h2>Running 3 builds <span class="sub">2/8 slots here</span></h2>`)
+	contains(t, renderQueue(t, e, &api.QueueView{Running: runningBuilds(3), Executors: 8, Busy: 2, Runners: loads(2, 8,
+		api.RunnerLoad{Name: "build-box", Kind: api.KindRunner, Busy: 1, Limit: 2, State: api.StateOnline},
+		api.RunnerLoad{Name: "idle-box", Kind: api.KindRunner, Limit: 1, State: api.StateOffline},
+		api.RunnerLoad{Name: "off-box", Kind: api.KindRunner, Limit: 3, State: api.StateDisabled},
+		api.RunnerLoad{Name: "wide-box", Kind: api.KindRunner, Busy: 5, State: api.StateOnline},
+		api.RunnerLoad{Name: "pool", Kind: api.KindEngine, Busy: 1, Limit: 3, State: api.StateOnline})}),
+		`<h2>Running 3 builds <span class="sub">built-in 2/8 &middot; build-box 1/2 &middot; idle-box offline &middot; off-box disabled &middot; wide-box 5/no limit &middot; pool 1/3</span></h2>`)
 	body := renderQueue(t, e, &api.QueueView{Running: runningBuilds(1)})
 	contains(t, body, `<h2>Running 1 build</h2>`)
-	lacks(t, body, "slots", "<h2>Waiting")
+	lacks(t, body, "built-in", "slots", "<h2>Waiting")
+}
+
+func TestTheQueueHeadingSaysTheBuiltInRunnerOfAServerOfNoExecutorsOnlyPrepares(t *testing.T) {
+	e := site(t)
+	l := loads(1, 4)
+	l[0].PreparesOnly = true
+	contains(t, renderQueue(t, e, &api.QueueView{Running: runningBuilds(1), Executors: 4, Busy: 1, Runners: l}),
+		`<span class="sub">built-in 1/4 prepares</span>`)
 }
 
 func TestTheQueueShowsABuildWhoseEveryStageWaitsToBePlacedWithTheBuildsThatWait(t *testing.T) {
@@ -189,9 +207,9 @@ func TestTheQueueShowsABuildWhoseEveryStageWaitsToBePlacedWithTheBuildsThatWait(
 	r[2].Stages = []string{"s", "t"}
 	r[2].Waiting = map[string]string{"s": "waiting for a runner with labels [mac]"}
 	queued := api.QueuedView{Build: &store.Build{ID: 9, Job: "later", Number: 1, Status: store.Queued}, Waiting: dispatch.WaitExecutor}
-	body := renderQueue(t, e, &api.QueueView{Running: r, Queued: []api.QueuedView{queued}, Executors: 8, Busy: 2})
+	body := renderQueue(t, e, &api.QueueView{Running: r, Queued: []api.QueuedView{queued}, Executors: 8, Busy: 2, Runners: loads(2, 8)})
 	contains(t, body,
-		`<h2>Running 2 builds <span class="sub">2/8 slots here</span></h2>`,
+		`<h2>Running 2 builds <span class="sub">built-in 2/8</span></h2>`,
 		`<h2>Waiting 2 builds</h2>`,
 		`<span class="status queued">waiting</span><br><span class="sub">s: waiting for runner (label mac)</span>`,
 		`<span class="tl">started </span><time class="elapsed"`)
@@ -211,8 +229,8 @@ func TestTheQueueShowsABuildWhoseEveryStageWaitsToBePlacedWithTheBuildsThatWait(
 		}
 	}
 
-	body = renderQueue(t, e, &api.QueueView{Running: r[1:2], Executors: 8})
-	contains(t, body, `<h2>Waiting 1 build <span class="sub">0/8 slots here</span></h2>`)
+	body = renderQueue(t, e, &api.QueueView{Running: r[1:2], Executors: 8, Runners: loads(0, 8)})
+	contains(t, body, `<h2>Waiting 1 build <span class="sub">built-in 0/8</span></h2>`)
 	lacks(t, body, "<h2>Running")
 }
 
@@ -270,4 +288,17 @@ func TestABuildThatRunsAStageWhileAnotherWaitsSaysRunning(t *testing.T) {
 	v.Needs["lint"] = []string{"clone"}
 	body := renderBuild(t, e, v)
 	contains(t, body, `<span>#21</span> <span class="status running">running</span>`, `<span class="status waiting">waiting</span>`)
+}
+
+// The server's own executors are a runner like the others, listed apart:
+// its limit, what it runs now and which stages go to it.
+func TestTheRunnersPageListsTheBuiltInRunnerWithItsLimitAndWhatItRuns(t *testing.T) {
+	e := site(t)
+	e.lockJobs(t)
+	admin := e.login(t, "admin")
+	e.build(t, admin, "hold", nil)
+	e.queued(t, 1, 0)
+	_, page := get(t, admin, e.srv.URL+"/admin/runners")
+	contains(t, page, "<h2>Built-in runner</h2>", `<td>built-in</td>`, "stages that name no <code>runs_on</code>",
+		`<td>1 of 4 <span class="sub">hold#1/s</span></td>`)
 }

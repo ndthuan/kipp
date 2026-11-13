@@ -308,10 +308,20 @@ func toChildV1(c ChildView) childV1 {
 }
 
 type queueV1 struct {
-	Executors *int        `json:"executors"`
-	Busy      *int        `json:"busy"`
-	Running   []runningV1 `json:"running"`
-	Queued    []queuedV1  `json:"queued"`
+	Executors *int            `json:"executors"`
+	Busy      *int            `json:"busy"`
+	Runners   *[]runnerLoadV1 `json:"runners"`
+	Running   []runningV1     `json:"running"`
+	Queued    []queuedV1      `json:"queued"`
+}
+
+type runnerLoadV1 struct {
+	Name         string `json:"name"`
+	Kind         string `json:"kind"`
+	Busy         int    `json:"busy"`
+	Limit        int    `json:"limit"`
+	State        string `json:"state"`
+	PreparesOnly bool   `json:"prepares_only"`
 }
 
 type runningV1 struct {
@@ -340,8 +350,13 @@ type queuedV1 struct {
 
 func toQueueV1(v *QueueView) queueV1 {
 	out := queueV1{Running: []runningV1{}, Queued: []queuedV1{}}
-	if v.Executors > 0 { // an admin's
+	if v.Runners != nil { // an admin's
 		out.Executors, out.Busy = &v.Executors, &v.Busy
+		loads := make([]runnerLoadV1, 0, len(v.Runners))
+		for _, l := range v.Runners {
+			loads = append(loads, runnerLoadV1(l))
+		}
+		out.Runners = &loads
 	}
 	for _, r := range v.Running {
 		waiting := r.Waiting

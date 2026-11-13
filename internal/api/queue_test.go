@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/ndthuan/kipp/internal/dispatch"
+	"github.com/ndthuan/kipp/internal/enginepool"
+	"github.com/ndthuan/kipp/internal/runnerhub"
 	"github.com/ndthuan/kipp/internal/waitfor"
 )
 
@@ -211,5 +213,38 @@ func TestToAllButAnAdminNoRunnerNameIsToldOfAStageThatRunsOnOne(t *testing.T) {
 	got, ok := v.Running[0].Remote["s"]
 	if !ok || got != "" {
 		t.Fatalf("remote = %v", v.Running[0].Remote)
+	}
+}
+
+// The queue's header names each place that runs stages with its own load,
+// the server's own first: no total stands over them.
+func TestTheQueueTellsAnAdminTheLoadOfEachRunnerTheBuiltInFirst(t *testing.T) {
+	e := newEnv(t, func(a *API) {
+		a.deps.Runners = func() []runnerhub.Status {
+			return []runnerhub.Status{
+				{Name: "build-box", Executors: 2, Busy: 1, Enabled: true, Online: true},
+				{Name: "idle-box", Executors: 1, Enabled: true},
+				{Name: "off-box", Executors: 3, Online: true},
+				{Name: "wide-box", Executors: 0, Busy: 5, Enabled: true, Online: true},
+				{Name: "container-1", Build: 7, Executors: 1, Busy: 1, Enabled: true, Online: true},
+			}
+		}
+		a.deps.Engines = func() []enginepool.EngineStatus {
+			return []enginepool.EngineStatus{{Name: "pool", Max: 3, Enabled: true, Reachable: true, Running: []string{"pool/1"}}}
+		}
+	})
+	var q struct {
+		Runners []map[string]any `json:"runners"`
+	}
+	text := e.decode(t, "/api/v1/queue", &q)
+	var got []string
+	for _, r := range q.Runners {
+		got = append(got, fmt.Sprintf("%v %v %v/%v %v", r["name"], r["kind"], r["busy"], r["limit"], r["state"]))
+	}
+	eq(t, "the runners in "+text, strings.Join(got, "; "),
+		"built-in built-in 0/4 online; build-box runner 1/2 online; idle-box runner 0/1 offline; off-box runner 0/3 disabled; wide-box runner 5/0 online; pool engine 1/3 online")
+	v := e.object(t, 200, e.viewer, "GET", "/api/v1/queue", "")
+	if v["runners"] != nil {
+		t.Fatalf("a viewer is told the runners: %v", v["runners"])
 	}
 }

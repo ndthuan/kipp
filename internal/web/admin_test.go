@@ -505,7 +505,7 @@ func TestTheServerPageSaysWhatTheServerRunsWithAndHasTheAudit(t *testing.T) {
 	eq(t, "server", code, http.StatusOK)
 	selfContained(t, page)
 	contains(t, page, "go-test", "<dd>7</dd>", "up 1h 30m", "<code>127.0.0.1:8085</code>", "<code>https://ci.example/</code>",
-		"<dd>3</dd>", "<code>/bin/sh</code>", "720h0m0s", "<code>/srv/kipp/data</code>", "<code>/srv/kipp/jobs</code>",
+		"<dd>3, the built-in runner's limit</dd>", "<code>/bin/sh</code>", "720h0m0s", "<code>/srv/kipp/data</code>", "<code>/srv/kipp/jobs</code>",
 		"3.0 GiB", "5.0 MiB", "taken", `action="/admin/server/reload"`,
 		"<code>https://ci.example/api/v1/hooks/github/smoke</code>", `<span class="status failed">missing</span>`, `href="/admin/secrets?name=GITHUB_WEBHOOK_SMOKE#set"`,
 		"row-100", `href="/admin/server?before=`)

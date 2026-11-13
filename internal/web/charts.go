@@ -194,24 +194,17 @@ func slotsChart(c *overview.Charts, zone *time.Location) *chart {
 		peak = max(peak, b.MaxRunning)
 		longest = max(longest, b.WaitMax)
 	}
-	limit := "no limit"
-	if c.BuildsLimit > 0 {
-		limit = "the limit is " + strconv.Itoa(c.BuildsLimit)
-	}
-	ch := &chart{Key: "slots", Heading: "Slots and queue", W: chartW, H: 214,
-		Title: "Slots and queue: builds running at once, and how long builds waited, in the last " + c.Range.Label,
-		Desc: fmt.Sprintf("In the last %s at most %d builds ran at once (%s) and the longest a build waited to start was %s.",
-			c.Range.Label, peak, limit, shortWait(longest)),
+	ch := &chart{Key: "slots", Heading: "Running and queue", W: chartW, H: 214,
+		Title: "Running and queue: builds running at once, and how long builds waited, in the last " + c.Range.Label,
+		Desc: fmt.Sprintf("In the last %s at most %d builds ran at once (each runner has a limit of its own) and the longest a build waited to start was %s.",
+			c.Range.Label, peak, shortWait(longest)),
 		Head: []string{"From", "Most running", "Started", "Median wait", "Longest wait"}}
 	ch.Legend = []legendItem{{"running", "running at once, at most " + strconv.Itoa(peak)}}
-	if c.BuildsLimit > 0 {
-		ch.Legend = append(ch.Legend, legendItem{"limit", "limit " + strconv.Itoa(c.BuildsLimit)})
-	}
 	ch.Legend = append(ch.Legend, legendItem{"wait", "median wait"}, legendItem{"waitmax", "longest wait " + shortWait(longest)})
 
 	slot := px(chartW-chartLeft-chartPad) / px(len(c.Buckets))
 	topA, hA := px(18), px(92)
-	runMax := niceMax(max(peak, c.BuildsLimit))
+	runMax := niceMax(peak)
 	ch.Labels = append(ch.Labels, glabel{X: chartLeft, Y: 10, Text: "Builds running at once", Anchor: "start", Class: "caption"})
 	ch.yTicks(topA, hA, runMax, strconv.Itoa)
 	topB, hB := px(138), px(48)
@@ -237,10 +230,6 @@ func slotsChart(c *overview.Charts, zone *time.Location) *chart {
 			mh = max(px(b.WaitMedian)*hB/px(waitMax), 1)
 			ch.Rects = append(ch.Rects, grect{X: x, Y: topB + hB - mh, W: slot * 0.72, H: mh, Class: "bar bar-wait", Title: tip})
 		}
-	}
-	if c.BuildsLimit > 0 {
-		y := topA + hA - px(c.BuildsLimit)*hA/px(runMax)
-		ch.Lines = append(ch.Lines, gline{X1: chartLeft, Y1: y, X2: chartW - chartPad, Y2: y, Class: "limit"})
 	}
 	ch.Labels = append(ch.Labels, axisTicks(c, zone, chartLeft, slot, topB+hB+labelGap+4)...)
 	return ch

@@ -4,7 +4,6 @@
 package dispatch
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -54,15 +53,13 @@ var (
 // Options configure a Dispatcher. Zero values take the defaults noted.
 type Options struct {
 	DataDir string // logs/ and workspace/ live under it
-	// Executors is how many stages the server runs itself at once; default
-	// 4. RunsNoStages is a server that runs none (--executors 0): a stage
-	// with no runs_on goes where DefaultRunsOn says, or fails.
-	Executors    int
-	RunsNoStages bool
-	// Builds is how many builds with something running run at once (see
-	// joinSlot), the one limit that also counts their stages on runners;
-	// default Executors, or 4 for a server that runs no stage itself.
-	Builds        int
+	// Executors is the built-in runner's limit: how many stages the server
+	// runs itself at once, each build's prepare counted as one while it
+	// runs; default 4. RunsNoStages is a server that runs none
+	// (--executors 0): a stage with no runs_on goes where DefaultRunsOn
+	// says, or fails, and NoStagesPrepares builds prepare at once.
+	Executors     int
+	RunsNoStages  bool
 	DefaultRunsOn []string
 	// Hub is the runners, and Engines the Docker engines, a stage with
 	// runs_on is placed on; nil is none.
@@ -155,8 +152,7 @@ type Dispatcher struct {
 	// bin is KIPP_BIN for the stages the server runs: its own binary.
 	bin string
 
-	slots chan struct{} // one token per build with something running; see joinSlot
-	local chan struct{} // one token per stage the server runs itself
+	local *limit // the built-in runner's executors
 	wake  chan struct{}
 	quit  chan struct{}  // closed when Run's ctx ends
 	wg    sync.WaitGroup // the build goroutines; only Run adds and waits
@@ -179,10 +175,6 @@ type Dispatcher struct {
 	done    map[int64][]chan struct{}   // waiters per build
 	waiting map[int64]map[string]string // by build and stage: what a stage waits for to be placed
 	changes chan struct{}               // closed and replaced at every change; see Changes
-	// slotWaiters is how many started stages have a free place and wait for
-	// a slot. While there is one, no queued build takes a slot, so that the
-	// stage gets the next to free before a build that started later.
-	slotWaiters int
 	// quiet is the time the server went quiet, zero while it is not; and
 	// skipped the jobs whose cron fired meanwhile, which run once when it
 	// ends. Both are memory only: a restart ends quiet.
@@ -199,15 +191,13 @@ type Dispatcher struct {
 
 // run is a build between leaving the queue and releasing what it holds: its
 // place among the running builds and the job's locks, which it keeps until
-// its hook is done, and a slot, which it holds only while something of it
-// runs (see joinSlot).
+// its hook is done, and the built-in runner's executor its prepare holds.
 type run struct {
-	build   *store.Build
-	job     *config.Job
-	cancel  context.CancelCauseFunc // with a cancelledBy when somebody asked for it
-	settled bool                    // its final status is decided; Cancel comes too late
-	slot    bool                    // it holds a slot
-	users   int                     // what runs of it: its prepare, and each stage running; it holds the slot while above 0
+	build     *store.Build
+	job       *config.Job
+	cancel    context.CancelCauseFunc // with a cancelledBy when somebody asked for it
+	settled   bool                    // its final status is decided; Cancel comes too late
+	preparing bool                    // it holds an executor of the built-in runner for its prepare
 }
 
 // cancelledBy is why a build's context ended when a user cancelled it: who.
@@ -251,9 +241,6 @@ func New(st *store.Store, r runner.Runner, opts Options) *Dispatcher {
 	case opts.Executors <= 0:
 		opts.Executors = 4
 	}
-	if opts.Builds <= 0 {
-		opts.Builds = cmp.Or(opts.Executors, 4)
-	}
 	if opts.Secrets == nil {
 		opts.Secrets = func(context.Context, []string) (map[string]Secret, error) { return map[string]Secret{}, nil }
 	}
@@ -277,16 +264,13 @@ func New(st *store.Store, r runner.Runner, opts Options) *Dispatcher {
 	}
 	return &Dispatcher{
 		st: st, r: r, opts: opts, log: opts.Logger, bin: executable(),
-		slots: make(chan struct{}, opts.Builds), local: make(chan struct{}, opts.Executors),
-		wake: make(chan struct{}, 1), quit: make(chan struct{}), waiting: map[int64]map[string]string{}, now: opts.Now,
+		local: newLimit(opts.Executors),
+		wake:  make(chan struct{}, 1), quit: make(chan struct{}), waiting: map[int64]map[string]string{}, now: opts.Now,
 		snap:    &config.Snapshot{Jobs: map[string]*config.Job{}},
 		running: map[int64]*run{}, ending: map[int64]bool{}, locks: map[string]int64{},
 		done: map[int64][]chan struct{}{}, changes: make(chan struct{}),
 	}
 }
-
-// Builds is how many builds with something running run at once.
-func (d *Dispatcher) Builds() int { return cap(d.slots) }
 
 // Zone is the zone the job's cron is read in; for a nil job it is the
 // server's own, which is also the zone of what the pages show.
@@ -664,25 +648,20 @@ func (d *Dispatcher) start(ctx context.Context, b *store.Build, job *config.Job)
 	d.wg.Go(func() { d.runBuild(runCtx, r) })
 }
 
-// reserve applies the concurrency rule, the named locks and the builds
-// limit, in that order, and takes what the build needs when all three allow
-// it. The slot it takes is for the build's prepare.
+// reserve applies the concurrency rule, the named locks and the built-in
+// runner's limit, in that order, and takes what the build needs when all
+// three allow it. The executor it takes is for the build's prepare.
 func (d *Dispatcher) reserve(ctx context.Context, b *store.Build, job *config.Job) (context.Context, *run) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if !d.mayStartLocked(b, job) || d.slotWaiters > 0 {
-		return nil, nil
-	}
-	select {
-	case d.slots <- struct{}{}:
-	default:
+	if !d.mayStartLocked(b, job) || !d.local.tryTake() {
 		return nil, nil
 	}
 	for _, l := range job.Locks {
 		d.locks[l] = b.ID
 	}
 	runCtx, cancel := context.WithCancelCause(ctx)
-	r := &run{build: b, job: job, cancel: cancel, slot: true, users: 1}
+	r := &run{build: b, job: job, cancel: cancel, preparing: true}
 	d.running[b.ID] = r
 	return runCtx, r
 }
@@ -703,74 +682,13 @@ func (d *Dispatcher) mayStartLocked(b *store.Build, job *config.Job) bool {
 	return true
 }
 
-// joinSlot makes something of the build run: its first takes a slot, and
-// the others share it, so a build counts once however many stages it runs
-// at once, and counts for nothing while all it does is wait for a place or
-// for a slot. With wait, it blocks until a slot is free, and a blocked
-// caller is served before any build that tries later; without, it reports
-// false when none is. It reports false too when ctx ends first. Each true
-// is for one leaveSlot.
-func (d *Dispatcher) joinSlot(ctx context.Context, id int64, wait bool) bool {
+// prepared gives back the executor the build's prepare held, and wakes
+// the loop.
+func (d *Dispatcher) prepared(id int64) {
 	d.mu.Lock()
-	r := d.running[id]
-	if r == nil {
-		d.mu.Unlock()
-		return false
-	}
-	if r.users > 0 {
-		r.users++
-		d.mu.Unlock()
-		return true
-	}
-	select {
-	case d.slots <- struct{}{}:
-		r.slot, r.users = true, 1
-		d.mu.Unlock()
-		return true
-	default:
-	}
-	d.mu.Unlock()
-	if !wait {
-		return false
-	}
-	select {
-	case d.slots <- struct{}{}:
-	case <-ctx.Done():
-		return false
-	}
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	if r.slot {
-		<-d.slots // another stage of the build took one meanwhile
-	}
-	r.slot = true
-	r.users++
-	return true
-}
-
-// leaveSlot ends what joinSlot made run, gives the slot back when nothing
-// else of the build runs, and wakes the loop. The hook runs outside the
-// limit, and the job's locks and its place among the running builds stay
-// the build's until release.
-func (d *Dispatcher) leaveSlot(id int64) {
-	d.mu.Lock()
-	if r := d.running[id]; r != nil && r.users > 0 {
-		if r.users--; r.users == 0 && r.slot {
-			r.slot = false
-			<-d.slots
-		}
-	}
-	d.mu.Unlock()
-	d.kick()
-}
-
-// slotWaiter records that a started stage waits for a slot, or no longer does.
-func (d *Dispatcher) slotWaiter(on bool) {
-	d.mu.Lock()
-	if on {
-		d.slotWaiters++
-	} else {
-		d.slotWaiters--
+	if r := d.running[id]; r != nil && r.preparing {
+		r.preparing = false
+		d.local.give()
 	}
 	d.mu.Unlock()
 	d.kick()
@@ -786,8 +704,8 @@ func (d *Dispatcher) release(id int64) {
 		}
 		r.cancel(nil)
 		delete(d.running, id)
-		if r.slot {
-			<-d.slots
+		if r.preparing {
+			d.local.give()
 		}
 	}
 	for _, ch := range d.done[id] {

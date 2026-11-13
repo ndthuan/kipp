@@ -14,7 +14,34 @@ file of the same name. A server that loads its job files keeps loading them,
 and creates no example job. To keep kipp refusing every change of a job, as
 before, start it with `--job-edits off`.
 
+Upgrading: `kipp serve --builds` is refused, and a server started with it
+does not start. There is no longer a limit of builds across every runner:
+each runner has its own, and the server's own executors are the built-in
+runner, whose limit is `--executors`. Drop `--builds` from how the server
+is started, and set `--executors` and each runner's and engine's limit to
+what each machine can take.
+
 Changed:
+
+- No limit counts builds across runners any more: a stage waits only for a
+  free executor on a place that matches it. The server's own executors are
+  the built-in runner, `--executors` its limit, and a build's prepare (its
+  clone or merge on the server) holds one of them while it runs, so clones
+  stay within the server's capacity; a server of `--executors 0` prepares
+  four builds at once. `kipp serve --builds` is refused rather than kept
+  with a warning for a release, since a flag that is read and does nothing
+  would hide that the limit it set is gone. The stage log's `waiting for a
+  free build slot` is gone with it, and a queued build's `executor` wait now
+  means its prepare waits for the built-in runner.
+- The queue's heading tells an admin each runner's load, the built-in
+  runner first (`built-in 1/8`, then each standing runner and engine), an
+  offline or disabled one saying so, in place of `1/8 slots here`.
+  `GET /api/v1/queue` carries the same as `runners`. The Runners page lists
+  the built-in runner, with its limit and what it runs.
+- The overview's graph "Slots and queue" is "Running and queue", and draws
+  no limit line. `builds_limit` is gone from `GET /api/v1/overview`'s
+  `charts` and from the MCP overview, and `builds` from
+  `GET /api/v1/admin/server`.
 
 - `kipp serve` no longer needs `--jobs`: with the default
   `--job-edits store` a server without one serves the jobs of its

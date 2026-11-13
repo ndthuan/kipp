@@ -1,14 +1,23 @@
 type: object
 additionalProperties: false
 description: What runs and what waits, as the caller may see it.
-required: [executors, busy, running, queued]
+required: [executors, busy, runners, running, queued]
 properties:
   executors:
     type: [integer, "null"]
-    description: The server's executors. Only an admin is told, anyone else gets null.
+    description: The built-in runner's limit, the server's own executors. Only an admin is told, anyone else gets null.
   busy:
     type: [integer, "null"]
-    description: How many are taken. Only an admin is told, anyone else gets null.
+    description: How many of them stages and prepares hold. Only an admin is told, anyone else gets null.
+  runners:
+    type: [array, "null"]
+    description: |
+      Every place that runs stages with its own load, the built-in runner
+      first, then the standing runners and the engines by name. Each has a
+      limit of its own and none counts against another's. Only an admin is
+      told, anyone else gets null.
+    items:
+      $ref: RunnerLoad.yaml
   running:
     type: array
     items:

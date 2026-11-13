@@ -172,12 +172,12 @@ func TestAReloadReadsTheEnginesAndTheRunners(t *testing.T) {
 	})
 }
 
-func TestAServerOfNoExecutorsTakesFourBuildsAtOnce(t *testing.T) {
+func TestAServerOfNoExecutorsSaysSoAndWhereItsStagesGo(t *testing.T) {
 	s := &served{t: t, stderr: &syncBuffer{}, args: []string{"--executors", "0", "--default-runs-on", "linux", "--runner-env", "KIPP_DRY"}}
 	s.data, s.jobs, s.token = dataAndJobs(t, map[string]string{"plain.yml": "name: plain\nstages:\n  s: {run: 'true'}\n"})
 	s.serve()
 	info := kippGet(t, s, "/api/v1/admin/server")
-	for _, want := range []string{`"executors":0`, `"builds":4`, `"default_runs_on":["linux"]`, `"runner_env":["KIPP_DRY"]`, `"runner_url":"` + s.url + `"`} {
+	for _, want := range []string{`"executors":0`, `"default_runs_on":["linux"]`, `"runner_env":["KIPP_DRY"]`, `"runner_url":"` + s.url + `"`} {
 		contains(t, info, want)
 	}
 }

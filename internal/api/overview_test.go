@@ -166,7 +166,7 @@ func TestTheOverviewAnswersTheChartsOfTheDayAndTheWeekAndRefusesAnyOtherWindow(t
 	week := e.object(t, http.StatusOK, e.admin, "GET", "/api/v1/overview?window=7d", "")
 	explicit := e.object(t, http.StatusOK, e.admin, "GET", "/api/v1/overview?window=24h", "")
 	dc, wc := day["charts"].(map[string]any), week["charts"].(map[string]any)
-	eqKeys(t, "charts", dc, "bucket_seconds,buckets,builds_limit,end,groups,start,window")
+	eqKeys(t, "charts", dc, "bucket_seconds,buckets,end,groups,start,window")
 	eq(t, "the default window", dc["window"], "24h")
 	eq(t, "explicit 24h is the default", explicit["charts"].(map[string]any)["window"], "24h")
 	eq(t, "the week", wc["window"], "7d")
@@ -187,7 +187,6 @@ func TestTheOverviewAnswersTheChartsOfTheDayAndTheWeekAndRefusesAnyOtherWindow(t
 	eq(t, "day: unstable", sum(dc, "unstable"), 1)
 	eq(t, "day: cancelled", sum(dc, "cancelled"), 1)
 	eq(t, "week: the failure of three days ago too", sum(wc, "failed"), 2)
-	eq(t, "the limit of builds", dc["builds_limit"], any(float64(e.api.deps.Dispatch.Builds())))
 
 	groups := rowsOf(t, dc, "groups")
 	eqKeys(t, "a group's rate", groups[0], "before,change,name,now")

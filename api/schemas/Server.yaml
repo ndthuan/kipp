@@ -9,7 +9,6 @@ required:
   - listen
   - base_url
   - executors
-  - builds
   - default_runs_on
   - runner_env
   - runner_url
@@ -49,10 +48,7 @@ properties:
     type: string
   executors:
     type: integer
-    description: The server's own stages at once; 0 for none.
-  builds:
-    type: integer
-    description: The builds with something running at once.
+    description: The built-in runner's limit, the server's own stages at once; 0 for none.
   default_runs_on:
     type: array
     items:

@@ -197,7 +197,7 @@ func TestServeSaysWhatItCannotStartWith(t *testing.T) {
 		"no jobs directory, files":   {[]string{"--data", data, "--job-edits", "files"}, 2, "--jobs is required with --job-edits files"},
 		"a mode that is none":        {[]string{"--data", data, "--jobs", jobs, "--job-edits", "git"}, 2, "--job-edits is off, store or files"},
 		"executors below zero":       {[]string{"--data", data, "--jobs", jobs, "--executors", "-1"}, 2, "--executors is 0 or more"},
-		"builds below zero":          {[]string{"--data", data, "--jobs", jobs, "--builds", "-1"}, 2, "--builds"},
+		"the builds limit, gone":     {[]string{"--data", data, "--jobs", jobs, "--builds", "8"}, 2, "--builds is gone: no limit counts builds across runners; --executors is the built-in runner's"},
 		"flaky flips below zero":     {[]string{"--data", data, "--jobs", jobs, "--flaky-flips", "-1"}, 2, "--flaky-flips is 0"},
 		"a label that is none":       {[]string{"--data", data, "--jobs", jobs, "--default-runs-on", "Linux"}, 2, `--default-runs-on label "Linux"`},
 		"a runner-env prefix":        {[]string{"--data", data, "--jobs", jobs, "--runner-env", "LC_*"}, 2, `--runner-env "LC_*"`},

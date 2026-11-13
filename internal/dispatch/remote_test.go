@@ -213,45 +213,6 @@ func TestDefaultRunsOnSendsAStageThatNamesNoPlaceToAnRunner(t *testing.T) {
 	}
 }
 
-func TestAStageOnAnRunnerTakesNoneOfTheServersExecutors(t *testing.T) {
-	ag := newRunners(t, runnerhub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
-	ag.runBox(t.TempDir())
-	ready := filepath.Join(t.TempDir(), "go")
-	h := newHarness(t, map[string]string{
-		"busy":   "name: busy\nstages:\n  s: {run: 'while [ ! -e " + ready + " ]; do sleep 0.05; done'}\n",
-		"remote": "name: remote\nstages:\n  s: {runs_on: linux, run: echo remote}\n",
-	}, ag.opts, func(o *Options) { o.Executors, o.Builds = 1, 2 })
-	busy := h.trigger(t, "busy")
-	h.untilRunning(t, busy.ID)
-	if b := h.wait(t, h.trigger(t, "remote").ID); b.Status != store.Success {
-		t.Fatalf("%s", b.Status)
-	}
-	if err := os.WriteFile(ready, nil, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	h.wait(t, busy.ID)
-}
-
-func TestTheBuildsLimitIsApartFromTheServersExecutors(t *testing.T) {
-	ready := filepath.Join(t.TempDir(), "go")
-	h := newHarness(t, map[string]string{
-		"a": "name: a\nstages:\n  s: {run: 'while [ ! -e " + ready + " ]; do sleep 0.05; done'}\n",
-		"b": "name: b\nstages:\n  s: {run: 'true'}\n",
-	}, func(o *Options) { o.Executors, o.Builds = 4, 1 })
-	first := h.trigger(t, "a")
-	h.untilStageHoldsSlot(t, first.ID, "s")
-	second := h.trigger(t, "b")
-	eventually(t, "the second build waits for the builds limit", func() bool {
-		q, err := h.d.Queue(context.Background())
-		return err == nil && len(q.Queued) == 1 && q.Queued[0].Waiting == WaitExecutor
-	})
-	if err := os.WriteFile(ready, nil, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	h.wait(t, first.ID)
-	h.wait(t, second.ID)
-}
-
 func TestTheJunitOfAStageOnAnRunnerIsRead(t *testing.T) {
 	ag := newRunners(t, runnerhub.Identity{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true})
 	ag.runBox(t.TempDir())

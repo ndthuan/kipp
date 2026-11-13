@@ -33,6 +33,40 @@ type RunnerInfo struct {
 	LastSeenAt *time.Time
 }
 
+// BuiltInInfo is what an admin sees of the built-in runner, the server's
+// own executors.
+type BuiltInInfo struct {
+	// Executors is its limit, and Busy how many of them stages and prepares
+	// hold. RunsStages is false on a server of --executors 0, whose limit
+	// counts prepares alone.
+	Executors, Busy int
+	RunsStages      bool
+	// Stages is what it runs now: job#number/stage.
+	Stages []string
+}
+
+// BuiltIn is the built-in runner as it is now, for an admin.
+func (s *Service) BuiltIn(ctx context.Context, u *store.User) (*BuiltInInfo, error) {
+	if !u.Admin {
+		return nil, ErrForbidden
+	}
+	q, err := s.deps.Dispatch.Queue(ctx)
+	if err != nil {
+		return nil, err
+	}
+	info := &BuiltInInfo{Executors: q.Executors, Busy: q.Busy, RunsStages: q.RunsStages, Stages: []string{}}
+	for _, r := range q.Running {
+		for _, st := range r.Stages {
+			_, waits := r.Waiting[st]
+			_, away := r.Remote[st]
+			if !waits && !away {
+				info.Stages = append(info.Stages, fmt.Sprintf("%s#%d/%s", r.Build.Job, r.Build.Number, st))
+			}
+		}
+	}
+	return info, nil
+}
+
 // Engines are the Docker engines by name, for an admin; a token may read
 // them. Each is its record, and what the server sees of it now once it
 // has read it.

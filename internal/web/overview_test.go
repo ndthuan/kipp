@@ -156,12 +156,14 @@ func TestTheOverviewDrawsThreeGraphsAsSVGWithTheirNumbersAsText(t *testing.T) {
 		`<title id="chart-builds-title">Builds over time: how the builds that ended in the last 24 hours ended</title>`,
 		"In the last 24 hours, 2 builds ended success, 1 unstable, 1 failed and 0 cancelled.",
 		`aria-labelledby="chart-slots-title chart-slots-desc"`, "at most 1 builds ran at once",
+		// Each runner has its own limit, and no line on the graph stands for a total.
+		"each runner has a limit of its own", "Running and queue",
 		`aria-labelledby="chart-rates-title chart-rates-desc"`,
 		// The pass rate of a group, in the words of the page: 3 green of 4.
 		"backend 75% of 4",
 		// The numbers are in a table too, and in the legend.
 		`<div class="sr-only"><table>`, "<td>1</td><td>0</td><td>0</td><td>0</td>", "<td>0</td><td>1</td><td>0</td><td>0</td>", "success 2", "failed 1")
-	lacks(t, page, "<script src=\"https://", "<img")
+	lacks(t, page, "<script src=\"https://", "<img", `class="limit"`, "Slots and queue", "the limit is")
 }
 
 func TestTheOverviewTakesAWindowOfAWeekAndTheControlShowsWhichOneHolds(t *testing.T) {

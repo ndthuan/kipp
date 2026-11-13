@@ -2220,7 +2220,7 @@ func TestTheQueuePageSaysWhatRunsAndWhyTheRestWaits(t *testing.T) {
 	e.queued(t, 1, 1)
 	_, page := get(t, c, e.srv.URL+"/queue")
 	contains(t, page, `<section id="queue" class="stack" hx-get="/queue" hx-select="#queue" hx-target="this" hx-swap="outerHTML" hx-trigger="kipp-changed from:body">`,
-		`<h2>Running 1 build <span class="sub">1/4 slots here</span></h2>`,
+		`<h2>Running 1 build <span class="sub">built-in 1/4</span></h2>`,
 		`<h2>Waiting 1 build</h2>`,
 		`<a class="link" href="/jobs/hold/1">hold #1</a>`,
 		`<span class="status running">running</span> <span class="sub stages">stage: s</span>`,

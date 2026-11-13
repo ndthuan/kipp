@@ -147,25 +147,40 @@ runner idle longest, or the engine with the most room.
 
 | Flag | Does |
 |---|---|
-| `--executors N` | Stages the server runs itself at once (default 4). `0` runs none: a stage that names no `runs_on` goes where `--default-runs-on` says, or fails. Hooks and the clone of a `source` job still run on the server. |
+| `--executors N` | The built-in runner's limit: stages the server runs itself at once, each build's prepare counted while it runs (default 4). `0` runs none: a stage that names no `runs_on` goes where `--default-runs-on` says, or fails. Hooks and the clone of a `source` job still run on the server, four builds' prepares at once. |
 | `--default-runs-on <labels>` | Where a stage with no `runs_on` goes on a server with `--executors 0`. |
-| `--builds N` | How many builds with something running run at once (default `--executors`, or 4 when that is 0). |
 | `--runner-env <names>` | The server's variables, by exact name, that a stage on a runner is also given. |
 | `--runner-url <url>` | The URL a container's runner dials (default `--base-url`), and where a stage on a runner reaches the cache. |
 | `--runner-listen <addr>` | A second listener that serves `/api/v1/runner/` and `/api/v1/cache/` and nothing else; `/api/v1/runner/` is then not on `--listen`. |
 | `--ssh-key <file>` | The key for `ssh://` engines that name none. |
 
-A build counts toward `--builds` while it prepares, while any of its
-stages runs on the server, and from the start of a stage on a runner or
-an engine to its end, however many of its stages that is. A build whose
-stages all wait to be placed counts for nothing, and neither does one
-between its stages, so builds waiting for a busy runner do not keep the
-server's other jobs from starting; they still hold their job's place
-among the running builds and its locks. When a place is free and no
-slot is, the stage waits for the slot (its log says
-`waiting for a free build slot`) before it takes the runner's executor or
-starts a container, and it gets the first slot to free, before any build
-that was queued later.
+### Each runner has its own limit
+
+The server's own executors are the **built-in runner**, one runner among
+the others: `--executors` is its limit, as `--executors` of `kipp runner
+add` is a standing runner's and `--max` an engine's. No limit counts builds
+across them, so a stage waits only for a free executor on a place that
+matches it.
+
+A build's prepare (the clone, or the merge of a pull request, on the
+server) holds one of the built-in runner's executors while it runs, so
+clones stay within the server's own capacity: a build whose prepare finds
+every one taken waits in the queue (`waiting for a free executor`). Each
+stage the server runs holds one too. A stage on a runner or an engine
+holds nothing of the server's, and a build whose stages all wait to be
+placed holds nothing either; it still holds its job's place among the
+running builds and its locks. A started build's stage that waits for the
+built-in runner gets the first executor to free, before a build queued
+later.
+
+`--builds`, a limit of builds across every runner, is gone: `kipp serve`
+refuses it, naming `--executors` and the runners' limits.
+
+The queue's heading tells an admin each runner's load, the built-in
+runner first: `built-in 1/8`, then `build-1 1/2` and `docker-1 0/3`, a
+middle dot between them. An offline or disabled one says so instead of a
+count, and a limit of 0 reads `no limit`.
+`GET /api/v1/queue` carries the same as `runners`.
 
 ## Security
 

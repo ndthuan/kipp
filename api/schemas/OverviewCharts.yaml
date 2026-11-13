@@ -5,7 +5,7 @@ description: |
   view that build themselves, disabled ones included: the builds that ended
   by how they ended, how many ran at once and how long builds waited, and
   how often each group's builds ended green.
-required: [window, bucket_seconds, start, end, builds_limit, buckets, groups]
+required: [window, bucket_seconds, start, end, buckets, groups]
 properties:
   window:
     type: string
@@ -20,9 +20,6 @@ properties:
   end:
     $ref: Timestamp.yaml
     description: Where the last bucket ends, after now.
-  builds_limit:
-    type: integer
-    description: The server's limit of builds with something running at once.
   buckets:
     type: array
     description: |

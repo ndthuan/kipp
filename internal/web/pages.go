@@ -401,14 +401,14 @@ func pastIn(zone *time.Location, now func() time.Time) func(v any, word string) 
 type nowView struct {
 	Running, Placing []api.RunningView
 	Queued           []api.QueuedView
-	Executors, Busy  int
+	Runners          []api.RunnerLoad
 }
 
 // Waiting counts the builds that run nothing.
 func (n *nowView) Waiting() int { return len(n.Placing) + len(n.Queued) }
 
 func nowOf(q *api.QueueView) *nowView {
-	n := &nowView{Queued: q.Queued, Executors: q.Executors, Busy: q.Busy}
+	n := &nowView{Queued: q.Queued, Runners: q.Runners}
 	for _, r := range q.Running {
 		if placing(r) {
 			n.Placing = append(n.Placing, r)
@@ -417,6 +417,20 @@ func nowOf(q *api.QueueView) *nowView {
 		}
 	}
 	return n
+}
+
+// loadText is one runner's load as the queue's heading says it: what it
+// runs of its limit, or why it takes nothing.
+func loadText(l api.RunnerLoad) string {
+	switch {
+	case l.State != api.StateOnline:
+		return l.Name + " " + l.State
+	case l.Limit == 0:
+		return fmt.Sprintf("%s %d/no limit", l.Name, l.Busy)
+	case l.PreparesOnly:
+		return fmt.Sprintf("%s %d/%d prepares", l.Name, l.Busy, l.Limit)
+	}
+	return fmt.Sprintf("%s %d/%d", l.Name, l.Busy, l.Limit)
 }
 
 // placing says every stage r is on waits to be placed. A build on no stage

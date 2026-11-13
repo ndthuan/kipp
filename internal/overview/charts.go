@@ -42,8 +42,6 @@ type Config struct {
 	Flips int
 	// Range is how far back the graphs look; the zero Range is Day.
 	Range Range
-	// Builds is the server's limit of builds running at once, 0 for none.
-	Builds int
 	// Zone is where the columns' edges fall, so that a day's columns start
 	// on the hour of the page's clock; nil is UTC.
 	Zone *time.Location
@@ -73,9 +71,6 @@ type Charts struct {
 	// The columns cover [Start, End).
 	Start, End time.Time
 	Buckets    []Bucket
-	// BuildsLimit is the server's limit of builds running at once, 0 for
-	// none.
-	BuildsLimit int
 	// Groups is the pass rate of every group that finished a build in the
 	// last Range.Length or the one before it, or has a job never built or
 	// disabled, the named ones by name and the jobs with no group (Name
@@ -125,7 +120,7 @@ func (g GroupRate) Delta() (int, bool) {
 func chartsOf(jobs []Job, cfg Config, now time.Time) *Charts {
 	rg := cfg.rng()
 	start, end := Bounds(rg, cfg.Zone, now)
-	c := &Charts{Range: rg, Start: start, End: end, BuildsLimit: cfg.Builds}
+	c := &Charts{Range: rg, Start: start, End: end}
 	for t := start; t.Before(end); t = t.Add(rg.Bucket) {
 		c.Buckets = append(c.Buckets, Bucket{Start: t})
 	}

@@ -4315,9 +4315,6 @@ components:
           items:
             $ref: "#/components/schemas/OverviewBucket"
           type: array
-        builds_limit:
-          description: The server's limit of builds with something running at once.
-          type: integer
         end:
           $ref: "#/components/schemas/Timestamp"
           description: Where the last bucket ends, after now.
@@ -4343,7 +4340,6 @@ components:
         - bucket_seconds
         - start
         - end
-        - builds_limit
         - buckets
         - groups
       type: object
@@ -4611,12 +4607,12 @@ components:
       description: What runs and what waits, as the caller may see it.
       properties:
         busy:
-          description: How many are taken. Only an admin is told, anyone else gets null.
+          description: How many of them stages and prepares hold. Only an admin is told, anyone else gets null.
           type:
             - integer
             - "null"
         executors:
-          description: The server's executors. Only an admin is told, anyone else gets null.
+          description: The built-in runner's limit, the server's own executors. Only an admin is told, anyone else gets null.
           type:
             - integer
             - "null"
@@ -4624,6 +4620,17 @@ components:
           items:
             $ref: "#/components/schemas/QueuedBuild"
           type: array
+        runners:
+          description: |
+            Every place that runs stages with its own load, the built-in runner
+            first, then the standing runners and the engines by name. Each has a
+            limit of its own and none counts against another's. Only an admin is
+            told, anyone else gets null.
+          items:
+            $ref: "#/components/schemas/RunnerLoad"
+          type:
+            - array
+            - "null"
         running:
           items:
             $ref: "#/components/schemas/RunningBuild"
@@ -4631,6 +4638,7 @@ components:
       required:
         - executors
         - busy
+        - runners
         - running
         - queued
       type: object
@@ -4980,6 +4988,45 @@ components:
         - items
         - next_cursor
       type: object
+    RunnerLoad:
+      additionalProperties: false
+      description: How busy one place that runs stages is.
+      properties:
+        busy:
+          description: |
+            What it runs now: stages on a runner, containers on an engine, and
+            stages and prepares on the built-in runner.
+          type: integer
+        kind:
+          enum:
+            - built-in
+            - runner
+            - engine
+          type: string
+        limit:
+          description: How many it may run at once; 0 for no limit.
+          type: integer
+        name:
+          description: The runner's or engine's name; `built-in` for the server's own executors.
+          type: string
+        prepares_only:
+          description: The built-in runner of a server that runs no stage itself (`--executors 0`), whose limit is for prepares.
+          type: boolean
+        state:
+          description: A disabled place takes nothing new; an offline runner or an unreachable engine takes nothing until it is back.
+          enum:
+            - online
+            - offline
+            - disabled
+          type: string
+      required:
+        - name
+        - kind
+        - busy
+        - limit
+        - state
+        - prepares_only
+      type: object
     RunnerStage:
       additionalProperties: false
       description: A stage a runner runs or has been given.
@@ -5160,9 +5207,6 @@ components:
       properties:
         base_url:
           type: string
-        builds:
-          description: The builds with something running at once.
-          type: integer
         checked_at:
           $ref: "#/components/schemas/NullableTimestamp"
         data_dir:
@@ -5178,7 +5222,7 @@ components:
             type: string
           type: array
         executors:
-          description: The server's own stages at once; 0 for none.
+          description: The built-in runner's limit, the server's own stages at once; 0 for none.
           type: integer
         free_disk_bytes:
           description: Bytes free on the data directory's disk; null when they could not be read.
@@ -5262,7 +5306,6 @@ components:
         - listen
         - base_url
         - executors
-        - builds
         - default_runs_on
         - runner_env
         - runner_url
@@ -6122,8 +6165,9 @@ components:
     WaitReason:
       description: |
         Why a queued build has not started: its job is gone or disabled, a build
-        of the same job is ahead of it, another build holds a lock, every
-        executor is taken, or nothing holds it back and the next pass starts it.
+        of the same job is ahead of it, another build holds a lock, its prepare
+        waits for an executor of the built-in runner (executor), or nothing holds
+        it back and the next pass starts it.
         Anyone but an admin is told only that it waits to start (start), since
         what holds it back may be a job they may not view.
       enum:

@@ -82,7 +82,7 @@
 </html>
 {{define "navmetrics"}}<a class="navlink" href="/metrics"{{if eq . "/metrics"}} aria-current="page"{{end}}>Metrics</a>{{end}}
 {{define "queue"}}<section id="queue" class="stack"{{if not .Nested}} hx-get="/queue" hx-select="#queue" hx-target="this" hx-swap="outerHTML" hx-trigger="kipp-changed from:body"{{end}}>
-{{with .Queue}}{{with nowOf .}}{{$slots := .Executors}}{{if .Running}}<h2>Running {{len .Running}} {{if eq (len .Running) 1}}build{{else}}builds{{end}}{{if .Executors}} <span class="sub">{{.Busy}}/{{.Executors}} slots here</span>{{end}}</h2>{{$slots = 0}}
+{{with .Queue}}{{with nowOf .}}{{$loads := true}}{{if .Running}}<h2>Running {{len .Running}} {{if eq (len .Running) 1}}build{{else}}builds{{end}}{{template "loads" .Runners}}</h2>{{$loads = false}}
 <div class="scroll">
 <table class="queue stacked two-line">
 <thead><tr><th>Build</th><th>Status</th><th>For</th><th><span class="sr-only">Cancel</span></th></tr></thead>
@@ -96,7 +96,7 @@
 {{end}}</tbody>
 </table>
 </div>
-{{end}}{{if .Waiting}}<h2>Waiting {{.Waiting}} {{if eq .Waiting 1}}build{{else}}builds{{end}}{{if $slots}} <span class="sub">{{.Busy}}/{{.Executors}} slots here</span>{{end}}</h2>
+{{end}}{{if .Waiting}}<h2>Waiting {{.Waiting}} {{if eq .Waiting 1}}build{{else}}builds{{end}}{{if $loads}}{{template "loads" .Runners}}{{end}}</h2>
 <div class="scroll">
 <table class="queue queue-waiting stacked two-line">
 <thead><tr><th>Build</th><th>Status</th><th>For</th><th><span class="sr-only">Cancel</span></th></tr></thead>
@@ -121,6 +121,7 @@
 {{end}}
 {{define "since"}}{{with .}}{{with .Word}}<span class="tl">{{.}} </span>{{end}}<time class="{{.Kind}}" datetime="{{.At}}" title="{{.Title}}"{{if eq .Kind "past"}} data-ago{{end}}>{{.Text}}</time>{{end}}{{end}}
 {{define "dag"}}{{with .}}<svg class="dag" viewBox="0 0 {{.Width}} {{.Height}}" width="{{.Width}}" height="{{.Height}}" role="img" aria-label="Stages and what each one needs">{{range .Lines}}<line x1="{{.X1}}" y1="{{.Y1}}" x2="{{.X2}}" y2="{{.Y2}}"/>{{end}}{{range .Nodes}}<g class="stage {{.Status}}" data-stage="{{.Name}}"><title>{{.Name}}: {{.Status}}</title><rect x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}" rx="8"/><text x="{{.TextX}}" y="{{.TextY}}">{{.Label}}</text></g>{{end}}</svg>{{end}}{{end}}
+{{define "loads"}}{{with .}} <span class="sub">{{range $i, $l := .}}{{if $i}} &middot; {{end}}{{loadText $l}}{{end}}</span>{{end}}{{end}}
 {{define "queue-cancel"}}<a class="action action-small cancel" href="{{buildPath .Build}}/cancel?next={{.Next}}" aria-label="Cancel {{.Build.Job}} #{{.Build.Number}}"><span class="cancel-word">Cancel...</span><svg class="icon cancel-x" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></a>{{end}}
 {{define "dots"}}<span class="dots"><span class="dots-newest" aria-hidden="true">newest</span>{{range $i, $b := .}}<a class="dot {{.Status}}{{if not $i}} newest{{end}}" href="{{buildPath .}}" title="#{{.Number}} {{.Status}}"><span class="sr-only">#{{.Number}} {{.Status}}{{if not $i}}, newest{{end}}</span></a>{{end}}</span>{{end}}
 {{define "waiting"}}{{$b := .Blocker}}{{if eq .Waiting "job"}}{{if not $b}}waiting for another build of this job{{else if eq $b.Status "queued"}}behind <a class="link" href="{{buildPath $b}}">#{{$b.Number}}</a> of this job{{else}}waiting for <a class="link" href="{{buildPath $b}}">#{{$b.Number}}</a> of this job to end{{end}}{{else if eq .Waiting "lock"}}waiting for lock <code>{{.Lock}}</code>, held by {{with $b}}<a class="link" href="{{buildPath .}}">{{.Job}} #{{.Number}}</a>{{else}}another build{{end}}{{else if eq .Waiting "executor"}}waiting for a free executor{{else if eq .Waiting "start"}}waiting to start{{else if eq .Waiting "gone"}}its job is gone from the job files or disabled, so it will not start{{else}}starting{{end}}{{end}}

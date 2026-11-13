@@ -235,9 +235,9 @@ type ServerInfo struct {
 	Schema             int
 	StartedAt          time.Time
 	Listen, BaseURL    string
-	// Executors is the server's own stages at once, 0 for none; Builds the
-	// builds with something running at once.
-	Executors, Builds int
+	// Executors is the built-in runner's limit: the server's own stages at
+	// once, 0 for none.
+	Executors int
 	// Where stages on runners come from and what they get: the labels of a
 	// stage that names none on a server of no executors, the variables of
 	// the server's they are given, the URL a container's runner dials, and

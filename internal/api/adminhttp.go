@@ -56,7 +56,6 @@ type serverJSON struct {
 	Listen            string   `json:"listen"`
 	BaseURL           string   `json:"base_url"`
 	Executors         int      `json:"executors"`
-	Builds            int      `json:"builds"`
 	DefaultRunsOn     []string `json:"default_runs_on"`
 	RunnerEnv         []string `json:"runner_env"`
 	RunnerURL         string   `json:"runner_url"`
@@ -122,7 +121,7 @@ func toSecretsJSON(rows []SecretRow) []secretJSON {
 
 func toServerJSON(info *ServerInfo) serverJSON {
 	out := serverJSON{Version: info.Version, GoVersion: info.GoVersion, Schema: info.Schema, StartedAt: stampOf(info.StartedAt),
-		Listen: info.Listen, BaseURL: info.BaseURL, Executors: info.Executors, Builds: info.Builds,
+		Listen: info.Listen, BaseURL: info.BaseURL, Executors: info.Executors,
 		DefaultRunsOn: append([]string{}, info.DefaultRunsOn...), RunnerEnv: append([]string{}, info.RunnerEnv...),
 		RunnerURL: info.RunnerURL, RunnerListen: info.RunnerListen, Shell: info.Shell,
 		SessionTTLSeconds: int64(info.SessionTTL / time.Second), TimeZone: info.TimeZone, DataDir: info.DataDir, JobsDir: info.JobsDir,

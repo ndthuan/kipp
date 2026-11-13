@@ -64,9 +64,8 @@ directory.
 | `--job-edits <mode>` | `store` | What a change of a job through kipp does: `store` keeps it in the database, `files` writes the job file, `off` refuses it ([Changing jobs through kipp](jobs.md#changing-jobs-through-kipp)). On its first start in `store` mode a data directory that never held a job of the store or a build, serving no job, gets two example jobs, `hello` and `hello-schedule`, once ([The example jobs](jobs.md#the-example-jobs)). |
 | `--listen <addr>` | `127.0.0.1:8085` | The address to listen on, in plain HTTP. |
 | `--base-url <url>` | `http://<listen>` | The URL stages see as `KIPP_URL`. Build links, commit statuses' links, webhook URLs and GitHub App manifests need it given. |
-| `--executors <n>` | 4 | Stages the server runs itself at once; 0 runs none ([Runners and engines](runners.md#the-servers-flags)). |
+| `--executors <n>` | 4 | The built-in runner's limit: stages the server runs itself at once, each build's prepare counted while it runs; 0 runs none ([Each runner has its own limit](runners.md#each-runner-has-its-own-limit)). |
 | `--flaky-flips <n>` | 4 | Changes of colour among a job's last 20 finished builds (at least 5 needed) that put it in the front page's Flaky section; 0 hides the section. |
-| `--builds <n>` | `--executors`, or 4 when that is 0 | Builds with something running at once. |
 | `--shell <sh>` | `sh` | The shell that runs stages, as `<shell> -c <command>`. |
 | `--session-ttl <d>` | `720h` | How long a browser login lasts. |
 | `--timezone <zone>` | the host's | The IANA zone a cron is read in when its job names none, and the pages' zone. |

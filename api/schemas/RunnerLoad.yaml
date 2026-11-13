@@ -1,0 +1,26 @@
+type: object
+additionalProperties: false
+description: How busy one place that runs stages is.
+required: [name, kind, busy, limit, state, prepares_only]
+properties:
+  name:
+    type: string
+    description: The runner's or engine's name; `built-in` for the server's own executors.
+  kind:
+    type: string
+    enum: [built-in, runner, engine]
+  busy:
+    type: integer
+    description: |
+      What it runs now: stages on a runner, containers on an engine, and
+      stages and prepares on the built-in runner.
+  limit:
+    type: integer
+    description: How many it may run at once; 0 for no limit.
+  state:
+    type: string
+    enum: [online, offline, disabled]
+    description: A disabled place takes nothing new; an offline runner or an unreachable engine takes nothing until it is back.
+  prepares_only:
+    type: boolean
+    description: The built-in runner of a server that runs no stage itself (`--executors 0`), whose limit is for prepares.

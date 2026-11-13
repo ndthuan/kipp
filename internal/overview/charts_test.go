@@ -113,14 +113,11 @@ func TestMaxRunningIsTheMostBuildsRunningAtOnceInAColumn(t *testing.T) {
 		// Queued and never started.
 		build(6, "a", store.Queued, -h, 0, 0),
 	}}
-	c := Compute([]Job{j}, Config{Builds: 4}, now).Charts
+	c := Compute([]Job{j}, Config{}, now).Charts
 	for at, want := range map[time.Duration]int{-3 * h: 0, -2 * h: 3, -h: 2, 0: 1} {
 		if got := bucketAt(t, c, now.Add(at)).MaxRunning; got != want {
 			t.Errorf("%v: %d running, want %d", at, got, want)
 		}
-	}
-	if c.BuildsLimit != 4 {
-		t.Fatal(c.BuildsLimit)
 	}
 }
 

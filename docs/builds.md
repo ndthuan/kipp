@@ -122,10 +122,11 @@ comes with its numbers as text for a screen reader:
 - **Builds over time**: the builds that ended in each hour (each six hours
   for the week), stacked by how they ended: success, unstable, failed
   (`failed`, `timeout` and `lost`) and cancelled.
-- **Slots and queue**: the most builds running at once in each column
-  against the server's `--builds` limit (the dashed line), and under it how
-  long the builds that started in the column waited in the queue, the median
-  and the longest.
+- **Running and queue**: the most builds running at once in each column,
+  and under it how long the builds that started in the column waited in the
+  queue, the median and the longest. It draws no limit: each runner has its
+  own ([Each runner has its own limit](runners.md#each-runner-has-its-own-limit)),
+  and the queue's heading tells an admin each one's load.
 - **Pass rate by group**: for each group, the share of the builds that ended
   green in the window, how many builds that is of, and the change against
   the window before it of the same length ("92% (+4) of 130"). A group with
@@ -177,10 +178,12 @@ and on its own page, `/queue`, which the header links to from every page with a 
 - A running build shows the stages it runs, and for a stage that waits to
   be placed on a runner or an engine, what it waits for.
 - A queued one says why it waits: behind a build of its job, for a lock
-  and the build that holds it, for a free executor, or that its job is
+  and the build that holds it, for a free executor of the built-in runner
+  to prepare on, or that its job is
   gone and it will not start. A build that holds a lock is named only to
   whoever may view its job; anyone else reads "another build".
-- How many executors are busy is told to an admin alone: to anyone else
+- How busy each runner is, the built-in runner first, is told to an admin
+  alone, in the queue's heading: to anyone else
   a build waiting for a free executor is "waiting to start", since which
   it is would tell whether builds of other jobs hold every executor.
 
@@ -188,7 +191,10 @@ and on its own page, `/queue`, which the header links to from every page with a 
 `waiting_stages`; `queued`, each with `waiting` (`job`, `lock`,
 `executor`, `nothing` or `gone`, and `start` in place of `executor` and
 `nothing` for whoever is not an admin), `lock` and `blocker`; and to an
-admin `executors` and `busy`, which anyone else gets as `null`.
+admin `executors` and `busy` (the built-in runner's) and `runners`, each
+place that runs stages with its `kind` (`built-in`, `runner` or
+`engine`), `busy`, `limit` (0 for none) and `state` (`online`, `offline`
+or `disabled`), which anyone else gets as `null`.
 
 `GET /api/v1/queue/events` is a stream of server-sent events: one called
 `changed` each time the queue its user may see changes, so a change to a

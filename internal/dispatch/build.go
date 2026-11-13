@@ -87,7 +87,7 @@ func (d *Dispatcher) runBuild(ctx context.Context, r *run) {
 	e := d.newEnv(b, job)
 	status, ranStages := store.Failed, true
 	err := d.prepare(ctx, b, job, e)
-	d.leaveSlot(b.ID) // the slot reserve took was for the prepare
+	d.prepared(b.ID)
 	if err != nil {
 		ranStages = false
 		d.note(b, config.PrepareLog, e, err.Error())
@@ -500,7 +500,7 @@ func (d *Dispatcher) runStage(ctx context.Context, b *store.Build, e *buildEnv, 
 	}
 	free, ok := func() {}, ctx.Err() == nil
 	if !d.remote(s) {
-		free, ok = d.executor(ctx, b)
+		free, ok = d.executor(ctx)
 	}
 	if !ok {
 		d.setStage(ctx, b, s.Name, store.StageCancelled, nil)
@@ -519,21 +519,14 @@ func (d *Dispatcher) runStage(ctx context.Context, b *store.Build, e *buildEnv, 
 	return outcome(status)
 }
 
-// executor blocks until a stage of the server's own may run: on one of the
-// server's executors and on the build's slot, which the stage shares with
-// the build's others. The func gives them back. A build that was cancelled
-// while the stage waited gets neither.
-func (d *Dispatcher) executor(ctx context.Context, b *store.Build) (func(), bool) {
-	select {
-	case d.local <- struct{}{}:
-	case <-ctx.Done():
+// executor blocks until a stage of the server's own may run on one of the
+// built-in runner's executors. The func gives it back. A build that was
+// cancelled while the stage waited gets none.
+func (d *Dispatcher) executor(ctx context.Context) (func(), bool) {
+	if !d.local.take(ctx) {
 		return nil, false
 	}
-	if !d.joinSlot(ctx, b.ID, true) {
-		<-d.local
-		return nil, false
-	}
-	free := func() { d.leaveSlot(b.ID); <-d.local }
+	free := func() { d.local.give(); d.kick() }
 	if ctx.Err() != nil {
 		free()
 		return nil, false

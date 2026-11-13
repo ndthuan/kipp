@@ -133,7 +133,7 @@ func TestTheOverviewOfTheDemoHasSomethingInEveryGraph(t *testing.T) {
 		}
 		jobs = append(jobs, j)
 	}
-	o := overview.Compute(jobs, overview.Config{Flips: overview.DefaultFlips, Builds: slots}, at0)
+	o := overview.Compute(jobs, overview.Config{Flips: overview.DefaultFlips}, at0)
 	var finished, peak int
 	for _, b := range o.Charts.Buckets {
 		finished += b.Finished()

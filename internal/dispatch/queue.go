@@ -20,8 +20,9 @@ const (
 	WaitJob WaitReason = "job"
 	// WaitLock: another build holds one of the job's locks.
 	WaitLock WaitReason = "lock"
-	// WaitExecutor: every slot is taken, or a started stage that waits for
-	// one is served first.
+	// WaitExecutor: its prepare waits for an executor of the built-in
+	// runner: every one is taken, or a started stage that waits for one is
+	// served first.
 	WaitExecutor WaitReason = "executor"
 	// WaitNothing: nothing holds it back; the next pass starts it.
 	WaitNothing WaitReason = "nothing"
@@ -33,8 +34,11 @@ type Queue struct {
 	Running []RunningBuild
 	// Queued builds in the order the scheduler takes them, oldest first.
 	Queued []QueuedBuild
-	// Executors is the limit, and Busy how many of them are in use.
+	// Executors is the built-in runner's limit, and Busy how many of its
+	// executors stages and prepares hold. RunsStages is false on a server
+	// that runs no stage of its own, whose limit counts prepares alone.
 	Executors, Busy int
+	RunsStages      bool
 }
 
 // RunningBuild is a build that runs, with the stages it runs now, and
@@ -83,7 +87,7 @@ func (d *Dispatcher) Queue(ctx context.Context) (*Queue, error) {
 	if err != nil {
 		return nil, err
 	}
-	q := &Queue{Executors: cap(d.slots)}
+	q := &Queue{RunsStages: d.local.runsStages()}
 	var queued []*store.Build
 	for _, b := range builds {
 		if b.Status == store.Queued {
@@ -101,7 +105,7 @@ func (d *Dispatcher) Queue(ctx context.Context) (*Queue, error) {
 	for i := range q.Running {
 		q.Running[i].Waiting = d.waitingOfLocked(q.Running[i].Build.ID)
 	}
-	q.Busy = len(d.slots)
+	q.Busy, q.Executors = d.local.load()
 	ahead := map[string]*store.Build{} // the first queued build of each job
 	for _, b := range queued {
 		q.Queued = append(q.Queued, d.whyWaitingLocked(b, ahead))
@@ -135,9 +139,9 @@ func (d *Dispatcher) runningBuild(ctx context.Context, b *store.Build) (RunningB
 	return r, nil
 }
 
-// whyWaitingLocked applies mayStartLocked's rules and the executor limit
-// to b, and says which one holds it back. ahead is the first build of each
-// job queued before b.
+// whyWaitingLocked applies mayStartLocked's rules and the built-in
+// runner's limit to b, and says which one holds it back. ahead is the
+// first build of each job queued before b.
 func (d *Dispatcher) whyWaitingLocked(b *store.Build, ahead map[string]*store.Build) QueuedBuild {
 	w := QueuedBuild{Build: b, Waiting: WaitNothing}
 	job := d.snap.Jobs[b.Job]
@@ -166,7 +170,7 @@ func (d *Dispatcher) whyWaitingLocked(b *store.Build, ahead map[string]*store.Bu
 			return w
 		}
 	}
-	if len(d.slots) == cap(d.slots) || d.slotWaiters > 0 {
+	if d.local.full() {
 		w.Waiting = WaitExecutor
 	}
 	return w

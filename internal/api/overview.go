@@ -56,7 +56,7 @@ func (s *Service) Overview(ctx context.Context, u *store.User, rg overview.Range
 			Running: running, History: history[n],
 			Builds: byJob[n], Before: before[n]})
 	}
-	cfg := overview.Config{Flips: s.deps.FlakyFlips, Range: rg, Builds: s.deps.Dispatch.Builds(), Zone: zone}
+	cfg := overview.Config{Flips: s.deps.FlakyFlips, Range: rg, Zone: zone}
 	return overview.Compute(jobs, cfg, now), nil
 }
 
@@ -97,7 +97,6 @@ type chartsV1 struct {
 	BucketSeconds int           `json:"bucket_seconds"`
 	Start         stamp         `json:"start"`
 	End           stamp         `json:"end"`
-	BuildsLimit   int           `json:"builds_limit"`
 	Buckets       []bucketV1    `json:"buckets"`
 	Groups        []groupRateV1 `json:"groups"`
 }
@@ -165,7 +164,7 @@ func tallyOf(t store.Tally) tallyV1 { return tallyV1{t.Green, t.Red, t.Percent()
 
 func toChartsV1(c *overview.Charts) chartsV1 {
 	out := chartsV1{Window: c.Range.Name, BucketSeconds: int(c.Range.Bucket.Seconds()), Start: stampOf(c.Start), End: stampOf(c.End),
-		BuildsLimit: c.BuildsLimit, Buckets: make([]bucketV1, 0, len(c.Buckets)), Groups: []groupRateV1{}}
+		Buckets: make([]bucketV1, 0, len(c.Buckets)), Groups: []groupRateV1{}}
 	for _, b := range c.Buckets {
 		out.Buckets = append(out.Buckets, bucketV1{stampOf(b.Start), b.Success, b.Unstable, b.Failed, b.Cancelled, b.MaxRunning, b.Started,
 			int(b.WaitMedian.Round(time.Second).Seconds()), int(b.WaitMax.Round(time.Second).Seconds())})

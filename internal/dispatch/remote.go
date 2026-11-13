@@ -10,7 +10,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/ndthuan/kipp/internal/config"
@@ -43,7 +42,7 @@ var placeEvery = time.Second
 var errNoRunsOn = errors.New("the server runs no stages and the stage names no runs_on")
 
 // remote reports whether the stage runs somewhere other than the server.
-func (d *Dispatcher) remote(s *config.Stage) bool { return s.Remote() || d.opts.RunsNoStages }
+func (d *Dispatcher) remote(s *config.Stage) bool { return s.Remote() || !d.local.runsStages() }
 
 // labelsOf is where a stage on a runner asks to run.
 func (d *Dispatcher) labelsOf(s *config.Stage) []string {
@@ -55,11 +54,8 @@ func (d *Dispatcher) labelsOf(s *config.Stage) []string {
 
 // startRemote places the stage on a runner or an engine, waiting while
 // the places that could take it are busy or cannot be reached, and starts
-// it there. A stage nothing could ever take fails at once. The build holds
-// a slot from the start of the stage on its place until the stage ends, and
-// none while it waits: a place found free is not claimed until there is a
-// slot for the stage, so that an executor or a container is never held
-// for a stage that cannot start.
+// it there. A stage nothing could ever take fails at once. It waits only
+// for the places that match it: nothing counts builds across them.
 func (d *Dispatcher) startRemote(ctx context.Context, b *store.Build, e *buildEnv, s *config.Stage, out io.Writer) (runner.Proc, error) {
 	labels := d.labelsOf(s)
 	if len(labels) == 0 {
@@ -74,7 +70,7 @@ func (d *Dispatcher) startRemote(ctx context.Context, b *store.Build, e *buildEn
 		case placement.WhyNone:
 			return nil, errors.New(line)
 		case placement.Picked:
-			proc, err := d.startWithSlot(ctx, b, e, s, c, out)
+			proc, err := d.startOn(ctx, b, e, s, c, out)
 			if line = busyLine(c, err); line == "" {
 				return proc, err
 			}
@@ -87,12 +83,9 @@ func (d *Dispatcher) startRemote(ctx context.Context, b *store.Build, e *buildEn
 }
 
 // busyLine is what a stage waits for after it was picked a place and
-// startWithSlot said err, or "" when that is not a wait.
+// startOn said err, or "" when that is not a wait.
 func busyLine(c placement.Candidate, err error) string {
-	switch {
-	case errors.Is(err, errNoSlot):
-		return waitForSlot
-	case errors.Is(err, runnerhub.ErrNoRunner):
+	if errors.Is(err, runnerhub.ErrNoRunner) {
 		return "waiting for " + c.Name
 	}
 	return ""
@@ -100,21 +93,16 @@ func busyLine(c placement.Candidate, err error) string {
 
 // placeWait is a stage that waits to be placed, and what it has said so far.
 type placeWait struct {
-	d            *Dispatcher
-	build        int64
-	stage        string
-	out          io.Writer
-	said         string
-	waitsForSlot bool
+	d     *Dispatcher
+	build int64
+	stage string
+	out   io.Writer
+	said  string
 }
 
 // say records what the stage waits for. The first wait, and every change
 // of what it waits for, is a line of the stage's log.
 func (w *placeWait) say(line string) {
-	if forSlot := line == waitForSlot; forSlot != w.waitsForSlot {
-		w.d.slotWaiter(forSlot)
-		w.waitsForSlot = forSlot
-	}
 	if line != w.said {
 		_, _ = fmt.Fprintf(w.out, "kipp: %s\n", line)
 		w.said = line
@@ -124,58 +112,7 @@ func (w *placeWait) say(line string) {
 
 // end clears what the stage waited for.
 func (w *placeWait) end() {
-	if w.waitsForSlot {
-		w.d.slotWaiter(false)
-	}
 	w.d.setWaiting(w.build, w.stage, "")
-}
-
-// waitForSlot is what a stage waits for when its place is free and the
-// server has no slot for it.
-const waitForSlot = "waiting for a free build slot"
-
-// errNoSlot is startWithSlot finding every slot taken.
-var errNoSlot = errors.New(waitForSlot)
-
-// startWithSlot starts the stage on the place picked once the build has a
-// slot, taken before an engine starts a container. The slot is the stage's
-// until the process it returns has been waited for; there is no slot, and
-// no process, when it fails.
-func (d *Dispatcher) startWithSlot(ctx context.Context, b *store.Build, e *buildEnv, s *config.Stage, c placement.Candidate, out io.Writer) (runner.Proc, error) {
-	if !d.joinSlot(ctx, b.ID, false) {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		return nil, errNoSlot
-	}
-	proc, err := d.startOn(ctx, b, e, s, c, out)
-	if err != nil {
-		d.leaveSlot(b.ID)
-		return nil, err
-	}
-	return &slotProc{Proc: proc, leave: func() { d.leaveSlot(b.ID) }}, nil
-}
-
-// slotProc is a stage on its place, which gives the build's slot back when
-// it has been waited for.
-type slotProc struct {
-	runner.Proc
-	once  sync.Once
-	leave func()
-}
-
-// Tries is how many times the runner ran the command, when the process says.
-func (p *slotProc) Tries() int {
-	if t, ok := p.Proc.(interface{ Tries() int }); ok {
-		return t.Tries()
-	}
-	return 1
-}
-
-// Wait waits for the process, then gives the slot back, once.
-func (p *slotProc) Wait() (int, error) {
-	defer p.once.Do(p.leave)
-	return p.Proc.Wait()
 }
 
 func (d *Dispatcher) candidates(build int64, image string) []placement.Candidate {
@@ -278,7 +215,6 @@ func (d *Dispatcher) setWaiting(build int64, stage, line string) {
 	d.changed()
 }
 
-// waitingOf is a copy of what the build's stages wait for. mu is held.
 // Waiting is what each stage of the build that waits to be placed waits
 // for, nil when none does.
 func (d *Dispatcher) Waiting(build int64) map[string]string {
@@ -287,6 +223,7 @@ func (d *Dispatcher) Waiting(build int64) map[string]string {
 	return d.waitingOfLocked(build)
 }
 
+// waitingOfLocked is a copy of what the build's stages wait for. mu is held.
 func (d *Dispatcher) waitingOfLocked(build int64) map[string]string {
 	if w := d.waiting[build]; w != nil {
 		return maps.Clone(w)

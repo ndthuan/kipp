@@ -23,7 +23,7 @@ func TestServeWithAStandingRunnerRunsAStageThere(t *testing.T) {
 	t.Setenv("KIPP_DRY", "0")
 	t.Setenv("KIPP_TEST_SERVER_ONLY", "leak")
 	job := "name: remote\nstages:\n  s: {runs_on: linux, run: 'echo \"on $KIPP_RUNNER dry=$KIPP_DRY only=[$KIPP_TEST_SERVER_ONLY] tmp=[$TMPDIR] in $PWD\"'}\n"
-	s := &served{t: t, stderr: &syncBuffer{}, args: []string{"--executors", "0", "--builds", "2", "--runner-env", "KIPP_DRY", "--pass-env", "*"}}
+	s := &served{t: t, stderr: &syncBuffer{}, args: []string{"--executors", "0", "--runner-env", "KIPP_DRY", "--pass-env", "*"}}
 	s.data, s.jobs, s.token = dataAndJobs(t, map[string]string{"remote.yml": job})
 	s.serve()
 	token := tokenIn(t, ok(t, "", "runner", "add", "box", "--labels", "linux", "--data", s.data))

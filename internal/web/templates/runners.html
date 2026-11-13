@@ -65,6 +65,21 @@
 {{with .Notice}}<p class="notice" role="status">{{.}}</p>{{end}}
 <p class="lead">A stage with <code>runs_on</code> runs on a standing runner that carries its labels, or with <code>image</code> in a container kipp starts on an engine that carries them. Both dial this server; a change here takes effect at once.</p>
 
+<h2>Built-in runner</h2>
+{{with .BuiltIn}}<div class="scroll">
+<table>
+<thead><tr><th>Runner</th><th>Runs</th><th>Stages</th><th>State</th></tr></thead>
+<tbody>
+<tr>
+<td>built-in</td>
+<td>{{if .RunsStages}}stages that name no <code>runs_on</code>, and every build's prepare{{else}}every build's prepare, and no stage: the server runs none itself{{end}}</td>
+<td>{{.Busy}} of {{.Executors}}{{with .Stages}} <span class="sub">{{join .}}</span>{{end}}</td>
+<td><span class="status success">online</span> <span class="sub">this server, kipp {{$.Data.ServerVersion}}</span></td>
+</tr>
+</tbody>
+</table>
+</div>
+{{end}}
 <h2>Engines</h2>
 {{if .Engines}}<div class="scroll">
 <table>

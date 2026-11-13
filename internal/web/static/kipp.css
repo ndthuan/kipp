@@ -326,7 +326,6 @@
   .plot text.caption { fill: var(--fg-muted); }
   .plot a text.count { fill: var(--accent-text); text-decoration: underline; }
   .plot .grid { stroke: var(--line); stroke-width: 1; }
-  .plot .limit { stroke: var(--bad); stroke-width: 1.5; stroke-dasharray: 5 3; }
   .bar-success { fill: var(--ok); }
   .bar-unstable { fill: var(--warn); }
   .bar-failed { fill: var(--bad); }
@@ -343,7 +342,6 @@
   .swatch-failed { background-color: var(--bad); }
   .swatch-running { background-color: var(--busy); }
   .swatch-wait { background-color: var(--accent); }
-  .swatch-limit { height: 0; width: 14px; border-radius: 0; background-color: transparent; border-top: 2px dashed var(--bad); }
   .columns { display: grid; gap: calc(var(--space) * 4); min-width: 0; }
   .columns > * { min-width: 0; }
   /* From 48rem Unstable stays under Failing, before Now, as a wide screen

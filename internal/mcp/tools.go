@@ -236,7 +236,6 @@ type chartsOut struct {
 	Failed            int           `json:"failed"`
 	Cancelled         int           `json:"cancelled"`
 	PeakRunning       int           `json:"peak_running"`
-	BuildsLimit       int           `json:"builds_limit"`
 	LongestWaitSecond int           `json:"longest_wait_seconds"`
 	PassRates         []passRateOut `json:"pass_rates"`
 }
@@ -251,7 +250,7 @@ type passRateOut struct {
 }
 
 func chartsSummary(c *overview.Charts) chartsOut {
-	out := chartsOut{Window: c.Range.Name, BuildsLimit: c.BuildsLimit, PassRates: []passRateOut{}}
+	out := chartsOut{Window: c.Range.Name, PassRates: []passRateOut{}}
 	for _, b := range c.Buckets {
 		out.Success += b.Success
 		out.Unstable += b.Unstable

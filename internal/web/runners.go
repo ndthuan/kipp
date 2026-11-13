@@ -28,6 +28,7 @@ func (s *Site) runnerRoutes(mux *http.ServeMux) {
 }
 
 type runnersData struct {
+	BuiltIn *api.BuiltInInfo
 	Engines []enginepool.EngineStatus
 	Runners []api.RunnerInfo
 	// ServerVersion is the server's: a runner of another is refused, and
@@ -58,6 +59,10 @@ func (s *Site) runners(w http.ResponseWriter, r *http.Request, u *store.User) {
 func (s *Site) runnersPage(w http.ResponseWriter, r *http.Request, u *store.User, code int, fill filled) {
 	var d runnersData
 	var err error
+	if d.BuiltIn, err = s.api.Service().BuiltIn(r.Context(), u); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	if d.Engines, err = s.api.Service().Engines(r.Context(), u); err != nil {
 		s.fail(w, r, err)
 		return

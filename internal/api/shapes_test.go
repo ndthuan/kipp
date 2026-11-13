@@ -342,7 +342,7 @@ func TestAQueuedBuildAndARunningOneKeepAllTheirFieldsInV1(t *testing.T) {
 		q = e.object(t, 200, e.admin, "GET", "/api/v1/queue", "")
 		return len(q["queued"].([]any)) == 1
 	})
-	eqKeys(t, "queue keys", q, "busy,executors,queued,running")
+	eqKeys(t, "queue keys", q, "busy,executors,queued,runners,running")
 	run := q["running"].([]any)[0].(map[string]any)
 	eqKeys(t, "running keys", run, "id,job,number,queued_at,started_at,started_by,stages,trigger,waiting_stages")
 	if _, old := run["waiting"]; old {
@@ -356,7 +356,7 @@ func TestAQueuedBuildAndARunningOneKeepAllTheirFieldsInV1(t *testing.T) {
 
 	// Nobody but an admin is told the executors; the keys stay, null.
 	viewer := e.object(t, 200, e.viewer, "GET", "/api/v1/queue", "")
-	eqKeys(t, "a viewer's queue keys", viewer, "busy,executors,queued,running")
+	eqKeys(t, "a viewer's queue keys", viewer, "busy,executors,queued,runners,running")
 	eq(t, "executors", viewer["executors"], nil)
 	eq(t, "busy", viewer["busy"], nil)
 }

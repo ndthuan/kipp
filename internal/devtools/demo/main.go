@@ -1,14 +1,14 @@
 // Command demo fills a data directory and a jobs directory with a made-up
 // installation, so that a kipp started on them shows a full front page: some
 // seventy jobs in a few groups, days of builds that overlap and queue on a
-// limited number of slots, a few jobs that fail, flap or end unstable, and
+// limited number of executors, a few jobs that fail, flap or end unstable, and
 // builds waiting to run. It is a tool for the one who changes kipp, for
 // timing the overview on a store of a realistic size and for taking
 // screenshots, and the kipp binary does not contain it.
 //
 //	go run ./internal/devtools/demo -dir /tmp/kipp-demo
 //	go run ./cmd/kipp user add demo --admin --data /tmp/kipp-demo/data
-//	go run ./cmd/kipp serve --data /tmp/kipp-demo/data --jobs /tmp/kipp-demo/jobs --builds 4
+//	go run ./cmd/kipp serve --data /tmp/kipp-demo/data --jobs /tmp/kipp-demo/jobs --executors 4
 //
 // The same seed and the same time make the same store; the builds end at the
 // moment the tool is run, so a store of yesterday has an empty last day.
@@ -37,8 +37,8 @@ import (
 	"github.com/ndthuan/kipp/internal/store"
 )
 
-// slots is the limit of builds running at once the demo is made for; serve
-// it with --builds 4 for the overview to say the same.
+// slots is how many builds the demo lets run at once, as a server of
+// --executors 4 whose builds each run one stage would.
 const slots = 4
 
 // tsLayout is how the store writes a time.
