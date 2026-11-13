@@ -55,6 +55,11 @@ Changed:
   with what each stage waits for, and its time is `started 1h 59m`. The
   header's queue link counts the same way (`6 running, 10 waiting`), and
   the slots here go with Running, or with Waiting when nothing runs.
+- A build's page says `waiting` for a running stage that waits for a runner
+  or an engine, on its chip, in the graph and in the table of stages, which
+  also says what it waits for (`waiting for runner (label mac)`, or `waiting
+  for a place to run` to a user who is not an admin). The build itself reads
+  `waiting` while it runs no stage and one waits.
 
 Removed (breaking for the API and the MCP `overview` tool):
 

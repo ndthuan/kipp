@@ -104,19 +104,26 @@ func hideCapacity(v *QueueView) {
 			}
 			v.Running[i].Remote = hidden
 		}
-		if r.Waiting != nil {
-			hidden := map[string]string{}
-			for stage := range r.Waiting {
-				hidden[stage] = WaitPlace
-			}
-			v.Running[i].Waiting = hidden
-		}
+		v.Running[i].Waiting = hideWaits(r.Waiting)
 	}
 	for i, w := range v.Queued {
 		if w.Waiting == dispatch.WaitExecutor || w.Waiting == dispatch.WaitNothing {
 			v.Queued[i].Waiting = WaitStart
 		}
 	}
+}
+
+// hideWaits is what each stage waits for, told to whoever is not an admin:
+// that it waits, and not for which place.
+func hideWaits(w map[string]string) map[string]string {
+	if w == nil {
+		return nil
+	}
+	hidden := make(map[string]string, len(w))
+	for stage := range w {
+		hidden[stage] = WaitPlace
+	}
+	return hidden
 }
 
 // queuePerms is what u may do with each job the queue names.

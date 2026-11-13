@@ -162,6 +162,10 @@ func TestAStageThatRunnersCarryButCannotTakeWaitsAndSaysWhy(t *testing.T) {
 		return err == nil && len(q.Running) == 1 && len(q.Running[0].Waiting) == 1 &&
 			(q.Running[0].Waiting["one"] == "waiting for a runner with labels [linux]" || q.Running[0].Waiting["two"] == "waiting for a runner with labels [linux]")
 	})
+	// the build's own page asks for the same, by build
+	if w := h.d.Waiting(b.ID); len(w) != 1 || (w["one"] == "" && w["two"] == "") {
+		t.Fatalf("the build's stages wait for %v", w)
+	}
 	eventually(t, "the stage that holds the runner says where it runs", func() bool {
 		q, err := h.d.Queue(context.Background())
 		if err != nil || len(q.Running) != 1 {
@@ -176,6 +180,9 @@ func TestAStageThatRunnersCarryButCannotTakeWaitsAndSaysWhy(t *testing.T) {
 	b = h.wait(t, b.ID)
 	if b.Status != store.Success {
 		t.Fatalf("%s", b.Status)
+	}
+	if w := h.d.Waiting(b.ID); w != nil {
+		t.Fatalf("an ended build still waits for %v", w)
 	}
 	logs := h.log(t, b, "one") + h.log(t, b, "two")
 	if !strings.Contains(logs, "kipp: waiting for a runner with labels [linux]\n") {

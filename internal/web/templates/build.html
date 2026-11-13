@@ -1,11 +1,11 @@
 {{define "scripts"}}<script src="{{static "build.js"}}" defer></script>{{end}}
 {{define "content"}}
 {{with .Data}}
-{{$build := .View.Build}}{{$page := buildPath $build}}
+{{$build := .View.Build}}{{$waits := .View.Waiting}}{{$page := buildPath $build}}
 <section id="live" class="stack" data-logs="{{range .Logs}}{{.Name}} {{end}}" data-open="{{range .Logs}}{{if .Open}}{{.Name}} {{end}}{{end}}" data-states="{{range .Logs}}{{if .Status}}{{.Name}}={{.Status}} {{end}}{{end}}"{{if .Live}} hx-get="{{$page}}" hx-select="#live" hx-target="this" hx-swap="outerHTML" hx-trigger="every 2s"{{end}}>
 {{$group := crumb .View.Group .View.Removed}}<div class="head">
 <div class="title">
-<h1 class="crumbs"><a class="link-plain" href="{{$group.Href}}">{{$group.Label}}</a><span aria-hidden="true">/</span><a class="link-plain" href="/jobs/{{$build.Job}}">{{$build.Job}}</a><span aria-hidden="true">/</span><span class="crumb-end"><span>#{{$build.Number}}</span> <span class="status {{$build.Status}}">{{$build.Status}}</span></span></h1>
+<h1 class="crumbs"><a class="link-plain" href="{{$group.Href}}">{{$group.Label}}</a><span aria-hidden="true">/</span><a class="link-plain" href="/jobs/{{$build.Job}}">{{$build.Job}}</a><span aria-hidden="true">/</span><span class="crumb-end"><span>#{{$build.Number}}</span> <span class="status {{.Status}}">{{.Status}}</span></span></h1>
 <p class="meta"><span>{{$build.Trigger}}{{with $build.StartedBy}} by {{.}}{{end}}{{if or $build.TriggerDetail $build.Commit}} ({{template "detail" $build}}){{end}}</span>{{if $build.StartedAt}}<span>started {{template "when" (when $build.StartedAt)}}</span>{{with .Waited}}<span>waited {{.}}</span>{{end}}<span>took {{took $build.StartedAt $build.FinishedAt}}</span>{{else}}<span>queued {{template "when" (when $build.QueuedAt)}}</span>{{end}}{{with .Exit}}<span>exit {{.}}</span>{{end}}{{with $build.KeptAt}}<span>kept by {{$build.KeptBy}} {{template "when" (when .)}}</span>{{end}}{{with $build.RerunOf}}<span>runs <a class="link" href="/jobs/{{$build.Job}}/{{.}}">#{{.}}</a> again, stopped for a restart</span>{{end}}{{with $build.RerunAs}}<span>stopped for a restart, run again as <a class="link" href="/jobs/{{$build.Job}}/{{.}}">#{{.}}</a></span>{{end}}</p>
 </div>
 {{if .CanCancel}}<a class="build action action-small" href="{{$page}}/cancel">Cancel...</a>
@@ -35,7 +35,7 @@
 <tbody>
 {{range .View.Stages}}<tr>
 <td class="lead" data-label="Stage"><a class="link" href="#log-{{.Name}}">{{.Name}}</a></td>
-<td class="lead" data-label="Status"><span class="status {{.Status}}">{{.Status}}</span>{{if gt .Tries 1}}<span class="sub">, {{.Tries}} tries</span>{{end}}{{with .Reused}}<span class="sub">, reused from <a class="link" href="/jobs/{{.Job}}/{{.Number}}#log-{{.Stage}}">{{.Job}} #{{.Number}}</a></span>{{end}}</td>
+<td class="lead" data-label="Status"><span class="status {{.Status}}">{{.Status}}</span>{{with index $waits .Name}}<span class="sub">, {{placeWait .}}</span>{{end}}{{if gt .Tries 1}}<span class="sub">, {{.Tries}} tries</span>{{end}}{{with .Reused}}<span class="sub">, reused from <a class="link" href="/jobs/{{.Job}}/{{.Number}}#log-{{.Stage}}">{{.Job}} #{{.Number}}</a></span>{{end}}</td>
 <td data-label="Exit">{{exitText . $build}}</td>
 <td data-label="Started">{{template "when" (when .StartedAt)}}</td>
 <td class="lead" data-label="Took">{{took .StartedAt .FinishedAt}}</td>

@@ -231,3 +231,43 @@ func TestTheQueueSaysWhereAStageRunsAndWhatItWaitsForInFewWords(t *testing.T) {
 	r.Remote = map[string]string{"a": ""}
 	contains(t, renderQueue(t, e, &api.QueueView{Running: []api.RunningView{r}}), `<span class="sub">a: on another machine</span>`)
 }
+
+func waitingBuild() *api.BuildView {
+	started := time.Now().Add(-time.Minute)
+	return &api.BuildView{
+		Build:   &store.Build{ID: 1, Job: "site", Number: 21, Status: store.Running, Trigger: "api", StartedAt: &started},
+		Stages:  []*store.Stage{{Name: "clone", Status: store.StageSuccess}, {Name: "run", Status: store.StageRunning}},
+		Needs:   map[string][]string{"clone": nil, "run": {"clone"}},
+		Waiting: map[string]string{"run": "waiting for a runner with labels [mac]"},
+	}
+}
+
+func renderBuild(t *testing.T, e *env, v *api.BuildView) string {
+	t.Helper()
+	data := &buildData{View: v}
+	data.Status = showWaiting(v)
+	data.Logs = []logView{{Name: "clone", Status: v.Stages[0].Status}, {Name: "run", Open: true, Status: v.Stages[1].Status}}
+	rec := httptest.NewRecorder()
+	e.site.render(rec, httptest.NewRequest(http.MethodGet, "/jobs/site/21", nil), "build", http.StatusOK, page{Title: "site #21", Data: data})
+	eq(t, "status", rec.Code, http.StatusOK)
+	return rec.Body.String()
+}
+
+func TestABuildWhoseEveryRunningStageWaitsForAPlaceSaysWaitingAndWhatFor(t *testing.T) {
+	e := site(t)
+	body := renderBuild(t, e, waitingBuild())
+	contains(t, body,
+		`<span>#21</span> <span class="status waiting">waiting</span>`,
+		`<span class="status waiting">waiting</span><span class="sub">, waiting for runner (label mac)</span>`,
+		` run=waiting `)
+	lacks(t, body, `status running`)
+}
+
+func TestABuildThatRunsAStageWhileAnotherWaitsSaysRunning(t *testing.T) {
+	e := site(t)
+	v := waitingBuild()
+	v.Stages = append(v.Stages, &store.Stage{Name: "lint", Status: store.StageRunning})
+	v.Needs["lint"] = []string{"clone"}
+	body := renderBuild(t, e, v)
+	contains(t, body, `<span>#21</span> <span class="status running">running</span>`, `<span class="status waiting">waiting</span>`)
+}

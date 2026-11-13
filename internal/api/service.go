@@ -281,6 +281,9 @@ type BuildView struct {
 	// whose file is gone: where the build's page says the build belongs.
 	Group   string
 	Removed bool
+	// Waiting is what each stage that waits to be placed waits for, as the
+	// queue tells it to the same user.
+	Waiting map[string]string
 }
 
 // buildable is nil if u may build the job: otherwise ErrNotFound (not
@@ -579,6 +582,12 @@ func (s *Service) Build(ctx context.Context, u *store.User, id int64) (*BuildVie
 		needs[st.Name] = st.Needs
 	}
 	v := &BuildView{Build: b, Stages: stages, Needs: needs, Complete: complete, Removed: true}
+	if !b.Status.Terminal() {
+		v.Waiting = s.deps.Dispatch.Waiting(id)
+		if !u.Admin {
+			v.Waiting = hideWaits(v.Waiting)
+		}
+	}
 	// A job whose file is gone plans nothing: its queued build never starts.
 	if job := s.deps.Dispatch.Snapshot().Jobs[b.Job]; job != nil {
 		v.Group, v.Removed = job.Group, false

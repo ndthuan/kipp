@@ -749,7 +749,10 @@ func (s *Site) buildByID(w http.ResponseWriter, r *http.Request, u *store.User) 
 }
 
 type buildData struct {
-	View   *api.BuildView
+	View *api.BuildView
+	// Status is the build's as its page says it: waiting while it runs
+	// nothing because every stage it is on waits to be placed.
+	Status string
 	Live   bool   // the page still refreshes itself: more may be written
 	Waited string // how long it was queued, when that was a second or more
 	// Exit is the exit code of a build of one stage that did not end with
@@ -866,7 +869,8 @@ func (s *Site) buildData(r *http.Request, u *store.User) (*buildData, error) {
 	if len(v.Stages) == 0 && !ended {
 		v.Stages = planned(v.Needs)
 	}
-	data := &buildData{View: v, Tests: tests, Counts: map[string]int{}, Logs: s.logs(ctx, u, v), Guards: guardViews(guards), Artifacts: artifactViews(id, kept)}
+	status := showWaiting(v)
+	data := &buildData{View: v, Status: status, Tests: tests, Counts: map[string]int{}, Logs: s.logs(ctx, u, v), Guards: guardViews(guards), Artifacts: artifactViews(id, kept)}
 	data.Notice = redNotice(v, data.Logs)
 	data.Live = !v.Complete
 	data.Waited, data.Exit = headline(v)
@@ -970,12 +974,37 @@ func (s *Site) logs(ctx context.Context, u *store.User, v *api.BuildView) []logV
 	return out
 }
 
+// stageWaiting is a running stage, as its build's page says it, that waits
+// to be placed and runs nothing yet.
+const stageWaiting store.StageStatus = "waiting"
+
+// showWaiting has each running stage of v that waits to be placed read
+// waiting, and says what the build is then: waiting when it runs no stage
+// but has one that waits, its own status otherwise.
+func showWaiting(v *api.BuildView) string {
+	running, waiting := false, false
+	for _, st := range v.Stages {
+		if st.Status != store.StageRunning {
+			continue
+		}
+		if _, ok := v.Waiting[st.Name]; ok {
+			st.Status, waiting = stageWaiting, true
+		} else {
+			running = true
+		}
+	}
+	if v.Build.Status == store.Running && waiting && !running {
+		return string(stageWaiting)
+	}
+	return string(v.Build.Status)
+}
+
 // worthReading reports whether a stage in the status has a log a reader
 // came for: one still being written, or one that says why the build is
 // not a plain success.
 func worthReading(status store.StageStatus) bool {
 	switch status {
-	case store.StageRunning, store.StageFailed, store.StageCancelled, store.StageUnstable:
+	case store.StageRunning, stageWaiting, store.StageFailed, store.StageCancelled, store.StageUnstable:
 		return true
 	}
 	return false

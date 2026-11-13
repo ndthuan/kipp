@@ -279,6 +279,14 @@ func (d *Dispatcher) setWaiting(build int64, stage, line string) {
 }
 
 // waitingOf is a copy of what the build's stages wait for. mu is held.
+// Waiting is what each stage of the build that waits to be placed waits
+// for, nil when none does.
+func (d *Dispatcher) Waiting(build int64) map[string]string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.waitingOfLocked(build)
+}
+
 func (d *Dispatcher) waitingOfLocked(build int64) map[string]string {
 	if w := d.waiting[build]; w != nil {
 		return maps.Clone(w)
