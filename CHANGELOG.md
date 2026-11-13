@@ -42,7 +42,8 @@ Changed:
   no limit line. `builds_limit` is gone from `GET /api/v1/overview`'s
   `charts` and from the MCP overview, and `builds` from
   `GET /api/v1/admin/server`.
-
+- A standing runner's executors may be 0, for no limit, and the name
+  `built-in` is the built-in runner's: `kipp runner add` refuses it.
 - `kipp serve` no longer needs `--jobs`: with the default
   `--job-edits store` a server without one serves the jobs of its
   database.
@@ -101,6 +102,16 @@ Removed (breaking for the API and the MCP `overview` tool):
 
 Added:
 
+- The Runners page changes each runner's limit and labels on its row: a
+  standing runner's executors and labels, through the checks of
+  `kipp runner set`, an engine's containers at once and labels, and the
+  built-in runner's limit, in sudo mode, audited and in effect at once
+  (what runs past a lowered limit finishes). The built-in runner's limit
+  is kept in the data directory and outlives a restart: once set, there or
+  with `kipp runner set built-in --executors N`, it is the limit and
+  `--executors` is not used (the log says so at start); until then
+  `--executors` is. A server of `--executors 0` runs no stage itself and
+  has no limit to change there.
 - The web UI changes jobs, for an admin in sudo mode: an Edit tab on a
   job's page with its YAML in a text box (a change made meanwhile is shown
   beside the text, which is kept; a refusal lists every error by line), a

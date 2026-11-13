@@ -73,7 +73,16 @@
 <tr>
 <td>built-in</td>
 <td>{{if .RunsStages}}stages that name no <code>runs_on</code>, and every build's prepare{{else}}every build's prepare, and no stage: the server runs none itself{{end}}</td>
-<td>{{.Busy}} of {{.Executors}}{{with .Stages}} <span class="sub">{{join .}}</span>{{end}}</td>
+<td>{{.Busy}} of {{.Executors}}{{with .Stages}} <span class="sub">{{join .}}</span>{{end}}
+{{if .RunsStages}}<details class="build drop"{{if $.Fill.Is "builtin"}} open{{end}}><summary class="action action-quiet action-small">Change</summary>
+<form class="panel stack pop" method="post" action="/admin/runners/built-in">
+{{with $.Fill.Refusal "builtin"}}<p class="notice notice-error" role="alert">{{.}}</p>
+{{end}}<input type="hidden" name="csrf" value="{{$.CSRF}}">
+<label class="entry-label" for="builtin-executors">Stages at once</label>
+<p class="entry-help" id="builtin-executors-help">Each build's prepare counts as one while it runs. Kept across restarts, over the server's --executors.</p>
+<input class="entry" id="builtin-executors" name="executors" type="number" min="1" value="{{with $.Fill.Value "builtin" "executors"}}{{.}}{{else}}{{.Executors}}{{end}}" aria-describedby="builtin-executors-help" required>
+<div><button class="action action-main">Change the limit</button></div>
+</form></details>{{end}}</td>
 <td><span class="status success">online</span> <span class="sub">this server, kipp {{$.Data.ServerVersion}}</span></td>
 </tr>
 </tbody>
@@ -89,7 +98,17 @@
 <td>{{.Name}}{{if not .Enabled}} <span class="tag">disabled</span>{{end}}</td>
 <td><code>{{.URL}}</code></td>
 <td><code>{{join .Labels}}</code></td>
-<td>{{len .Running}} of {{.Max}}{{with .Running}} <span class="sub">{{join .}}</span>{{end}}</td>
+<td>{{len .Running}} of {{.Max}}{{with .Running}} <span class="sub">{{join .}}</span>{{end}}
+{{$open := $.Fill.IsRow "engine-edit" .Name}}<details class="build drop"{{if $open}} open{{end}}><summary class="action action-quiet action-small">Change</summary>
+<form class="panel stack pop" method="post" action="{{placePath "engines" .Name}}">
+{{with $.Fill.RowRefusal "engine-edit" .Name}}<p class="notice notice-error" role="alert">{{.}}</p>
+{{end}}<input type="hidden" name="csrf" value="{{$.CSRF}}">
+<label class="entry-label" for="engine-labels-{{.Name}}">Labels of {{.Name}}</label>
+<input class="entry" id="engine-labels-{{.Name}}" name="labels" value="{{if $open}}{{$.Fill.Value "engine-edit" "labels"}}{{else}}{{join .Labels}}{{end}}" autocomplete="off" autocapitalize="none" spellcheck="false" required>
+<label class="entry-label" for="engine-max-{{.Name}}">Containers at once</label>
+<input class="entry" id="engine-max-{{.Name}}" name="max" type="number" min="1" value="{{if $open}}{{$.Fill.Value "engine-edit" "max"}}{{else}}{{.Max}}{{end}}" required>
+<div><button class="action action-main">Change {{.Name}}</button></div>
+</form></details></td>
 <td>{{if .Reachable}}<span class="status success">reachable</span> <span class="sub">since {{template "when" (when .Since)}}</span>{{else if .LastError}}<span class="status failed">unreachable</span> <span class="sub">since {{template "when" (when .Since)}}: {{.LastError}}</span>{{else}}<span class="status">not asked yet</span>{{end}}</td>
 <td><form method="post" action="{{placePath "engines" .Name}}/{{if .Enabled}}disable{{else}}enable{{end}}"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="action action-quiet action-small">{{if .Enabled}}Disable{{else}}Enable{{end}}</button></form>
 <a class="action action-quiet action-small" href="{{placePath "engines" .Name}}/delete">Remove</a></td>
@@ -108,7 +127,18 @@
 {{range $runner := .Runners}}<tr>
 <td>{{.Name}}{{if not .Enabled}} <span class="tag">disabled</span>{{end}}</td>
 <td><code>{{join .Labels}}</code></td>
-<td>{{len .Stages}} of {{.Executors}}{{with .Stages}} <span class="sub">{{join .}}</span>{{end}}</td>
+<td>{{len .Stages}} of {{if .Executors}}{{.Executors}}{{else}}no limit{{end}}{{with .Stages}} <span class="sub">{{join .}}</span>{{end}}
+{{$open := $.Fill.IsRow "runner-edit" .Name}}<details class="build drop"{{if $open}} open{{end}}><summary class="action action-quiet action-small">Change</summary>
+<form class="panel stack pop" method="post" action="{{placePath "runners" .Name}}">
+{{with $.Fill.RowRefusal "runner-edit" .Name}}<p class="notice notice-error" role="alert">{{.}}</p>
+{{end}}<input type="hidden" name="csrf" value="{{$.CSRF}}">
+<label class="entry-label" for="runner-labels-{{.Name}}">Labels of {{.Name}}</label>
+<input class="entry" id="runner-labels-{{.Name}}" name="labels" value="{{if $open}}{{$.Fill.Value "runner-edit" "labels"}}{{else}}{{join .Labels}}{{end}}" autocomplete="off" autocapitalize="none" spellcheck="false" required>
+<label class="entry-label" for="runner-executors-{{.Name}}">Stages at once</label>
+<p class="entry-help" id="runner-executors-help-{{.Name}}">0 for no limit. A lower one takes effect at once; what runs past it finishes.</p>
+<input class="entry" id="runner-executors-{{.Name}}" name="executors" type="number" min="0" value="{{if $open}}{{$.Fill.Value "runner-edit" "executors"}}{{else}}{{.Executors}}{{end}}" aria-describedby="runner-executors-help-{{.Name}}" required>
+<div><button class="action action-main">Change {{.Name}}</button></div>
+</form></details></td>
 <td>{{if .Online}}<span class="status success">online</span> <span class="sub">since {{template "when" (when .Since)}}</span>{{else}}<span class="status">offline</span>{{with .LastSeenAt}} <span class="sub">last seen {{template "when" (when .)}}</span>{{else}} <span class="sub">never seen</span>{{end}}{{end}}</td>
 <td>{{with .Version}}{{.}}{{if ne . $.Data.ServerVersion}} <span class="status failed">not the server's</span>{{end}} <span class="sub">{{$.Data.OSArch $runner}}</span>{{else}}<span class="sub">unknown</span>{{end}}</td>
 <td><form method="post" action="{{placePath "runners" .Name}}/{{if .Enabled}}disable{{else}}enable{{end}}"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="action action-quiet action-small">{{if .Enabled}}Disable{{else}}Enable{{end}}</button></form>

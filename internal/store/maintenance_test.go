@@ -80,7 +80,9 @@ func TestTheTablesAndIndexesAreMeasuredPageByPageLargestFirst(t *testing.T) {
 
 func TestWithoutDbstatTheTablesAreEstimatedByTheirRows(t *testing.T) {
 	s := open(t)
-	seedJob(t, s, "a", 4, 3, 0)
+	// More test rows than schema rows, one per migration, so tests is the
+	// largest table however many migrations come.
+	seedJob(t, s, "a", 4, len(migrations), 0)
 	ro, err := s.reader()
 	must(t, err)
 	objs, err := estimateObjects(ctx, ro, 1000)

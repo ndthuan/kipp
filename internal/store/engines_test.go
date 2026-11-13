@@ -157,3 +157,17 @@ func TestStoppedStagesAreTheFailedAndTheCancelledOfEveryBuildAskedForInOneQuery(
 		t.Fatal(none)
 	}
 }
+
+// The built-in runner's limit is kept once an admin sets it, and none is
+// kept before: the server's --executors applies until then.
+func TestTheBuiltInRunnersLimitIsKeptOnceSet(t *testing.T) {
+	s := open(t)
+	if _, ok, err := s.BuiltInExecutors(ctx); err != nil || ok {
+		t.Fatalf("a new data directory keeps a limit: %v %v", ok, err)
+	}
+	must(t, s.SetBuiltInExecutors(ctx, 6))
+	must(t, s.SetBuiltInExecutors(ctx, 2))
+	if n, ok, err := s.BuiltInExecutors(ctx); err != nil || !ok || n != 2 {
+		t.Fatalf("kept %d %v %v", n, ok, err)
+	}
+}

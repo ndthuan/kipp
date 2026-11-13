@@ -64,7 +64,7 @@ directory.
 | `--job-edits <mode>` | `store` | What a change of a job through kipp does: `store` keeps it in the database, `files` writes the job file, `off` refuses it ([Changing jobs through kipp](jobs.md#changing-jobs-through-kipp)). On its first start in `store` mode a data directory that never held a job of the store or a build, serving no job, gets two example jobs, `hello` and `hello-schedule`, once ([The example jobs](jobs.md#the-example-jobs)). |
 | `--listen <addr>` | `127.0.0.1:8085` | The address to listen on, in plain HTTP. |
 | `--base-url <url>` | `http://<listen>` | The URL stages see as `KIPP_URL`. Build links, commit statuses' links, webhook URLs and GitHub App manifests need it given. |
-| `--executors <n>` | 4 | The built-in runner's limit: stages the server runs itself at once, each build's prepare counted while it runs; 0 runs none ([Each runner has its own limit](runners.md#each-runner-has-its-own-limit)). |
+| `--executors <n>` | 4 | The built-in runner's limit: stages the server runs itself at once, each build's prepare counted while it runs, until an admin sets one (Runners page, `kipp runner set built-in`), which is kept over it; 0 runs none ([Each runner has its own limit](runners.md#each-runner-has-its-own-limit)). |
 | `--flaky-flips <n>` | 4 | Changes of colour among a job's last 20 finished builds (at least 5 needed) that put it in the front page's Flaky section; 0 hides the section. |
 | `--shell <sh>` | `sh` | The shell that runs stages, as `<shell> -c <command>`. |
 | `--session-ttl <d>` | `720h` | How long a browser login lasts. |
@@ -416,8 +416,10 @@ The token is `--token`, `-` to read it from stdin, or
 when the server is another kipp version.
 
 `add` registers a runner and prints its token once; `--executors` is how
-many stages it runs at once (default 1). `set --disable` drains it: it
-takes nothing new, and what it runs finishes. `token` gives it a new
+many stages it runs at once (default 1, 0 for no limit). `set --disable`
+drains it: it takes nothing new, and what it runs finishes.
+`set built-in --executors N` sets the server's own limit, which a running
+server takes at its next reload and keeps over `kipp serve --executors`. `token` gives it a new
 token and ends the old one. See [Standing runners](runners.md#standing-runners).
 
 ## kipp metrics

@@ -185,3 +185,57 @@ func TestAStageTellsHowManyTimesItsCommandRan(t *testing.T) {
 		t.Fatalf("%s", text)
 	}
 }
+
+// A standing runner's executors and labels, an engine's limit and labels,
+// and the built-in runner's limit are changed by an admin in sudo mode,
+// through the checks kipp runner set makes, audited, and in effect at once.
+func TestAnAdminChangesEachRunnersLimitAndLabels(t *testing.T) {
+	var changed atomic.Int32
+	e := newEnv(t, func(a *API) { a.deps.PlacesChanged = func(context.Context) { changed.Add(1) } })
+	ctx := context.Background()
+	user := e.person(t, "user", false)
+	admin := e.person(t, "boss", true)
+	must(t, e.st.PutRunner(ctx, store.Runner{Name: "box", Labels: []string{"linux"}, Executors: 2, Enabled: true, TokenHash: "h1"}))
+	must(t, e.st.PutEngine(ctx, store.Engine{Name: "mac", Kind: "docker", URL: "unix:///var/run/docker.sock", Labels: []string{"linux"}, Max: 1, Enabled: true}))
+	three, none, minus := 3, 0, -1
+	is(t, "a user", e.api.svc.SetRunner(ctx, user.u, user.sess, "box", RunnerEdit{Executors: &three}), ErrForbidden)
+	is(t, "an admin not in sudo mode", e.api.svc.SetRunner(ctx, admin.u, admin.sess, "box", RunnerEdit{Executors: &three}), ErrSudoRequired)
+	is(t, "the built-in limit from a user", e.api.svc.SetBuiltInExecutors(ctx, user.u, user.sess, 3), ErrForbidden)
+	e.sudo(t, admin)
+	must(t, e.api.svc.SetRunner(ctx, admin.u, admin.sess, "box", RunnerEdit{Executors: &three, Labels: []string{"linux", "arm64"}}))
+	must(t, e.api.svc.SetRunner(ctx, admin.u, admin.sess, "box", RunnerEdit{Executors: &none}))
+	is(t, "executors below zero", e.api.svc.SetRunner(ctx, admin.u, admin.sess, "box", RunnerEdit{Executors: &minus}), ErrBadInput)
+	is(t, "no label", e.api.svc.SetRunner(ctx, admin.u, admin.sess, "box", RunnerEdit{Labels: []string{}}), ErrBadInput)
+	is(t, "a runner that is not there", e.api.svc.SetRunner(ctx, admin.u, admin.sess, "gone", RunnerEdit{Executors: &three}), ErrNotFound)
+	a, err := e.st.Runner(ctx, "box")
+	must(t, err)
+	if a.Executors != 0 || strings.Join(a.Labels, ",") != "linux,arm64" || !a.Enabled {
+		t.Fatalf("kept %+v", a)
+	}
+	must(t, e.api.svc.SetEngine(ctx, admin.u, admin.sess, "mac", EngineEdit{Max: &three, Labels: []string{"linux", "amd64"}}))
+	is(t, "an engine of no container", e.api.svc.SetEngine(ctx, admin.u, admin.sess, "mac", EngineEdit{Max: &none}), ErrBadInput)
+	must(t, e.api.svc.SetBuiltInExecutors(ctx, admin.u, admin.sess, 6))
+	is(t, "a built-in runner of no executor", e.api.svc.SetBuiltInExecutors(ctx, admin.u, admin.sess, 0), ErrBadInput)
+	if n, ok, err := e.st.BuiltInExecutors(ctx); err != nil || !ok || n != 6 {
+		t.Fatalf("the built-in limit kept: %d %v %v", n, ok, err)
+	}
+	if n := e.api.deps.Dispatch.Executors(); n != 6 {
+		t.Fatalf("the built-in runner's limit is %d", n)
+	}
+	var got []string
+	for _, a := range e.audit(t) {
+		if strings.HasSuffix(a.Action, ".set") {
+			got = append(got, a.Actor+" "+a.Action+" "+a.Target+": "+a.Detail)
+		}
+	}
+	want := []string{
+		"boss runner.set box: labels linux,arm64, executors 3, enabled",
+		"boss runner.set box: labels linux,arm64, executors 0, enabled",
+		"boss engine.set mac: unix:///var/run/docker.sock, labels linux,amd64, max 3, enabled",
+		"boss runner.set built-in: executors 6",
+	}
+	eq(t, "the audit", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	if changed.Load() != 3 {
+		t.Fatalf("the server was told of %d changes", changed.Load())
+	}
+}

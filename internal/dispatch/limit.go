@@ -89,6 +89,14 @@ func (l *limit) wakeLocked() {
 	l.freed = make(chan struct{})
 }
 
+// set changes its size. What holds more than the new size keeps it.
+func (l *limit) set(max int) {
+	l.mu.Lock()
+	l.max = max
+	l.wakeLocked()
+	l.mu.Unlock()
+}
+
 // load is how many hold it and how many may.
 func (l *limit) load() (busy, room int) {
 	l.mu.Lock()

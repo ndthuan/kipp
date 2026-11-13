@@ -272,6 +272,28 @@ func New(st *store.Store, r runner.Runner, opts Options) *Dispatcher {
 	}
 }
 
+// SetExecutors changes the built-in runner's limit while the server runs:
+// what runs past a lowered one finishes, and nothing new starts until it
+// is under. A server that runs no stage of its own keeps running none.
+func (d *Dispatcher) SetExecutors(n int) {
+	if n < 1 || !d.local.runsStages() {
+		return
+	}
+	d.local.set(n)
+	d.changed()
+	d.kick()
+}
+
+// Executors is the built-in runner's limit now; 0 on a server that runs no
+// stage of its own.
+func (d *Dispatcher) Executors() int {
+	if !d.local.runsStages() {
+		return 0
+	}
+	_, n := d.local.load()
+	return n
+}
+
 // Zone is the zone the job's cron is read in; for a nil job it is the
 // server's own, which is also the zone of what the pages show.
 func (d *Dispatcher) Zone(job *config.Job) *time.Location { return job.Zone(d.opts.TimeZone) }

@@ -14,11 +14,14 @@ import (
 func (s *Site) runnerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin/runners", s.withUser(s.runners))
 	mux.HandleFunc("POST /admin/runners/engines", s.withUser(s.addEngine))
+	mux.HandleFunc(editEngineRoute, s.withUser(s.editEngine))
 	mux.HandleFunc("POST /admin/runners/engines/{name}/enable", s.withUser(s.setEngine(true)))
 	mux.HandleFunc("POST /admin/runners/engines/{name}/disable", s.withUser(s.setEngine(false)))
 	mux.HandleFunc("GET /admin/runners/engines/{name}/delete", s.withUser(s.confirmDeleteEngine))
 	mux.HandleFunc("POST /admin/runners/engines/{name}/delete", s.withUser(s.deleteEngine))
 	mux.HandleFunc("POST /admin/runners/runners", s.withUser(s.oneTime(s.addRunner)))
+	mux.HandleFunc(editRunnerRoute, s.withUser(s.editRunner))
+	mux.HandleFunc(builtInRoute, s.withUser(s.setBuiltIn))
 	mux.HandleFunc("POST /admin/runners/runners/{name}/enable", s.withUser(s.setRunner(true)))
 	mux.HandleFunc("POST /admin/runners/runners/{name}/disable", s.withUser(s.setRunner(false)))
 	mux.HandleFunc("GET /admin/runners/runners/{name}/token", s.withUser(s.confirmRunnerToken))
@@ -37,10 +40,13 @@ type runnersData struct {
 	Notice        string
 }
 
-// The routes of the runners page's two forms.
+// The routes of the runners page's forms: the two that add, and the rows'.
 const (
-	addEngineRoute = "POST /admin/runners/engines"
-	addRunnerRoute = "POST /admin/runners/runners"
+	addEngineRoute  = "POST /admin/runners/engines"
+	addRunnerRoute  = "POST /admin/runners/runners"
+	editEngineRoute = "POST /admin/runners/engines/{name}"
+	editRunnerRoute = "POST /admin/runners/runners/{name}"
+	builtInRoute    = "POST /admin/runners/built-in"
 )
 
 // OSArch is where a runner said it runs, as os/arch.
@@ -52,7 +58,7 @@ func (runnersData) OSArch(a api.RunnerInfo) string {
 }
 
 func (s *Site) runners(w http.ResponseWriter, r *http.Request, u *store.User) {
-	s.runnersPage(w, r, u, http.StatusOK, fillOf(r, addEngineRoute, addRunnerRoute))
+	s.runnersPage(w, r, u, http.StatusOK, fillOf(r, addEngineRoute, addRunnerRoute, editEngineRoute, editRunnerRoute, builtInRoute))
 }
 
 // runnersPage is the runners page with fill's form open and filled.
@@ -83,8 +89,69 @@ func (s *Site) runnersPage(w http.ResponseWriter, r *http.Request, u *store.User
 // always been, not the 409 of the other forms.
 func (s *Site) refusedForm(w http.ResponseWriter, r *http.Request, u *store.User, route string, err error) {
 	s.refusedAs(w, r, err, func(_ int, msg string) {
-		s.runnersPage(w, r, u, http.StatusBadRequest, filledAs(route, r.PostForm, "").saying(msg))
+		s.runnersPage(w, r, u, http.StatusBadRequest, filledAs(route, r.PostForm, r.PathValue("name")).saying(msg))
 	})
+}
+
+// wholeNumber is the form's field read as a whole number.
+func wholeNumber(r *http.Request, field string) (int, error) {
+	n, err := strconv.Atoi(r.PostFormValue(field))
+	if err != nil {
+		return 0, fmt.Errorf("%w: %s: a whole number", api.ErrBadInput, field)
+	}
+	return n, nil
+}
+
+// editEngine changes an engine's labels and limit, from its row.
+func (s *Site) editEngine(w http.ResponseWriter, r *http.Request, u *store.User) {
+	max, err := wholeNumber(r, "max")
+	if err != nil {
+		s.refusedForm(w, r, u, editEngineRoute, err)
+		return
+	}
+	labels, err := api.ParseLabels(r.PostFormValue("labels"))
+	if err != nil {
+		s.refusedForm(w, r, u, editEngineRoute, err)
+		return
+	}
+	if err := s.api.Service().SetEngine(r.Context(), u, api.SessionFrom(r.Context()), r.PathValue("name"), api.EngineEdit{Labels: labels, Max: &max}); err != nil {
+		s.refusedForm(w, r, u, editEngineRoute, err)
+		return
+	}
+	done(w, r, "/admin/runners", "engine-set")
+}
+
+// editRunner changes a standing runner's labels and executors, from its
+// row, through the checks kipp runner set makes.
+func (s *Site) editRunner(w http.ResponseWriter, r *http.Request, u *store.User) {
+	executors, err := wholeNumber(r, "executors")
+	if err != nil {
+		s.refusedForm(w, r, u, editRunnerRoute, err)
+		return
+	}
+	labels, err := api.ParseLabels(r.PostFormValue("labels"))
+	if err != nil {
+		s.refusedForm(w, r, u, editRunnerRoute, err)
+		return
+	}
+	if err := s.api.Service().SetRunner(r.Context(), u, api.SessionFrom(r.Context()), r.PathValue("name"), api.RunnerEdit{Labels: labels, Executors: &executors}); err != nil {
+		s.refusedForm(w, r, u, editRunnerRoute, err)
+		return
+	}
+	done(w, r, "/admin/runners", "runner-set")
+}
+
+// setBuiltIn changes the built-in runner's limit.
+func (s *Site) setBuiltIn(w http.ResponseWriter, r *http.Request, u *store.User) {
+	executors, err := wholeNumber(r, "executors")
+	if err == nil {
+		err = s.api.Service().SetBuiltInExecutors(r.Context(), u, api.SessionFrom(r.Context()), executors)
+	}
+	if err != nil {
+		s.refusedForm(w, r, u, builtInRoute, err)
+		return
+	}
+	done(w, r, "/admin/runners", "builtin-set")
 }
 
 func (s *Site) addEngine(w http.ResponseWriter, r *http.Request, u *store.User) {

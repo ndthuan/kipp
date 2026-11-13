@@ -190,7 +190,7 @@ func parseServeFlags(args []string, stderr io.Writer) (*serveFlags, error) {
 	fs.IntVar(&f.flakyFlips, "flaky-flips", overview.DefaultFlips, "changes of colour among a job's last 20 builds that make it flaky on the front page, at least 5 builds being needed; 0 hides the section")
 	fs.StringVar(&f.baseURL, "base-url", "", "`URL` stages see as KIPP_URL (default http://<listen>); commit statuses link to builds under it only when it is given")
 	fs.StringVar(&f.shell, "shell", "sh", "shell that runs stages, as <shell> -c <command>")
-	fs.IntVar(&f.executors, "executors", 4, "stages the server runs itself at once; 0 runs none, and every stage goes to a runner")
+	fs.IntVar(&f.executors, "executors", 4, "stages the server runs itself at once, until an admin sets the built-in runner's limit on the Runners page; 0 runs none, and every stage goes to a runner")
 	fs.IntVar(&f.builds, "builds", 0, "refused: no limit counts builds across runners; --executors is the built-in runner's, and each runner and engine has its own")
 	defaultRunsOn := fs.String("default-runs-on", "", "`labels`, comma-separated, where a stage that names no runs_on goes on a server with --executors 0")
 	runnerEnv := fs.String("runner-env", "", "`names`, comma-separated, of the server's environment variables a stage on a runner is also given")
@@ -647,6 +647,24 @@ func logUpgrade(log *slog.Logger, up store.Upgrade) {
 	}
 }
 
+// builtInLimit is the built-in runner's limit to start with: the one an
+// admin set, kept in the data directory, over --executors, which only
+// stands until one is. A server started with --executors 0 runs no stage
+// itself whatever was set.
+func (s *server) builtInLimit(ctx context.Context) (int, error) {
+	if s.f.executors == 0 {
+		return 0, nil
+	}
+	n, ok, err := s.st.BuiltInExecutors(ctx)
+	if err != nil || !ok {
+		return s.f.executors, err
+	}
+	if n != s.f.executors {
+		s.log.Info(fmt.Sprintf("the built-in runner's limit is %d, as an admin set it; --executors %d is not used", n, s.f.executors))
+	}
+	return n, nil
+}
+
 // listen takes the address, then makes the dispatcher and has it clear
 // what the last process left. The address comes first, so that a server
 // that cannot be reached changes nothing.
@@ -683,8 +701,13 @@ func (s *server) listen(ctx context.Context) (net.Listener, error) {
 	if !s.f.noUpdateCheck {
 		s.updates = update.New(updateOptions(version.Version, s.f.data, s.log))
 	}
+	executors, err := s.builtInLimit(ctx)
+	if err != nil {
+		_ = ln.Close()
+		return nil, err
+	}
 	s.d = dispatch.New(s.st, runner.Local{Shell: s.f.shell}, dispatch.Options{
-		DataDir: s.f.data, Executors: s.f.executors, RunsNoStages: s.f.executors == 0,
+		DataDir: s.f.data, Executors: executors, RunsNoStages: s.f.executors == 0,
 		BaseURL: s.f.baseURL, TimeZone: s.f.zone,
 		Secrets: s.secrets, Retain: retain.Job, Logger: s.log, PassEnv: s.f.passEnv,
 		Hub: s.hub, Engines: s.pool, DefaultRunsOn: s.f.defaultRunsOn, RunnerEnv: s.f.runnerEnv,
@@ -767,6 +790,11 @@ func (s *server) loadPlaces(ctx context.Context) {
 	}
 	s.pool.SetEngines(es)
 	s.hub.SetStanding(ids)
+	if n, ok, err := s.st.BuiltInExecutors(ctx); err != nil {
+		s.log.Error("reading the built-in runner's limit; the one before stays", "err", err)
+	} else if ok && s.d != nil {
+		s.d.SetExecutors(n)
+	}
 	s.log.Info("engines reloaded", "count", len(es), "runners", len(as))
 }
 
@@ -985,7 +1013,7 @@ func (s *server) info() api.ServerInfo {
 		Origin: update.ServerOrigin(), Latest: up.Latest, NotesURL: up.NotesURL, Upgradable: up.Upgradable, CheckedAt: up.CheckedAt,
 		UpdateCheck: s.updates != nil,
 		Version:     version.Version, GoVersion: runtime.Version(), Schema: s.st.Upgrade().To, StartedAt: s.startedAt,
-		Listen: s.listenAddr, BaseURL: s.f.baseURL, Executors: s.f.executors, Shell: s.f.shell, SessionTTL: s.f.sessionTTL,
+		Listen: s.listenAddr, BaseURL: s.f.baseURL, Executors: s.d.Executors(), Shell: s.f.shell, SessionTTL: s.f.sessionTTL,
 		DefaultRunsOn: s.f.defaultRunsOn, RunnerEnv: s.f.runnerEnv, RunnerURL: s.f.runnerURL, RunnerListen: s.runnerListenAddr(),
 		TimeZone: s.d.Zone(nil).String(), DataDir: s.f.data, JobsDir: s.f.jobs,
 		FreeDisk: free, FreeDiskKnown: known, DBSize: dbSize, LastReloadAt: reloadAt, LastReloadError: reloadErr,

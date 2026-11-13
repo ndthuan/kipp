@@ -194,6 +194,8 @@ CREATE TABLE job_edits (
 CREATE TABLE job_files (job TEXT PRIMARY KEY, hash TEXT NOT NULL);
 `, `
 CREATE TABLE marks (name TEXT PRIMARY KEY, at TEXT NOT NULL);
+`, `
+CREATE TABLE builtin_runner (id INTEGER PRIMARY KEY CHECK (id = 1), executors INTEGER NOT NULL);
 `}
 
 // Upgrade is what Open did to the schema of the database it opened.

@@ -62,16 +62,21 @@ func TestAnRunnerIsDrainedChangedAndRemovedOnTheDataDirectory(t *testing.T) {
 	contains(t, ok(t, "", "runner", "ls", "--data", data), "a\tlinux\texecutors 3\tdisabled\tnever seen")
 	ok(t, "", "runner", "set", "a", "--enable", "--labels", "linux,arm64", "--data", data)
 	contains(t, ok(t, "", "runner", "ls", "--data", data), "a\tlinux,arm64\texecutors 3\tenabled")
+	ok(t, "", "runner", "set", "a", "--executors", "0", "--data", data)
+	contains(t, ok(t, "", "runner", "ls", "--data", data), "a\tlinux,arm64\tno limit\tenabled")
 	ok(t, "", "runner", "rm", "a", "--data", data)
 	eq(t, "ls", ok(t, "", "runner", "ls", "--data", data), "")
 	code, _, errOut := kipp("", "runner", "rm", "a", "--data", data)
 	eq(t, "rm again", code, 1)
 	contains(t, errOut, "no runner called a")
 	for args, want := range map[string]string{
-		"runner add b --data D":                              "runner add needs --labels",
-		"runner add B --labels linux --data D":               `runner "B"`,
-		"runner add b --labels Linux --data D":               `--labels label "Linux"`,
-		"runner add b --labels linux --executors 0 --data D": "executors is at least 1",
+		"runner add b --data D":                               "runner add needs --labels",
+		"runner add B --labels linux --data D":                `runner "B"`,
+		"runner add b --labels Linux --data D":                `--labels label "Linux"`,
+		"runner add b --labels linux --executors -1 --data D": "executors is a whole number, 0 for no limit",
+		"runner add built-in --labels linux --data D":         "the name is the built-in runner's",
+		"runner set built-in --labels linux --data D":         "the built-in runner takes --executors alone",
+		"runner set built-in --executors 0 --data D":          "the built-in runner's executors is at least 1",
 	} {
 		code, _, errOut := kipp("", strings.Fields(strings.ReplaceAll(args, " D", " "+data))...)
 		eq(t, args, code, 2)
@@ -111,6 +116,7 @@ func TestEveryChangeToAnEngineOrAnRunnerIsAudited(t *testing.T) {
 	ok(t, "", "runner", "set", "a", "--disable", "--data", data)
 	fresh := tokenIn(t, ok(t, "", "runner", "token", "a", "--data", data))
 	ok(t, "", "runner", "rm", "a", "--data", data)
+	ok(t, "", "runner", "set", "built-in", "--executors", "6", "--data", data)
 	got := strings.Join(audit(t, openDB(t, data)), "\n")
 	want := strings.Join([]string{
 		"cli engine.add mac: unix:///var/run/docker.sock, labels linux, max 1, enabled",
@@ -120,6 +126,7 @@ func TestEveryChangeToAnEngineOrAnRunnerIsAudited(t *testing.T) {
 		"cli runner.set a: labels linux, executors 1, disabled",
 		"cli runner.token a: the old token no longer works",
 		"cli runner.rm a: ",
+		"cli runner.set built-in: executors 6",
 	}, "\n")
 	eq(t, "the audit", got, want)
 	lacks(t, got, token)
@@ -180,6 +187,22 @@ func TestAServerOfNoExecutorsSaysSoAndWhereItsStagesGo(t *testing.T) {
 	for _, want := range []string{`"executors":0`, `"default_runs_on":["linux"]`, `"runner_env":["KIPP_DRY"]`, `"runner_url":"` + s.url + `"`} {
 		contains(t, info, want)
 	}
+}
+
+// The built-in runner's limit an admin set outlives a restart: it, not
+// --executors, is the limit from then on, and a reload reads it again.
+func TestTheBuiltInRunnersLimitAnAdminSetIsTheServersAtStart(t *testing.T) {
+	s := &served{t: t, stderr: &syncBuffer{}, args: []string{"--executors", "2"}}
+	s.data, s.jobs, s.token = dataAndJobs(t, map[string]string{"plain.yml": "name: plain\nstages:\n  s: {run: 'true'}\n"})
+	ok(t, "", "runner", "set", "built-in", "--executors", "5", "--data", s.data)
+	s.serve()
+	contains(t, kippGet(t, s, "/api/v1/admin/server"), `"executors":5`)
+	contains(t, s.stderr.String(), "the built-in runner's limit is 5, as an admin set it; --executors 2 is not used")
+	ok(t, "", "runner", "set", "built-in", "--executors", "3", "--data", s.data)
+	must(t, syscall.Kill(os.Getpid(), syscall.SIGHUP))
+	eventually(t, "the reload read the built-in runner's limit", func() bool {
+		return strings.Contains(kippGet(t, s, "/api/v1/admin/server"), `"executors":3`)
+	})
 }
 
 // The cache is reached with a build's token, on the main listener and on

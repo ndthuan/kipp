@@ -161,9 +161,17 @@ func (s *Service) AddEngine(ctx context.Context, u *store.User, sess *store.Sess
 	return nil
 }
 
-// SetEngineEnabled enables an engine or disables it: a disabled one takes
-// no new container, and the ones it runs finish.
-func (s *Service) SetEngineEnabled(ctx context.Context, u *store.User, sess *store.Session, name string, on bool) error {
+// EngineEdit is a change to an engine; a field left nil stays as it is.
+type EngineEdit struct {
+	Labels  []string
+	Max     *int
+	Enabled *bool
+}
+
+// SetEngine changes an engine's labels, its limit or whether it is
+// enabled, in effect at once: a disabled one takes no new container, and
+// what runs past a lowered limit finishes.
+func (s *Service) SetEngine(ctx context.Context, u *store.User, sess *store.Session, name string, ed EngineEdit) error {
 	if err := administers(u, sess); err != nil {
 		return err
 	}
@@ -171,13 +179,29 @@ func (s *Service) SetEngineEnabled(ctx context.Context, u *store.User, sess *sto
 	if err != nil {
 		return missing(err)
 	}
-	e.Enabled = on
+	if ed.Labels != nil {
+		e.Labels = ed.Labels
+	}
+	if ed.Max != nil {
+		e.Max = *ed.Max
+	}
+	if ed.Enabled != nil {
+		e.Enabled = *ed.Enabled
+	}
+	if err := enginepool.Check(e); err != nil {
+		return fmt.Errorf("%w: %w", ErrBadInput, err)
+	}
 	if err := s.deps.Store.PutEngine(ctx, *e); err != nil {
 		return err
 	}
 	s.record(ctx, u.Name, "engine.set", name, EngineDetail(e))
 	s.placesChanged(ctx)
 	return nil
+}
+
+// SetEngineEnabled enables an engine or disables it.
+func (s *Service) SetEngineEnabled(ctx context.Context, u *store.User, sess *store.Session, name string, on bool) error {
+	return s.SetEngine(ctx, u, sess, name, EngineEdit{Enabled: &on})
 }
 
 // DeleteEngine removes an engine; the containers it runs finish.
@@ -220,24 +244,86 @@ func (s *Service) AddRunner(ctx context.Context, u *store.User, sess *store.Sess
 	return plain, nil
 }
 
-// SetRunnerEnabled enables a standing runner or drains it: a disabled one
-// takes nothing new, and what it runs finishes.
-func (s *Service) SetRunnerEnabled(ctx context.Context, u *store.User, sess *store.Session, name string, on bool) error {
+// RunnerEdit is a change to a standing runner, from kipp runner set and the
+// Runners page alike; a field left nil stays as it is.
+type RunnerEdit struct {
+	Labels    []string
+	Executors *int // 0 is no limit
+	Enabled   *bool
+}
+
+// EditRunner makes ed on the standing runner called name and keeps it. One
+// no stage could be placed on is refused as ErrBadInput, and nothing kept.
+func EditRunner(ctx context.Context, st *store.Store, name string, ed RunnerEdit) (*store.Runner, error) {
+	a, err := st.Runner(ctx, name)
+	if err != nil {
+		return nil, missing(err)
+	}
+	if ed.Labels != nil {
+		a.Labels = ed.Labels
+	}
+	if ed.Executors != nil {
+		a.Executors = *ed.Executors
+	}
+	if ed.Enabled != nil {
+		a.Enabled = *ed.Enabled
+	}
+	if err := runnerhub.CheckRunner(a.Name, a.Labels, a.Executors); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrBadInput, err)
+	}
+	return a, st.PutRunner(ctx, *a)
+}
+
+// SetRunner changes a standing runner, in effect at once: a disabled one
+// takes nothing new, and what runs past a lowered limit finishes.
+func (s *Service) SetRunner(ctx context.Context, u *store.User, sess *store.Session, name string, ed RunnerEdit) error {
 	if err := administers(u, sess); err != nil {
 		return err
 	}
-	a, err := s.deps.Store.Runner(ctx, name)
+	a, err := EditRunner(ctx, s.deps.Store, name, ed)
 	if err != nil {
-		return missing(err)
-	}
-	a.Enabled = on
-	if err := s.deps.Store.PutRunner(ctx, *a); err != nil {
 		return err
 	}
 	s.record(ctx, u.Name, "runner.set", name, RunnerDetail(a))
 	s.placesChanged(ctx)
 	return nil
 }
+
+// SetRunnerEnabled enables a standing runner or drains it.
+func (s *Service) SetRunnerEnabled(ctx context.Context, u *store.User, sess *store.Session, name string, on bool) error {
+	return s.SetRunner(ctx, u, sess, name, RunnerEdit{Enabled: &on})
+}
+
+// SetBuiltIn keeps the built-in runner's limit, from kipp runner set and
+// the Runners page alike. It is kept apart from the standing runners and
+// outlives a restart: from then on it, not --executors, is the limit.
+func SetBuiltIn(ctx context.Context, st *store.Store, executors int) error {
+	if err := runnerhub.CheckBuiltIn(executors); err != nil {
+		return fmt.Errorf("%w: %w", ErrBadInput, err)
+	}
+	return st.SetBuiltInExecutors(ctx, executors)
+}
+
+// SetBuiltInExecutors changes the built-in runner's limit, in effect at
+// once and kept across restarts. A server that runs no stage of its own
+// (--executors 0) has none to change: that is how it was started.
+func (s *Service) SetBuiltInExecutors(ctx context.Context, u *store.User, sess *store.Session, executors int) error {
+	if err := administers(u, sess); err != nil {
+		return err
+	}
+	if s.deps.Dispatch.Executors() == 0 {
+		return fmt.Errorf("%w: this server runs no stage itself (--executors 0), so its built-in runner has no limit to change", ErrConflict)
+	}
+	if err := SetBuiltIn(ctx, s.deps.Store, executors); err != nil {
+		return err
+	}
+	s.deps.Dispatch.SetExecutors(executors)
+	s.record(ctx, u.Name, "runner.set", runnerhub.BuiltIn, BuiltInDetail(executors))
+	return nil
+}
+
+// BuiltInDetail is what the audit says of the built-in runner.
+func BuiltInDetail(executors int) string { return fmt.Sprintf("executors %d", executors) }
 
 // NewRunnerToken gives a standing runner a new token, the one time it is
 // seen; the old one dies, and the runner that held it is refused.

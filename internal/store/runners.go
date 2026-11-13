@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 )
 
@@ -81,4 +82,23 @@ func scanRunner(row scanner) (*Runner, error) {
 	}
 	a.LastSeenAt, err = parseTS(seen)
 	return &a, err
+}
+
+// BuiltInExecutors is the built-in runner's limit as an admin last set it;
+// ok is false while none has, and the server's --executors applies. It is
+// a table of its own, not a row of runners, so no runner's name is taken
+// and no token is asked of it.
+func (s *Store) BuiltInExecutors(ctx context.Context) (n int, ok bool, err error) {
+	err = s.db.QueryRowContext(ctx, `SELECT executors FROM builtin_runner WHERE id = 1`).Scan(&n)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, false, nil
+	}
+	return n, err == nil, err
+}
+
+// SetBuiltInExecutors keeps the built-in runner's limit.
+func (s *Store) SetBuiltInExecutors(ctx context.Context, n int) error {
+	_, err := s.db.ExecContext(ctx, `INSERT INTO builtin_runner (id, executors) VALUES (1, ?)
+		ON CONFLICT(id) DO UPDATE SET executors = excluded.executors`, n)
+	return err
 }

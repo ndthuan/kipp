@@ -57,12 +57,12 @@ func (h *harness) builtInBusy() int {
 	return busy
 }
 
-// untilLocalStageRuns waits until the stage of a build runs on the server
-// and holds one of its executors, its prepare's given back.
-func (h *harness) untilLocalStageRuns(t *testing.T, id int64, stage string, busy int) {
+// untilLocalStageRuns waits until the stage s of a build runs on the
+// server and busy of its executors are held, its prepare's given back.
+func (h *harness) untilLocalStageRuns(t *testing.T, id int64, busy int) {
 	t.Helper()
 	eventually(t, "the stage of the build runs on the server", func() bool {
-		s := h.stages(t, id)[stage]
+		s := h.stages(t, id)["s"]
 		return s != nil && s.Status == store.StageRunning && h.builtInBusy() == busy
 	})
 }
@@ -80,7 +80,7 @@ func TestAStageOnARunnerStartsWhileTheBuiltInRunnerIsFull(t *testing.T) {
 		return len(h.waitingOf(t, remote.ID)) == 1 && h.builtInBusy() == 0
 	})
 	holder := h.trigger(t, "hold")
-	h.untilLocalStageRuns(t, holder.ID, "s", 1)
+	h.untilLocalStageRuns(t, holder.ID, 1)
 	ag.runBox(t.TempDir())
 	if b := h.wait(t, remote.ID); b.Status != store.Success {
 		t.Fatalf("the stage on the runner: %s", b.Status)
@@ -96,7 +96,7 @@ func TestAPrepareWaitsWhileTheBuiltInRunnerIsFull(t *testing.T) {
 		"other": "name: other\nstages:\n  s: {run: 'true'}\n",
 	}, func(o *Options) { o.Executors = 1 })
 	holder := h.trigger(t, "hold")
-	h.untilLocalStageRuns(t, holder.ID, "s", 1)
+	h.untilLocalStageRuns(t, holder.ID, 1)
 	other := h.trigger(t, "other")
 	eventually(t, "the other build waits for the built-in runner", func() bool {
 		q := h.queue(t)
@@ -287,5 +287,39 @@ func TestAServerOfNoExecutorsStillPreparesBuilds(t *testing.T) {
 	}
 	if q := h.queue(t); q.Executors != NoStagesPrepares || q.RunsStages {
 		t.Fatalf("the queue says %d executors, runs stages %v", q.Executors, q.RunsStages)
+	}
+}
+
+// The built-in runner's limit changes while the server runs: what runs
+// past a lowered limit finishes, and nothing new starts until it is under.
+func TestTheBuiltInRunnersLimitChangesLive(t *testing.T) {
+	hold, open := gated(t)
+	h := newHarness(t, map[string]string{
+		"hold":  "name: hold\nconcurrency: parallel\nstages:\n  s: {run: '" + hold + "'}\n",
+		"other": "name: other\nstages:\n  s: {run: 'true'}\n",
+	}, func(o *Options) { o.Executors = 1 })
+	first := h.trigger(t, "hold")
+	h.untilLocalStageRuns(t, first.ID, 1)
+	second := h.trigger(t, "hold")
+	eventually(t, "the second build waits for the built-in runner", func() bool {
+		q := h.queue(t)
+		return len(q.Queued) == 1 && q.Queued[0].Waiting == WaitExecutor
+	})
+	h.d.SetExecutors(2)
+	h.untilLocalStageRuns(t, second.ID, 2)
+	if n := h.d.Executors(); n != 2 {
+		t.Fatalf("the limit reads %d", n)
+	}
+	h.d.SetExecutors(1)
+	other := h.trigger(t, "other")
+	eventually(t, "a third build waits while two run past the lowered limit", func() bool {
+		q := h.queue(t)
+		return len(q.Queued) == 1 && q.Queued[0].Build.ID == other.ID && q.Queued[0].Waiting == WaitExecutor && q.Busy == 2 && q.Executors == 1
+	})
+	open()
+	for _, b := range []*store.Build{first, second, other} {
+		if got := h.wait(t, b.ID); got.Status != store.Success {
+			t.Fatalf("%s: %s", got.Job, got.Status)
+		}
 	}
 }

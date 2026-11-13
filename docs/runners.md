@@ -96,7 +96,7 @@ change at its next reload:
 | `kipp engine set <name> [--docker ...] [--labels ...] [--max N] [--disable \| --enable]` | Changes one. A disabled engine takes no new container; what runs finishes. |
 | `kipp engine rm <name>` / `kipp engine ls` | Removes one / lists them. |
 | `kipp runner add <name> --labels <a,b> [--executors N]` | Registers a standing runner and prints its token once. |
-| `kipp runner set <name> [--labels ...] [--executors N] [--disable \| --enable]` | Changes one. `--disable` drains it: it takes nothing new, and what it runs finishes. |
+| `kipp runner set <name> [--labels ...] [--executors N] [--disable \| --enable]` | Changes one; `--executors 0` is no limit. `--disable` drains it: it takes nothing new, and what it runs finishes. `kipp runner set built-in --executors N` sets the [built-in runner's](#each-runner-has-its-own-limit) limit. |
 | `kipp runner token <name>` | Gives it a new token and ends the old one. |
 | `kipp runner rm <name>` / `kipp runner ls` | Removes one / lists them. |
 
@@ -104,7 +104,11 @@ An admin does the same on the **Runners** page (`/admin/runners`, in the
 menu under their name), in [sudo mode](accounts.md#sudo-mode), and a
 change made there takes effect at once. The page shows each engine and
 runner with its labels, whether it is online or reachable, its version
-and what it runs now. `GET /api/v1/admin/engines` and
+and what it runs now. Each row's Change form sets a standing runner's
+labels and executors (0 for no limit), with the same checks as
+`kipp runner set`, or an engine's labels and containers at once. A
+runner busy past a lowered limit finishes what it runs and takes nothing
+new until it is under. `GET /api/v1/admin/engines` and
 `GET /api/v1/admin/runners` answer the same for an admin's token.
 
 To upgrade: drain each standing runner, upgrade the server
@@ -147,7 +151,7 @@ runner idle longest, or the engine with the most room.
 
 | Flag | Does |
 |---|---|
-| `--executors N` | The built-in runner's limit: stages the server runs itself at once, each build's prepare counted while it runs (default 4). `0` runs none: a stage that names no `runs_on` goes where `--default-runs-on` says, or fails. Hooks and the clone of a `source` job still run on the server, four builds' prepares at once. |
+| `--executors N` | The built-in runner's limit: stages the server runs itself at once, each build's prepare counted while it runs (default 4), until one is set on the Runners page. `0` runs none: a stage that names no `runs_on` goes where `--default-runs-on` says, or fails. Hooks and the clone of a `source` job still run on the server, four builds' prepares at once. |
 | `--default-runs-on <labels>` | Where a stage with no `runs_on` goes on a server with `--executors 0`. |
 | `--runner-env <names>` | The server's variables, by exact name, that a stage on a runner is also given. |
 | `--runner-url <url>` | The URL a container's runner dials (default `--base-url`), and where a stage on a runner reaches the cache. |
@@ -172,6 +176,15 @@ placed holds nothing either; it still holds its job's place among the
 running builds and its locks. A started build's stage that waits for the
 built-in runner gets the first executor to free, before a build queued
 later.
+
+The built-in runner's limit is changed on the Runners page, or with
+`kipp runner set built-in --executors N` (a running server takes that at
+its next reload). It takes effect at once, and is kept in the data
+directory: from then on it, not `--executors`, is the limit, across
+restarts, and the server's log says so at start when the two differ.
+Until it is set, `--executors` is the limit. It is at least 1: a server
+that runs no stage itself is one started with `--executors 0`, which no
+stored limit overrides, and its page has nothing to change.
 
 `--builds`, a limit of builds across every runner, is gone: `kipp serve`
 refuses it, naming `--executors` and the runners' limits.

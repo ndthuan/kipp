@@ -460,6 +460,38 @@ func TestAnRunnerIsBusyUpToItsExecutors(t *testing.T) {
 	}
 }
 
+// A runner's limit changes while it runs: one busy at its old limit takes
+// no new stage past a lowered one, and a raised one, or none, frees it.
+func TestARunnersLimitChangesWhileItRuns(t *testing.T) {
+	f := newFixture(t)
+	f.runRunner(t.TempDir())
+	f.online()
+	ctx := t.Context()
+	f.start(ctx, "sleep 30", StageMeta{})
+	f.start(ctx, "sleep 30", StageMeta{})
+	box := Who{Name: "box"}
+	set := func(executors int) {
+		f.hub.SetStanding([]Identity{{Name: "box", Labels: []string{"linux"}, Executors: executors, Enabled: true}})
+	}
+	set(3)
+	if !f.hub.Free(box) {
+		t.Fatal("two of three executors busy and not free")
+	}
+	set(1)
+	if f.hub.Free(box) {
+		t.Fatal("two stages run past a limit of one and it is free")
+	}
+	for _, r := range f.hub.Runners() {
+		if r.Name == "box" && r.Busy != 2 {
+			t.Fatalf("lowering the limit stopped what ran: %d run", r.Busy)
+		}
+	}
+	set(0)
+	if !f.hub.Free(box) {
+		t.Fatal("a runner of no limit is not free")
+	}
+}
+
 func TestAStageCannotBeGivenToAnRunnerThatIsNotOnline(t *testing.T) {
 	f := newFixture(t)
 	if _, err := f.hub.Start(context.Background(), Who{Name: "box"}, runner.Spec{Command: "true", Output: &syncBuffer{}}, StageMeta{}); !errors.Is(err, ErrNoRunner) {

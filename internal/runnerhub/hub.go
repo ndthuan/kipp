@@ -276,21 +276,37 @@ func (c *conn) free() bool {
 	return c.online && c.id.Enabled && (c.id.Executors <= 0 || c.busy() < c.id.Executors)
 }
 
+// BuiltIn is the name of the built-in runner, the server's own executors,
+// which no standing runner may take.
+const BuiltIn = "built-in"
+
 // CheckRunner refuses a standing runner no stage could be placed on: a name
-// that is not one, no label, or no executor.
+// that is not one, no label, or executors below 0 (0 is no limit).
 func CheckRunner(name string, labels []string, executors int) error {
 	switch {
 	case !config.ValidName(name):
 		return fmt.Errorf("runner %q: lower-case letters, digits, dot, dash and underscore only", name)
+	case name == BuiltIn:
+		return fmt.Errorf("runner %s: the name is the built-in runner's, the server's own executors", name)
 	case len(labels) == 0:
 		return fmt.Errorf("runner %s: one or more labels, which a stage's runs_on chooses it by", name)
-	case executors < 1:
-		return fmt.Errorf("runner %s: executors is at least 1", name)
+	case executors < 0:
+		return fmt.Errorf("runner %s: executors is a whole number, 0 for no limit", name)
 	}
 	for _, l := range labels {
 		if !config.ValidLabel(l) {
 			return fmt.Errorf("runner %s: label %q: lower-case letters, digits, dot, dash and underscore, starting with a letter or digit", name, l)
 		}
+	}
+	return nil
+}
+
+// CheckBuiltIn refuses a limit of the built-in runner that is not one. A
+// server that runs no stage itself is one started with --executors 0, so
+// 0 is never a limit here: it would turn where stages run while it runs.
+func CheckBuiltIn(executors int) error {
+	if executors < 1 {
+		return errors.New("the built-in runner's executors is at least 1: a server that runs no stage itself is started with --executors 0")
 	}
 	return nil
 }

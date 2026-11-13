@@ -300,5 +300,50 @@ func TestTheRunnersPageListsTheBuiltInRunnerWithItsLimitAndWhatItRuns(t *testing
 	e.queued(t, 1, 0)
 	_, page := get(t, admin, e.srv.URL+"/admin/runners")
 	contains(t, page, "<h2>Built-in runner</h2>", `<td>built-in</td>`, "stages that name no <code>runs_on</code>",
-		`<td>1 of 4 <span class="sub">hold#1/s</span></td>`)
+		`<td>1 of 4 <span class="sub">hold#1/s</span>`)
+}
+
+// Each runner's limit and labels are changed on its row: a standing
+// runner's, an engine's and the built-in runner's, after the password
+// step, with the form's usual error for a value that is not one.
+func TestTheRunnersPageChangesEachRunnersLimitOnItsRow(t *testing.T) {
+	e := site(t)
+	admin := e.login(t, "admin")
+	ctx := context.Background()
+	must(t, e.st.PutEngine(ctx, store.Engine{Name: "mac", Kind: "docker", URL: "unix:///d.sock", Labels: []string{"linux"}, Max: 1, Enabled: true}))
+	must(t, e.st.PutRunner(ctx, store.Runner{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true, TokenHash: "h"}))
+	_, page := get(t, admin, e.srv.URL+"/admin/runners")
+	contains(t, page, `action="/admin/runners/built-in"`, `action="/admin/runners/engines/mac"`, `action="/admin/runners/runners/box"`)
+
+	res, _ := e.form(t, admin, "/admin/runners/runners/box", url.Values{"labels": {"linux,arm64"}, "executors": {"3"}})
+	eq(t, "without sudo", res.StatusCode, http.StatusForbidden)
+	e.sudo(t, admin)
+	for path, fields := range map[string]url.Values{
+		"/admin/runners/runners/box": {"labels": {"linux,arm64"}, "executors": {"0"}},
+		"/admin/runners/engines/mac": {"labels": {"linux,amd64"}, "max": {"3"}},
+		"/admin/runners/built-in":    {"executors": {"6"}},
+	} {
+		res, _ := e.form(t, admin, path, fields)
+		eq(t, path, res.StatusCode, http.StatusSeeOther)
+	}
+	a, err := e.st.Runner(ctx, "box")
+	must(t, err)
+	en, err := e.st.Engine(ctx, "mac")
+	must(t, err)
+	if a.Executors != 0 || len(a.Labels) != 2 || en.Max != 3 || len(en.Labels) != 2 {
+		t.Fatalf("runner %+v, engine %+v", a, en)
+	}
+	_, page = get(t, admin, e.srv.URL+"/admin/runners?done=builtin-set")
+	contains(t, page, "0 of no limit", "0 of 6", "The built-in runner&#39;s limit is changed")
+	contains(t, e.audit(t), "admin runner.set box labels linux,arm64, executors 0, enabled", "admin engine.set mac", "admin runner.set built-in executors 6")
+
+	res, page = e.form(t, admin, "/admin/runners/runners/box", url.Values{"labels": {"linux"}, "executors": {"many"}})
+	eq(t, "executors that are no number", res.StatusCode, http.StatusBadRequest)
+	contains(t, page, "executors: a whole number", `role="alert"`, `value="many"`)
+	res, page = e.form(t, admin, "/admin/runners/built-in", url.Values{"executors": {"0"}})
+	eq(t, "a built-in runner of no executor", res.StatusCode, http.StatusBadRequest)
+	contains(t, page, "the built-in runner&#39;s executors is at least 1", `role="alert"`)
+	res, page = e.form(t, admin, "/admin/runners/engines/mac", url.Values{"labels": {"Linux"}, "max": {"1"}})
+	eq(t, "a label that is not one", res.StatusCode, http.StatusBadRequest)
+	contains(t, page, `label &#34;Linux&#34;`, `role="alert"`)
 }
