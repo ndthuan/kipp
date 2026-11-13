@@ -23,7 +23,7 @@ func TestTheServerPageNamesTheBuildHoldingQuietAndRunsItAgainAfterARestartOnceCo
 	res, _ := e.form(t, admin, "/admin/server/quiet", nil)
 	eq(t, "quiet on", res.StatusCode, http.StatusSeeOther)
 	_, page := get(t, admin, e.srv.URL+"/admin/server")
-	contains(t, page, "1 running, 0 queued")
+	contains(t, page, "1 running, 0 waiting")
 	lacks(t, page, "still runs", `action="/admin/server/quiet/rerun"`)
 
 	e.ahead.Store(int64(dispatch.HoldingAfter))

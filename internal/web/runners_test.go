@@ -12,6 +12,7 @@ import (
 
 	"github.com/ndthuan/kipp/internal/api"
 	"github.com/ndthuan/kipp/internal/auth"
+	"github.com/ndthuan/kipp/internal/dispatch"
 	"github.com/ndthuan/kipp/internal/store"
 )
 
@@ -173,10 +174,46 @@ func runningBuilds(n int) []api.RunningView {
 func TestTheQueueHeadingCountsBuildsFirstAndSlotsHereOnlyForAnAdmin(t *testing.T) {
 	e := site(t)
 	contains(t, renderQueue(t, e, &api.QueueView{Running: runningBuilds(3), Executors: 8, Busy: 2}),
-		`<h2>Now 3 builds <span class="sub">2/8 slots here</span></h2>`)
+		`<h2>Running 3 builds <span class="sub">2/8 slots here</span></h2>`)
 	body := renderQueue(t, e, &api.QueueView{Running: runningBuilds(1)})
-	contains(t, body, `<h2>Now 1 build</h2>`)
-	lacks(t, body, "slots")
+	contains(t, body, `<h2>Running 1 build</h2>`)
+	lacks(t, body, "slots", "<h2>Waiting")
+}
+
+func TestTheQueueShowsABuildWhoseEveryStageWaitsToBePlacedWithTheBuildsThatWait(t *testing.T) {
+	e := site(t)
+	r := runningBuilds(3)
+	r[1].Waiting = map[string]string{"s": "waiting for a runner with labels [mac]"}
+	started := time.Now().Add(-time.Hour)
+	r[1].Build.StartedAt = &started
+	r[2].Stages = []string{"s", "t"}
+	r[2].Waiting = map[string]string{"s": "waiting for a runner with labels [mac]"}
+	queued := api.QueuedView{Build: &store.Build{ID: 9, Job: "later", Number: 1, Status: store.Queued}, Waiting: dispatch.WaitExecutor}
+	body := renderQueue(t, e, &api.QueueView{Running: r, Queued: []api.QueuedView{queued}, Executors: 8, Busy: 2})
+	contains(t, body,
+		`<h2>Running 2 builds <span class="sub">2/8 slots here</span></h2>`,
+		`<h2>Waiting 2 builds</h2>`,
+		`<span class="status queued">waiting</span><br><span class="sub">s: waiting for runner (label mac)</span>`,
+		`<span class="tl">started </span><time class="elapsed"`)
+	// the header's badge counts the same way
+	if n := nowOf(&api.QueueView{Running: r, Queued: []api.QueuedView{queued}}); len(n.Running) != 2 || n.Waiting() != 2 {
+		t.Fatalf("badge counts %d running and %d waiting, want 2 and 2", len(n.Running), n.Waiting())
+	}
+	waiting := strings.Index(body, "<h2>Waiting")
+	for _, b := range []string{"smoke #1", "smoke #3"} {
+		if i := strings.Index(body, b); i < 0 || i > waiting {
+			t.Fatalf("%s, which runs a stage, is not above the builds that wait:\n%s", b, body)
+		}
+	}
+	for _, b := range []string{"smoke #2", "later #1"} {
+		if strings.Index(body, b) < waiting {
+			t.Fatalf("%s, which runs nothing, is not with the builds that wait:\n%s", b, body)
+		}
+	}
+
+	body = renderQueue(t, e, &api.QueueView{Running: r[1:2], Executors: 8})
+	contains(t, body, `<h2>Waiting 1 build <span class="sub">0/8 slots here</span></h2>`)
+	lacks(t, body, "<h2>Running")
 }
 
 func TestTheQueueSaysWhereAStageRunsAndWhatItWaitsForInFewWords(t *testing.T) {

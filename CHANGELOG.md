@@ -48,6 +48,13 @@ Changed:
   of them is written with its word (`running 9m 42s`, `seen 3m ago`). The
   stage names after a running build's badge read `stage: build` and are not
   drawn on a phone, and a stacked table's box no longer scrolls down.
+- The queue (on the overview, `/queue` and the job list) is two tables:
+  Running, the builds that run a stage somewhere, and Waiting, the queued
+  builds and the started ones whose every stage waits for a runner or an
+  engine, which hold no slot. A build of the second kind reads `waiting`
+  with what each stage waits for, and its time is `started 1h 59m`. The
+  header's queue link counts the same way (`6 running, 10 waiting`), and
+  the slots here go with Running, or with Waiting when nothing runs.
 
 Removed (breaking for the API and the MCP `overview` tool):
 

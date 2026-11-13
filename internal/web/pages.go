@@ -395,6 +395,44 @@ func pastIn(zone *time.Location, now func() time.Time) func(v any, word string) 
 	return momentIn("past", zone, now)
 }
 
+// nowView is the queue as its page splits it: Running are the builds that
+// run a stage somewhere, Placing the started builds whose every stage waits
+// to be placed, which run nothing and are listed with the queued ones.
+type nowView struct {
+	Running, Placing []api.RunningView
+	Queued           []api.QueuedView
+	Executors, Busy  int
+}
+
+// Waiting counts the builds that run nothing.
+func (n *nowView) Waiting() int { return len(n.Placing) + len(n.Queued) }
+
+func nowOf(q *api.QueueView) *nowView {
+	n := &nowView{Queued: q.Queued, Executors: q.Executors, Busy: q.Busy}
+	for _, r := range q.Running {
+		if placing(r) {
+			n.Placing = append(n.Placing, r)
+		} else {
+			n.Running = append(n.Running, r)
+		}
+	}
+	return n
+}
+
+// placing says every stage r is on waits to be placed. A build on no stage
+// is starting or ending, and counts as running.
+func placing(r api.RunningView) bool {
+	if len(r.Stages) == 0 {
+		return false
+	}
+	for _, s := range r.Stages {
+		if _, waits := r.Waiting[s]; !waits {
+			return false
+		}
+	}
+	return true
+}
+
 // localStages are the stages of r that run on the server: the others wait
 // to be placed or run elsewhere, and placeLines say that for them.
 func localStages(r api.RunningView) []string {

@@ -34,7 +34,7 @@
 {{end}}</nav>
 {{else}}{{template "navmetrics" $.Here}}
 {{end}}{{end}}{{end}}<div class="who">
-{{if .User}}{{with .Queue}}{{$busy := or .Running .Queued}}<a id="queue-badge" class="link-plain queue-badge{{if not $busy}} idle{{end}}" href="/queue" hx-get="/queue" hx-select="#queue-badge" hx-target="this" hx-swap="outerHTML" hx-trigger="kipp-changed from:body"{{if $busy}} aria-label="{{len .Running}} running, {{len .Queued}} queued" title="{{len .Running}} running, {{len .Queued}} queued">{{if .Running}}<span class="qb qb-running"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l13 8-13 8z"/></svg>{{len .Running}}</span>{{end}}{{if .Queued}}<span class="qb qb-queued"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>{{len .Queued}}</span>{{end}}{{else}}>idle{{end}}</a>
+{{if .User}}{{with .Queue}}{{with nowOf .}}{{$busy := or .Running .Waiting}}<a id="queue-badge" class="link-plain queue-badge{{if not $busy}} idle{{end}}" href="/queue" hx-get="/queue" hx-select="#queue-badge" hx-target="this" hx-swap="outerHTML" hx-trigger="kipp-changed from:body"{{if $busy}} aria-label="{{len .Running}} running, {{.Waiting}} waiting" title="{{len .Running}} running, {{.Waiting}} waiting">{{if .Running}}<span class="qb qb-running"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l13 8-13 8z"/></svg>{{len .Running}}</span>{{end}}{{if .Waiting}}<span class="qb qb-queued"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>{{.Waiting}}</span>{{end}}{{else}}>idle{{end}}</a>{{end}}
 {{end}}{{$mine := or (eq .Here "/account") (eq .Here "/admin/users") (eq .Here "/admin/secrets") (eq .Here "/admin/apps") (eq .Here "/admin/runners") (eq .Here "/admin/cache") (eq .Here "/admin/storage") (eq .Here "/admin/server")}}<details class="user drop">
 <summary{{if $mine}} aria-current="true"{{end}} aria-label="{{.User.Name}}" title="{{.User.Name}}"><svg class="icon icon-user" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span class="who-name">{{.User.Name}}</span></summary>
 <ul class="menu">
@@ -82,7 +82,7 @@
 </html>
 {{define "navmetrics"}}<a class="navlink" href="/metrics"{{if eq . "/metrics"}} aria-current="page"{{end}}>Metrics</a>{{end}}
 {{define "queue"}}<section id="queue" class="stack"{{if not .Nested}} hx-get="/queue" hx-select="#queue" hx-target="this" hx-swap="outerHTML" hx-trigger="kipp-changed from:body"{{end}}>
-{{with .Queue}}{{if or .Running .Queued}}<h2>Now{{if .Running}} {{len .Running}} {{if eq (len .Running) 1}}build{{else}}builds{{end}}{{end}}{{if .Executors}} <span class="sub">{{.Busy}}/{{.Executors}} slots here</span>{{end}}</h2>
+{{with .Queue}}{{with nowOf .}}{{$slots := .Executors}}{{if .Running}}<h2>Running {{len .Running}} {{if eq (len .Running) 1}}build{{else}}builds{{end}}{{if .Executors}} <span class="sub">{{.Busy}}/{{.Executors}} slots here</span>{{end}}</h2>{{$slots = 0}}
 <div class="scroll">
 <table class="queue stacked two-line">
 <thead><tr><th>Build</th><th>Status</th><th>For</th><th><span class="sr-only">Cancel</span></th></tr></thead>
@@ -91,6 +91,20 @@
 <td class="lead" data-label="Build"><a class="link" href="{{buildPath .Build}}">{{.Build.Job}} #{{.Build.Number}}</a></td>
 <td class="lead" data-label="Status"><span class="status running">running</span>{{with localStages .}} <span class="sub stages">{{if gt (len .) 1}}stages{{else}}stage{{end}}: {{join .}}</span>{{end}}{{range placeLines .}}<br><span class="sub">{{.}}</span>{{end}}</td>
 <td class="lead" data-label="For">{{template "since" (elapsed .Build.StartedAt "running")}}</td>
+<td class="lead" data-label="Cancel">{{if .CanCancel}}{{template "queue-cancel" (cancelOf .Build $.Next)}}{{end}}</td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>
+{{end}}{{if .Waiting}}<h2>Waiting {{.Waiting}} {{if eq .Waiting 1}}build{{else}}builds{{end}}{{if $slots}} <span class="sub">{{.Busy}}/{{.Executors}} slots here</span>{{end}}</h2>
+<div class="scroll">
+<table class="queue queue-waiting stacked two-line">
+<thead><tr><th>Build</th><th>Status</th><th>For</th><th><span class="sr-only">Cancel</span></th></tr></thead>
+<tbody>
+{{range .Placing}}<tr>
+<td class="lead" data-label="Build"><a class="link" href="{{buildPath .Build}}">{{.Build.Job}} #{{.Build.Number}}</a></td>
+<td class="lead" data-label="Status"><span class="status queued">waiting</span>{{range placeLines .}}<br><span class="sub">{{.}}</span>{{end}}</td>
+<td class="lead" data-label="For">{{template "since" (elapsed .Build.StartedAt "started")}}</td>
 <td class="lead" data-label="Cancel">{{if .CanCancel}}{{template "queue-cancel" (cancelOf .Build $.Next)}}{{end}}</td>
 </tr>
 {{end}}{{range .Queued}}<tr>
@@ -102,8 +116,8 @@
 {{end}}</tbody>
 </table>
 </div>
-{{else if $.Full}}<p class="sub">Nothing runs and nothing waits.</p>
-{{end}}{{end}}</section>
+{{end}}{{if and (not .Running) (not .Waiting) $.Full}}<p class="sub">Nothing runs and nothing waits.</p>
+{{end}}{{end}}{{end}}</section>
 {{end}}
 {{define "since"}}{{with .}}{{with .Word}}<span class="tl">{{.}} </span>{{end}}<time class="{{.Kind}}" datetime="{{.At}}" title="{{.Title}}"{{if eq .Kind "past"}} data-ago{{end}}>{{.Text}}</time>{{end}}{{end}}
 {{define "dag"}}{{with .}}<svg class="dag" viewBox="0 0 {{.Width}} {{.Height}}" width="{{.Width}}" height="{{.Height}}" role="img" aria-label="Stages and what each one needs">{{range .Lines}}<line x1="{{.X1}}" y1="{{.Y1}}" x2="{{.X2}}" y2="{{.Y2}}"/>{{end}}{{range .Nodes}}<g class="stage {{.Status}}" data-stage="{{.Name}}"><title>{{.Name}}: {{.Status}}</title><rect x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}" rx="8"/><text x="{{.TextX}}" y="{{.TextY}}">{{.Label}}</text></g>{{end}}</svg>{{end}}{{end}}
