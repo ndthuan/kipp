@@ -52,7 +52,7 @@ func (x *Index) Push(ctx context.Context, parent string, ev PushEvent) (*Trigger
 	}
 	plan := &TriggerPlan{}
 	if m.RebuildOnBase {
-		plan.Builds = x.onBaseLocked(m, parent, branch)
+		plan.Builds, plan.Base = x.onBaseLocked(m, parent, branch), ev.After
 	}
 	if plan.Ignored = x.skipLocked(m, parent, branch); plan.Ignored != "" {
 		return plan, nil

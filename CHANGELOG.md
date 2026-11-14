@@ -246,6 +246,10 @@ Changed:
 
 Fixed:
 
+- A push to a base branch while a pull request's build of the same head
+  runs on an older base queues a build on the new base under
+  `rebuild_on_base`; it was skipped as already on its way, and the pull
+  request kept a green build of a base that was no longer the branch's.
 - The queue's heading ("Now") counts the builds that run first and says the
   server's slots second and briefly (`Now 11 builds`, `5/8 slots here`, the
   slots to an admin alone). A stage that runs on a runner or an engine says

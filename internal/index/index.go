@@ -179,6 +179,10 @@ type TriggerPlan struct {
 	// that may have a build queued or running: a pull request moved to
 	// another base is merged with it anew.
 	Rebuild bool
+	// Base is the commit a push to a base branch moved it to, for the
+	// pull request builds rebuild_on_base asks for: a running build that
+	// merged another base is not on its way to this one.
+	Base string
 }
 
 func ignored(format string, args ...any) *TriggerPlan {

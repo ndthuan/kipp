@@ -105,7 +105,7 @@ func (h *hook) queue(r *http.Request, plan *index.TriggerPlan) []queued {
 	out := make([]queued, 0, len(plan.Builds))
 	for _, req := range plan.Builds {
 		if req.Kind == "webhook" && req.Detail != "" && !plan.Rebuild {
-			on, err := h.o.Index.OnItsWay(r.Context(), req.Job, req.Detail, req.Tag)
+			on, err := h.o.Index.OnItsWay(r.Context(), req.Job, req.Detail, req.Tag, plan.Base)
 			if err != nil {
 				slog.Error("webhook: looking for a build of the commit", "job", req.Job, "err", err)
 				out = append(out, queued{Job: req.Job, Error: "could not queue the build"})

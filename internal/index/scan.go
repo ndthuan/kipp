@@ -257,15 +257,19 @@ func (x *Index) unseenHeadsLocked(ctx context.Context, reqs []dispatch.TriggerRe
 }
 
 // OnItsWay reports whether a build of the job for the commit, and for the
-// tag ("" for a branch's), is queued or running: a delivery that asks for it again, by another route or hook of
-// the same repo, has nothing to add.
-func (x *Index) OnItsWay(ctx context.Context, job, commit, tag string) (bool, error) {
+// tag ("" for a branch's), is queued or running: a delivery that asks for
+// it again, by another route or hook of the same repo, has nothing to add.
+// A delivery that names the base it wants the build merged into ("" for
+// none) is not served by a build that merged another: a queued build, and a
+// running one that has not cloned yet, merge the base as it is then.
+func (x *Index) OnItsWay(ctx context.Context, job, commit, tag, base string) (bool, error) {
 	active, err := x.st.BuildsWithStatus(ctx, store.Queued, store.Running)
 	if err != nil {
 		return false, err
 	}
 	for _, b := range active {
-		if b.Job == job && b.TriggerTag == tag && (headOf(b) == commit || b.TriggerDetail == commit && b.Trigger == "scan") {
+		if b.Job == job && b.TriggerTag == tag && (headOf(b) == commit || b.TriggerDetail == commit && b.Trigger == "scan") &&
+			(base == "" || b.BaseCommit == "" || b.BaseCommit == base) {
 			return true, nil
 		}
 	}

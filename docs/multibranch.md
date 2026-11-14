@@ -344,5 +344,7 @@ job's ([webhook](jobs.md#webhook)), for the events `push` (of a branch or
 a tag) and `pull_request`. An event it builds is answered 202 with
 `{"builds": [{"job", "id", "number"}]}` (a build the child's concurrency
 dropped says `error` in place of the id, and a commit that has a build
-queued or running already says `skipped`); one it builds nothing for, 200
+queued or running already says `skipped`; under `rebuild_on_base` a pull
+request build that already merged an older base does not count, so a push to
+the base while it runs queues another one, behind it, on the new base); one it builds nothing for, 200
 with `ignored` and why. A child takes no deliveries of its own.

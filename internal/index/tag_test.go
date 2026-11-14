@@ -90,7 +90,7 @@ func TestATagsBuildOfTheSameCommitIsOnItsWayOnlyForTheSameTag(t *testing.T) {
 	b := &store.Build{Job: "site.tags", Status: store.Queued, Trigger: "webhook", TriggerDetail: head, TriggerTag: "v1"}
 	must(t, f.st.CreateBuild(ctx, b))
 	for tag, want := range map[string]bool{"v1": true, "latest": false, "": false} {
-		on, err := f.x.OnItsWay(ctx, "site.tags", head, tag)
+		on, err := f.x.OnItsWay(ctx, "site.tags", head, tag, "")
 		must(t, err)
 		if on != want {
 			t.Errorf("tag %q: on its way %v, want %v", tag, on, want)
