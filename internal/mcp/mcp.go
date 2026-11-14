@@ -39,10 +39,13 @@ var ErrInvalidToken = auth.ErrInvalidToken
 // tool acts only where the user's grant and the ceiling both allow. An API
 // token acts as its user in full (AllGrants); a credential that is to do
 // less, like an OAuth token granted read access only, carries a lower one.
-type Ceiling struct{ View, Build, Cancel bool }
+//
+// Jobs is the right to read and change job definitions. An OAuth grant has
+// it only through kipp:jobs; kipp:build never carries it.
+type Ceiling struct{ View, Build, Cancel, Jobs bool }
 
 // AllGrants is the ceiling of a credential that acts as its user.
-var AllGrants = Ceiling{View: true, Build: true, Cancel: true}
+var AllGrants = Ceiling{View: true, Build: true, Cancel: true, Jobs: true}
 
 // Allows reports whether the ceiling lets a credential do action (view,
 // build or cancel).
@@ -90,7 +93,8 @@ func APITokens(a *kauth.Service) Verifier {
 // OAuthTokens adds the access tokens of an authorization server to a
 // Verifier: a token it issued is the user of its grant, under a ceiling of
 // what the grant's scopes allow (kipp:build is what lets a build be started
-// or cancelled, and reading is always granted), and any other token is
+// or cancelled, kipp:jobs what lets jobs be read and changed, and reading
+// is always granted), and any other token is
 // left to next. The user's grants still apply beneath the ceiling.
 func OAuthTokens(o *oauth.Server, next Verifier) Verifier {
 	return func(ctx context.Context, token string) (*Caller, error) {
@@ -105,7 +109,7 @@ func OAuthTokens(o *oauth.Server, next Verifier) Verifier {
 			return nil, err
 		}
 		build := v.Has(oauth.ScopeBuild)
-		return &Caller{User: v.User, Ceiling: Ceiling{View: true, Build: build, Cancel: build}}, nil
+		return &Caller{User: v.User, Ceiling: Ceiling{View: true, Build: build, Cancel: build, Jobs: v.Has(oauth.ScopeJobs)}}, nil
 	}
 }
 

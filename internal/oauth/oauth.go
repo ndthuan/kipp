@@ -24,11 +24,14 @@ import (
 	"github.com/ndthuan/kipp/internal/store"
 )
 
-// The two scopes. Reading is always granted; building is the user's to
-// grant or not.
+// The scopes. Reading is always granted; building and administering jobs
+// are the user's to grant or not. ScopeJobs is its own scope, not part of
+// ScopeBuild, so that a connector allowed to start builds cannot also edit
+// job definitions.
 const (
 	ScopeRead  = "kipp:read"
 	ScopeBuild = "kipp:build"
+	ScopeJobs  = "kipp:jobs"
 )
 
 // AccessPrefix and RefreshPrefix tell the tokens apart from API tokens
@@ -137,7 +140,7 @@ func (s *Server) ResourceMetadataURL() string {
 }
 
 // Scopes are what a client may ask for.
-func Scopes() []string { return []string{ScopeRead, ScopeBuild} }
+func Scopes() []string { return []string{ScopeRead, ScopeBuild, ScopeJobs} }
 
 // Register mounts the endpoints that need no browser session. The consent
 // page, /oauth/authorize, is the site's.

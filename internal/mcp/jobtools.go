@@ -17,9 +17,9 @@ import (
 )
 
 // Tools that read and change the job files are for an admin whose
-// credential may do all an admin may (Ceiling == AllGrants). A narrower
-// ceiling, such as a read-only OAuth grant, must not edit jobs, and no
-// scope exists for it, so those callers are not shown the tools at all.
+// credential may administer jobs: an API token, or an OAuth grant with
+// kipp:jobs. Any other ceiling, such as a grant with kipp:build alone, is not
+// shown the tools at all.
 
 // kind is which of the server's tool sets a caller is served.
 type kind int
@@ -31,7 +31,7 @@ const (
 )
 
 // editsJobs is whether c may use the job tools.
-func editsJobs(c *Caller) bool { return c.User.Admin && c.Ceiling == AllGrants }
+func editsJobs(c *Caller) bool { return c.User.Admin && c.Ceiling.Jobs }
 
 // kindFor is the tool set served to the request's caller; edits off keeps
 // the tools that change jobs out of the list.

@@ -11,6 +11,7 @@
 <p>See your jobs, builds, logs and test results.</p>
 {{if .AsksBuild}}<label class="check"><input type="checkbox" name="build" checked> Start, repeat and cancel builds</label>
 {{else}}<p class="sub">It did not ask to start or cancel builds.</p>
+{{end}}{{if .AsksJobs}}<label class="check"><input type="checkbox" name="jobs" checked> Read, create, change and delete job definitions</label>
 {{end}}</fieldset>
 <p class="sub">It can do only what your own grants allow, and nothing a person with no grants could not. The access lasts up to 90 days; you can disconnect it on your Account page.</p>
 <div class="actions">

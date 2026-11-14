@@ -146,7 +146,7 @@ func (f *fixture) authorize(client string, build bool) string {
 	if aerr != nil {
 		f.t.Fatal(aerr)
 	}
-	to, err := f.srv.Approve(req, f.user, build)
+	to, err := f.srv.Approve(req, f.user, build, false)
 	must(f.t, err)
 	u, err := url.Parse(to)
 	must(f.t, err)
@@ -190,7 +190,7 @@ func TestTheDiscoveryDocumentsNameTheServerAndItsEndpoints(t *testing.T) {
 		eq(t, "resource", m["resource"], any(base+"/mcp"))
 		eq(t, "authorization_servers", m["authorization_servers"].([]any)[0], any(base))
 		eq(t, "bearer", m["bearer_methods_supported"].([]any)[0], any("header"))
-		eq(t, "scopes", len(m["scopes_supported"].([]any)), 2)
+		eq(t, "scopes", len(m["scopes_supported"].([]any)), 3)
 	}
 	rec := f.do(httptest.NewRequest(http.MethodGet, "/.well-known/oauth-authorization-server", nil))
 	m := decode(t, rec)
@@ -437,7 +437,7 @@ func TestOnlyAnAppThatAskedForBuildCanBeGivenIt(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	to, err := f.srv.Approve(req, f.user, true) // the box is ticked in a form the app never asked about
+	to, err := f.srv.Approve(req, f.user, true, true) // the box is ticked in a form the app never asked about
 	must(t, err)
 	u, _ := url.Parse(to)
 	m := decode(t, f.form("/oauth/token", f.tokenForm(id, u.Query().Get("code"), nil)))
@@ -700,4 +700,28 @@ func TestTheEndpointsCapWhatTheyRead(t *testing.T) {
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		eq(t, p, f.do(req).Code, http.StatusBadRequest)
 	}
+}
+
+func TestTheJobsScopeIsGivenOnlyToAnAdminWhoWasAskedAndTickedIt(t *testing.T) {
+	f := newFixture(t)
+	id := f.register()
+	asks := func(u *store.User, jobs bool) string {
+		req, e := f.srv.ParseAuthorize(context.Background(), f.query(id, url.Values{"scope": {"kipp:read kipp:build kipp:jobs"}}))
+		if e != nil {
+			t.Fatal(e)
+		}
+		to, err := f.srv.Approve(req, u, true, jobs)
+		must(t, err)
+		parsed, _ := url.Parse(to)
+		m := decode(t, f.form("/oauth/token", f.tokenForm(id, parsed.Query().Get("code"), nil)))
+		return m["scope"].(string)
+	}
+	admin := *f.user
+	admin.Admin = true
+	eq(t, "admin ticked", asks(&admin, true), "kipp:read kipp:build kipp:jobs")
+	eq(t, "admin unticked", asks(&admin, false), "kipp:read kipp:build")
+	eq(t, "not an admin", asks(f.user, true), "kipp:read kipp:build")
+
+	// kipp:build alone never brings it.
+	eq(t, "build only", f.signIn(id, true)["scope"], any("kipp:read kipp:build"))
 }

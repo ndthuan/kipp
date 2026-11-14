@@ -67,7 +67,7 @@ func TestTheJobToolsAreListedToAnAdminAtTheFullCeilingAndNoOneElse(t *testing.T)
 
 func TestAnAdminsLowerCeilingNeitherSeesNorCallsAJobTool(t *testing.T) {
 	// A read-only grant, and a build grant: neither is the full ceiling.
-	for name, c := range map[string]Ceiling{"view only": {View: true}, "no cancel": {View: true, Build: true}, "nothing": {}} {
+	for name, c := range map[string]Ceiling{"view only": {View: true}, "no cancel": {View: true, Build: true}, "everything but jobs": {View: true, Build: true, Cancel: true}, "nothing": {}} {
 		verify, au := atCeiling(c)
 		e := newEnv(t, verify)
 		*au = *e.au
@@ -79,6 +79,23 @@ func TestAnAdminsLowerCeilingNeitherSeesNorCallsAJobTool(t *testing.T) {
 		if err == nil && !res.IsError {
 			t.Errorf("%s: replace_job went through", name)
 		}
+	}
+}
+
+func TestAnOAuthGrantWithTheJobsScopeIsServedTheJobToolsToAnAdminOnly(t *testing.T) {
+	c := Ceiling{View: true, Jobs: true}
+	verify, au := atCeiling(c)
+	e := newEnv(t, verify)
+	*au = *e.au
+	if got := toolNames(t, e, e.admin); !slices.Contains(got, "replace_job") || !slices.Contains(got, "get_job_yaml") {
+		t.Errorf("an admin with the jobs scope sees %v", got)
+	}
+	if got := toolNames(t, e, e.viewer); hasAny(got, jobToolNames) {
+		t.Errorf("a non-admin with the jobs scope sees %v", got)
+	}
+	_, err := e.mcp.replaceJob(context.Background(), &Caller{User: e.mustUser(t, "viewer"), Ceiling: c}, replaceJobIn{Job: "smoke", YAML: freshJob, ETag: "x"})
+	if !errors.Is(err, api.ErrForbidden) {
+		t.Errorf("a non-admin with the jobs scope: %v", err)
 	}
 }
 

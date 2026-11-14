@@ -68,6 +68,8 @@ type consentData struct {
 	Hidden       []hiddenField
 	// AsksBuild: the app asked to start builds; the box is on then.
 	AsksBuild bool
+	// AsksJobs: the app asked to administer jobs and the user is an admin.
+	AsksJobs bool
 }
 
 // authFailed answers a request that was refused: an app whose address is
@@ -111,7 +113,7 @@ func (s *Site) authorize(w http.ResponseWriter, r *http.Request, u *store.User) 
 		s.authFailed(w, r, e)
 		return
 	}
-	d := consentData{Client: req.Client.Name, User: u.Name, AsksBuild: req.WantsBuild()}
+	d := consentData{Client: req.Client.Name, User: u.Name, AsksBuild: req.WantsBuild(), AsksJobs: req.WantsJobs() && u.Admin}
 	if to, err := url.Parse(req.RedirectURI); err == nil {
 		d.Host = to.Host
 	}
@@ -143,7 +145,7 @@ func (s *Site) decide(w http.ResponseWriter, r *http.Request, u *store.User) {
 			s.fail(w, r, err)
 			return
 		}
-		to, err := s.oauth.Approve(req, u, r.PostFormValue("build") == "on")
+		to, err := s.oauth.Approve(req, u, r.PostFormValue("build") == "on", r.PostFormValue("jobs") == "on")
 		if err != nil {
 			s.fail(w, r, err)
 			return
@@ -165,10 +167,17 @@ func appList(apps []*store.OAuthGrant, base string) appsView { return appsView{a
 
 // appScopes says what a grant allows, in words.
 func appScopes(g *store.OAuthGrant) string {
+	var what []string
 	if slices.Contains(g.Scopes, oauth.ScopeBuild) {
-		return "read, and start and cancel builds"
+		what = append(what, "start and cancel builds")
 	}
-	return "read only"
+	if slices.Contains(g.Scopes, oauth.ScopeJobs) {
+		what = append(what, "read and change jobs")
+	}
+	if len(what) == 0 {
+		return "read only"
+	}
+	return "read, and " + strings.Join(what, " and ")
 }
 
 func appID(r *http.Request) (int64, error) {

@@ -31,6 +31,9 @@ type AuthRequest struct {
 // WantsBuild reports whether the app asked to be able to start builds.
 func (r *AuthRequest) WantsBuild() bool { return slices.Contains(r.Scopes, ScopeBuild) }
 
+// WantsJobs reports whether the app asked to administer jobs.
+func (r *AuthRequest) WantsJobs() bool { return slices.Contains(r.Scopes, ScopeJobs) }
+
 // Fields are the parameters of the request, to be carried through the
 // consent form and checked again when it comes back.
 func (r *AuthRequest) Fields() url.Values {
@@ -118,9 +121,9 @@ func parseScopes(raw string) ([]string, bool) {
 	for sc := range strings.FieldsSeq(raw) {
 		switch sc {
 		case ScopeRead:
-		case ScopeBuild:
-			if !slices.Contains(scopes, ScopeBuild) {
-				scopes = append(scopes, ScopeBuild)
+		case ScopeBuild, ScopeJobs:
+			if !slices.Contains(scopes, sc) {
+				scopes = append(scopes, sc)
 			}
 		default:
 			return nil, false
@@ -164,11 +167,15 @@ func (s *Server) Deny(r *AuthRequest) string {
 }
 
 // Approve gives a code to the app, at its address: for kipp:read, and for
-// kipp:build when the app asked for it and build is true.
-func (s *Server) Approve(r *AuthRequest, u *store.User, build bool) (string, error) {
+// kipp:build when the app asked for it and build is true, and for kipp:jobs
+// when it asked, jobs is true and the user is an admin.
+func (s *Server) Approve(r *AuthRequest, u *store.User, build, jobs bool) (string, error) {
 	scopes := []string{ScopeRead}
 	if build && r.WantsBuild() {
 		scopes = append(scopes, ScopeBuild)
+	}
+	if jobs && r.WantsJobs() && u.Admin {
+		scopes = append(scopes, ScopeJobs)
 	}
 	code, err := kauth.NewID()
 	if err != nil {

@@ -26,8 +26,11 @@ Added:
 - The MCP endpoint has tools for an admin to read and change jobs:
   `get_job_yaml`, `list_job_versions`, `get_job_version`, `create_job`,
   `replace_job`, `delete_job` and `restore_job`. They are listed only to an
-  admin at the full ceiling, and with `--job-edits off` only the reading
-  ones are. See docs/mcp.md.
+  admin with an API token or an OAuth grant of the new scope `kipp:jobs`,
+  and with `--job-edits off` only the reading ones are. `kipp:jobs` is its
+  own box on the consent page, shown to an admin when the app asked for it;
+  `kipp:build` never brings the job tools, and it is listed in
+  `scopes_supported`. See docs/mcp.md.
 
 Changed:
 

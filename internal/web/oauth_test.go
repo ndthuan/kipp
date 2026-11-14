@@ -605,3 +605,32 @@ func TestWithoutOAuthTheConsentPageAndTheAppsListAreNotThere(t *testing.T) {
 	_, page = get(t, c, e.srv.URL+"/admin/users/bob")
 	lacks(t, page, "Connected apps")
 }
+
+func TestTheConsentPageOffersJobAdministrationToAnAdminWhoseAppAskedForIt(t *testing.T) {
+	o := newOAuthSite(t, nil)
+	client := o.register(t, appCallback)
+	asks := o.authorizeQuery(client, url.Values{"scope": {"kipp:read kipp:build kipp:jobs"}})
+	page := func(user string, q url.Values) string {
+		_, p := get(t, o.login(t, user), o.srv.URL+"/oauth/authorize?"+q.Encode())
+		return p
+	}
+	contains(t, page("admin", asks), `name="jobs" checked`)
+	lacks(t, page("bob", asks), `name="jobs"`)
+	lacks(t, page("admin", o.authorizeQuery(client, nil)), `name="jobs"`)
+
+	c := o.login(t, "admin")
+	o.sudo(t, c)
+	form := url.Values{"jobs": {"on"}}
+	status, p := get(t, c, o.srv.URL+"/oauth/authorize?"+asks.Encode())
+	eq(t, "consent", status, http.StatusOK)
+	form.Set("csrf", csrfOf(t, p))
+	form.Set("decision", "approve")
+	form.Set("build", "on")
+	for _, k := range consentFields {
+		if v := hiddenValue(t, p, k); v != "" {
+			form.Set(k, v)
+		}
+	}
+	res := post(t, c, o.srv.URL+"/oauth/authorize", form)
+	eq(t, "scope", o.exchange(t, client, codeOf(t, res))["scope"], any("kipp:read kipp:build kipp:jobs"))
+}

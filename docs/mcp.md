@@ -100,10 +100,11 @@ that change a job are not listed.
 | `delete_job` | `job`, `etag` | Deletes the job; its versions stay. |
 | `restore_job` | `job`, `version`, `etag` | Makes a version the newest; `etag` is not needed for a deleted job. |
 
-Who sees them: an admin whose credential may do all an admin may, which is
-an admin's API token, or an admin's sign-in that was granted every scope.
-A user who is not an admin, a build token, and an admin's read-only
-sign-in do not have the tools listed and may not call them. Settling a
+Who sees them: an admin whose credential may administer jobs, which is an
+admin's API token, or an admin's sign-in that was granted `kipp:jobs`.
+A user who is not an admin, and a sign-in without `kipp:jobs` (a read-only
+one, or one with `kipp:build` alone), do not have the tools listed and may
+not call them. Settling a
 conflict between a file and an edit stays on the page and the command
 line, where both sides can be read. `replace_job` and `delete_job` are
 marked destructive, and no job tool is idempotent except the reading ones,
@@ -159,12 +160,13 @@ and then `/mcp` in Claude Code to sign in; it follows the `401` that points
 to the resource metadata.
 
 **Consent.** The consent page names the app and the host it sends you
-back to, and who you are. Two scopes:
+back to, and who you are. Three scopes:
 
 | Scope | What it allows |
 | --- | --- |
 | `kipp:read` | Always granted: the reading tools. |
 | `kipp:build` | `run_build`, `build_again` and `cancel_build`. A box that is on when the app asked for it; untick it for a connector that can only look. |
+| `kipp:jobs` | The job tools above (the reading ones too), for an admin only. A box that is on when the app asked for it and you are an admin; it is never part of `kipp:build`. |
 
 The scopes only narrow: the app can do what its user's
 [grants](accounts.md#users-and-grants) allow and, beneath that, what the
@@ -207,7 +209,7 @@ carries `Cache-Control: no-store`.
 | `GET /.well-known/oauth-protected-resource` and `.../oauth-protected-resource/mcp` | RFC 9728: `resource` (`<base-url>/mcp`), `authorization_servers`, `scopes_supported`, `bearer_methods_supported` `["header"]`. |
 | `GET /.well-known/oauth-authorization-server` | RFC 8414: the endpoints below, `code_challenge_methods_supported` `["S256"]`, `token_endpoint_auth_methods_supported` `["none"]`, `client_id_metadata_document_supported`, `authorization_response_iss_parameter_supported`. OpenID Connect discovery is not served. |
 | `GET /oauth/authorize` | The consent page, for a logged-in user (anyone else is sent to the login and back). `client_id`, `redirect_uri`, `response_type=code`, `code_challenge` with `code_challenge_method=S256`, `scope`, `state`, and `resource` when given, which must be `<base-url>/mcp`. A client or redirect address that is not the app's is a `400` page; any other fault goes back to the app as `error` (`invalid_request`, `invalid_scope`, `invalid_target`, `unsupported_response_type`, `access_denied`), with `state` and `iss`. |
-| `POST /oauth/authorize` | The form of the consent page, with its CSRF token: `decision` `approve` or `deny`, and `build` for the `kipp:build` box. Answers `303` to the app with `code`, `state` and `iss`. |
+| `POST /oauth/authorize` | The form of the consent page, with its CSRF token: `decision` `approve` or `deny`, `build` for the `kipp:build` box and `jobs` for the `kipp:jobs` box. Answers `303` to the app with `code`, `state` and `iss`. |
 | `POST /oauth/token` | Form-encoded. `grant_type=authorization_code` with `code`, `code_verifier`, `client_id`, `redirect_uri` and `resource` when given; or `grant_type=refresh_token` with `refresh_token` and `client_id`. Answers `access_token`, `token_type` `Bearer`, `expires_in`, `refresh_token` and `scope`. A code works once, within 60 seconds. `400` with `invalid_grant` for a code or refresh token that is unknown, used, expired or another client's, and for a wrong verifier; `invalid_target` for another resource. |
 | `POST /oauth/register` | RFC 7591, JSON. `redirect_uris` (required, at most 10) and `client_name`; answers `201` with a random `client_id` and `token_endpoint_auth_method` `none`. There are no client secrets. Slowed per client address like wrong passwords (`429` with `Retry-After`); a registration unused for 30 days is removed. |
 | `POST /oauth/revoke` | RFC 7009: `token`, and `client_id` if the app sends it. Ends the grant the token belongs to, whichever kind it is; `200` even for a token nobody holds. |
