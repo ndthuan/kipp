@@ -76,7 +76,7 @@ func TestMcpServesATokensUserWithTheFlag(t *testing.T) {
 	defer func() { _ = session.Close() }()
 	tools, err := session.ListTools(ctx, nil)
 	must(t, err)
-	eq(t, "tools", len(tools.Tools), 12)
+	eq(t, "tools", len(tools.Tools), 19)
 	run, err := session.CallTool(ctx, &sdk.CallToolParams{Name: "run_build", Arguments: map[string]any{"job": "hello"}})
 	must(t, err)
 	eq(t, "run_build failed", run.IsError, false)

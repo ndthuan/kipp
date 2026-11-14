@@ -22,6 +22,7 @@ import (
 	"github.com/ndthuan/kipp/internal/auth"
 	"github.com/ndthuan/kipp/internal/config"
 	"github.com/ndthuan/kipp/internal/dispatch"
+	"github.com/ndthuan/kipp/internal/jobstore"
 	"github.com/ndthuan/kipp/internal/overview"
 	"github.com/ndthuan/kipp/internal/runner"
 	"github.com/ndthuan/kipp/internal/store"
@@ -42,6 +43,7 @@ var jobFiles = map[string]string{
 
 type env struct {
 	d       *dispatch.Dispatcher
+	mcp     *Server
 	srv     *httptest.Server
 	st      *store.Store
 	au      *auth.Service
@@ -56,6 +58,12 @@ func newEnv(t *testing.T, verify Verifier) *env { return newEnvAt(t, verify, "")
 // newEnvAt is newEnv with the address of the resource metadata a 401 points to.
 func newEnvAt(t *testing.T, verify Verifier, metadata string) *env {
 	t.Helper()
+	return newEnvMode(t, verify, metadata, jobstore.Store)
+}
+
+// newEnvMode is newEnvAt with the mode of serve --job-edits.
+func newEnvMode(t *testing.T, verify Verifier, metadata string, mode jobstore.Mode) *env {
+	t.Helper()
 	dir := t.TempDir()
 	jobs := filepath.Join(dir, "jobs")
 	if err := os.MkdirAll(jobs, 0o750); err != nil {
@@ -65,10 +73,6 @@ func newEnvAt(t *testing.T, verify Verifier, metadata string) *env {
 		if err := os.WriteFile(filepath.Join(jobs, name), []byte(body), 0o600); err != nil {
 			t.Fatal(err)
 		}
-	}
-	snap, err := config.Load(jobs)
-	if err != nil {
-		t.Fatal(err)
 	}
 	st, err := store.Open(filepath.Join(dir, "db"))
 	if err != nil {
@@ -83,12 +87,16 @@ func newEnvAt(t *testing.T, verify Verifier, metadata string) *env {
 			}
 			return m, nil
 		}})
-	d.SetSnapshot(snap)
 	ctx, stop := context.WithCancel(context.Background())
+	js := jobstore.New(jobstore.Options{Mode: mode, Dir: jobs, Store: st, Log: quiet,
+		Publish: func(_ context.Context, snap *config.Snapshot) { d.SetSnapshot(snap) }})
+	if _, err := js.Load(ctx); err != nil {
+		t.Fatal(err)
+	}
 	stopped := make(chan struct{})
 	go func() { d.Run(ctx); close(stopped) }()
 	au := auth.New(st, time.Hour, []byte("an obvious test device key 32 b."))
-	a := api.New(api.Deps{Auth: au, Dispatch: d, Store: st, Version: "test", Logger: quiet, FlakyFlips: overview.DefaultFlips})
+	a := api.New(api.Deps{Auth: au, Dispatch: d, Store: st, Jobs: js, Version: "test", Logger: quiet, FlakyFlips: overview.DefaultFlips})
 	m := New(Config{Service: a.Service(), Auth: au, Verify: verify, ResourceMetadataURL: metadata, Version: "test", BaseURL: "https://ci.example.com", Logger: quiet})
 	mux := http.NewServeMux()
 	mux.Handle(Path, m.Handler())
@@ -241,7 +249,8 @@ func TestToolsListIsExactlyTheDocumentedSetWithAnnotations(t *testing.T) {
 	*tr = true
 	reads, starts, stops := want{readOnly: tr}, want{destructive: f}, want{destructive: tr}
 	wants := map[string]want{"overview": reads, "list_jobs": reads, "get_job": reads, "list_builds": reads, "get_build": reads, "read_log": reads,
-		"test_results": reads, "list_artifacts": reads, "queue": reads, "run_build": starts, "build_again": starts, "cancel_build": stops}
+		"test_results": reads, "list_artifacts": reads, "queue": reads, "run_build": starts, "build_again": starts, "cancel_build": stops,
+		"get_job_yaml": reads, "list_job_versions": reads, "get_job_version": reads, "create_job": starts, "replace_job": stops, "delete_job": stops, "restore_job": stops}
 	var got []string
 	for _, tool := range res.Tools {
 		got = append(got, tool.Name)
@@ -877,4 +886,13 @@ func TestTheOverviewOfAServerWithNoJobAndNoBuildIsEveryListEmptyAndTheGraphsZero
 			t.Fatalf("%s charts: %+v", window, c)
 		}
 	}
+}
+
+func (e *env) mustUser(t *testing.T, name string) *store.User {
+	t.Helper()
+	u, err := e.st.UserByName(context.Background(), name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return u
 }

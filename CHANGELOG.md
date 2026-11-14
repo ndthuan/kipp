@@ -21,6 +21,14 @@ runner, whose limit is `--executors`. Drop `--builds` from how the server
 is started, and set `--executors` and each runner's and engine's limit to
 what each machine can take.
 
+Added:
+
+- The MCP endpoint has tools for an admin to read and change jobs:
+  `get_job_yaml`, `list_job_versions`, `get_job_version`, `create_job`,
+  `replace_job`, `delete_job` and `restore_job`. They are listed only to an
+  admin at the full ceiling, and with `--job-edits off` only the reading
+  ones are. See docs/mcp.md.
+
 Changed:
 
 - No limit counts builds across runners any more: a stage waits only for a

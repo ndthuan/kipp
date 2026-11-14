@@ -152,8 +152,8 @@ const callerKey = "kipp.caller"
 // bearer token is 401 with a Bearer challenge; sessions and cookies are not
 // read at all.
 func (s *Server) Handler() http.Handler {
-	srv := s.newServer()
-	h := sdk.NewStreamableHTTPHandler(func(*http.Request) *sdk.Server { return srv }, &sdk.StreamableHTTPOptions{Stateless: true, DisableLocalhostProtection: true})
+	servers := map[kind]*sdk.Server{plain: s.newServer(plain), jobsRead: s.newServer(jobsRead), jobsEdit: s.newServer(jobsEdit)}
+	h := sdk.NewStreamableHTTPHandler(func(r *http.Request) *sdk.Server { return servers[s.kindFor(auth.TokenInfoFromContext(r.Context()))] }, &sdk.StreamableHTTPOptions{Stateless: true, DisableLocalhostProtection: true})
 	var opts *auth.RequireBearerTokenOptions
 	if s.cfg.ResourceMetadataURL != "" {
 		opts = &auth.RequireBearerTokenOptions{ResourceMetadataURL: s.cfg.ResourceMetadataURL}
@@ -318,9 +318,12 @@ func (c *challenge) Flush() { _ = http.NewResponseController(c.ResponseWriter).F
 // refusal is the error a tool answers a caller with: the API's errors in
 // words for a model, and a server fault as no more than that, logged.
 func (s *Server) refusal(err error) error {
+	var told *toldError
 	switch {
 	case err == nil:
 		return nil
+	case errors.As(err, &told):
+		return told
 	case errors.Is(err, api.ErrNotFound):
 		return errors.New("not found")
 	case errors.Is(err, api.ErrSelfStart):

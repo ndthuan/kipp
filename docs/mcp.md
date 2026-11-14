@@ -85,6 +85,30 @@ the model to read.
 | `build_again` | `job`, `number` | Starts a build like an earlier one. |
 | `cancel_build` | `job`, `number` | Stops a build that has not ended. |
 
+The job tools below are for admins. They act through the same code as the
+[API](api.md) and the pages, so a change is audited and kept as a version
+(made through `mcp`), and `--job-edits` rules them: with `off` the tools
+that change a job are not listed.
+
+| Tool | Arguments | What it gives |
+| --- | --- | --- |
+| `get_job_yaml` | `job` | The job's YAML as written, its `etag`, where it comes from and whether an edit waits in conflict. |
+| `list_job_versions` | `job`, `limit` (50), `before` | Versions newest first, with who made each and through what; `next_before` for older ones. Works for a deleted job. |
+| `get_job_version` | `job`, `version` | One version with its YAML. |
+| `create_job` | `yaml` | Makes the job its `name:` names. |
+| `replace_job` | `job`, `yaml`, `etag` | Changes the job when `etag` is still its. A stale one is refused with the job's current YAML and `etag`; a YAML kipp refuses is answered with every error. |
+| `delete_job` | `job`, `etag` | Deletes the job; its versions stay. |
+| `restore_job` | `job`, `version`, `etag` | Makes a version the newest; `etag` is not needed for a deleted job. |
+
+Who sees them: an admin whose credential may do all an admin may, which is
+an admin's API token, or an admin's sign-in that was granted every scope.
+A user who is not an admin, a build token, and an admin's read-only
+sign-in do not have the tools listed and may not call them. Settling a
+conflict between a file and an edit stays on the page and the command
+line, where both sides can be read. `replace_job` and `delete_job` are
+marked destructive, and no job tool is idempotent except the reading ones,
+which are read-only.
+
 The reading tools are marked read-only. `run_build` and `build_again` are
 marked not destructive and not idempotent, `cancel_build` destructive.
 

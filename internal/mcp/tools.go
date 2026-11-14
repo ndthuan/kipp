@@ -110,7 +110,7 @@ func (s *Server) implementation() *sdk.Implementation {
 	return impl
 }
 
-func (s *Server) newServer() *sdk.Server {
+func (s *Server) newServer(k kind) *sdk.Server {
 	srv := sdk.NewServer(s.implementation(), &sdk.ServerOptions{
 		Instructions: "kipp is a CI server. Start with overview to see what is red; read_log with a build's number shows why. " +
 			"What you can see and do is what the token's user may.",
@@ -127,6 +127,7 @@ func (s *Server) newServer() *sdk.Server {
 	add(s, srv, "run_build", "Start a build of a job, with parameters if it has any (see get_job). Needs the build grant.", starts(), s.runBuild)
 	add(s, srv, "build_again", "Start a build like an earlier one: same parameters, same checkout. Needs the build grant.", starts(), s.buildAgain)
 	add(s, srv, "cancel_build", "Stop a build that is queued or running. Needs the cancel grant.", stops(), s.cancelBuild)
+	s.addJobTools(srv, k)
 	return srv
 }
 
