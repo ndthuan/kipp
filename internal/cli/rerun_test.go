@@ -58,17 +58,21 @@ func TestASafeRestartStopsAJobThatWaitsOnAKeptWebhookAndRunsItAgainBeforeTheWebh
 		RerunOf *int   `json:"rerun_of"`
 		RerunAs *int   `json:"rerun_as"`
 	}
-	read := func(path string) build {
+	// A build not queued yet answers a 404 whose "status" is a number, which
+	// is not a build: that reads as one that has not ended.
+	read := func(path string) (build, error) {
 		var b build
-		must(t, json.Unmarshal([]byte(kippGet(t, s, path)), &b))
-		return b
+		return b, json.Unmarshal([]byte(kippGet(t, s, path)), &b)
 	}
 	var again, hooked build
 	eventually(t, "both end", func() bool {
-		again, hooked = read("/api/v1/jobs/flow/builds/2"), read("/api/v1/jobs/hooked/builds/1")
-		return again.Status == "success" && hooked.Status == "success"
+		a, errA := read("/api/v1/jobs/flow/builds/2")
+		h, errH := read("/api/v1/jobs/hooked/builds/1")
+		again, hooked = a, h
+		return errA == nil && errH == nil && again.Status == "success" && hooked.Status == "success"
 	})
-	stopped := read("/api/v1/jobs/flow/builds/1")
+	stopped, err := read("/api/v1/jobs/flow/builds/1")
+	must(t, err)
 	if stopped.Status != "cancelled" || stopped.RerunAs == nil || *stopped.RerunAs != 2 || again.RerunOf == nil || *again.RerunOf != 1 {
 		t.Fatalf("flow #1 %+v and #2 %+v do not link as stopped and run again", stopped, again)
 	}
