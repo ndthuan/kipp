@@ -8,6 +8,8 @@ lines and the data directory are the public surface.
 
 ## Unreleased
 
+## [1.4.0] - 2026-11-16
+
 Upgrading: the default of the new `kipp serve --job-edits` is `store`, so
 a job created or changed through kipp is kept in the database, over a job
 file of the same name. A server that loads its job files keeps loading them,
