@@ -78,7 +78,10 @@ docs/ are the user's view: the job file, the commands, the data directory.
     run that finds a flaky test, set it back to 20 (delete the variable)
     until four runs in a row are green again.
   - When a package's shard grows past about 30 minutes, give it a shard of
-    its own (a line in `named` and in the matrix); when a shard named there
+    its own (a line in `named` and in the matrix); when a package's repeats
+    do not fit the 60 minute `-timeout` (`web`, `api` and `dispatch` today),
+    cut it into parts (`parts` and the matrix), each running its share of
+    the count; when a shard named there
     no longer holds a package, the job fails, so remove it.
 
 ## Commit messages

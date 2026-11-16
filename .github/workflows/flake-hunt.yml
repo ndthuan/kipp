@@ -40,7 +40,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
         cpu: ["1", "4"]
-        shard: [web, api, dispatch, cli, rest]
+        shard: [web-1, web-2, web-3, api-1, api-2, dispatch-1, dispatch-2, cli, rest]
         exclude:
           - os: macos-latest
             cpu: "4"
@@ -66,7 +66,10 @@ jobs:
       # The slowest packages are named below, a shard each (the small ones
       # with a partner); "rest" is every other package, so a package added
       # later is hunted without a change here. A name that matches no
-      # package fails the job rather than hunting nothing.
+      # package fails the job rather than hunting nothing. A package whose
+      # repeats do not fit one -timeout is cut into parts (web-1, web-2,
+      # ...): each part runs ceil(COUNT / parts) repeats under its own
+      # shuffle seed, so the parts together make at least COUNT.
       - name: hunt
         shell: bash
         run: |
@@ -77,6 +80,16 @@ jobs:
             echo "count $COUNT is below 10, the least a hunt repeats"
             exit 2
           fi
+          name="${SHARD%-[0-9]*}"
+          parts() {
+            case "$1" in
+              web) echo 3 ;;
+              api|dispatch) echo 2 ;;
+              *) echo 1 ;;
+            esac
+          }
+          n="$(parts "$name")"
+          COUNT=$(( (COUNT + n - 1) / n ))
           named() {
             case "$1" in
               web) echo ./internal/web/... ;;
@@ -85,7 +98,7 @@ jobs:
               cli) echo ./internal/cli/... ;;
             esac
           }
-          if [ "$SHARD" = rest ]; then
+          if [ "$name" = rest ]; then
             others="$(for s in web api dispatch cli; do
               # shellcheck disable=SC2046 # patterns, word by word
               go list $(named "$s")
@@ -93,7 +106,7 @@ jobs:
             pkgs="$(go list ./... | sort | comm -23 - <(echo "$others"))"
           else
             # shellcheck disable=SC2046 # patterns, word by word
-            pkgs="$(go list $(named "$SHARD"))"
+            pkgs="$(go list $(named "$name"))"
           fi
           if [ -z "$pkgs" ]; then
             echo "shard $SHARD has no package"
