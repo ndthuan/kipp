@@ -2220,8 +2220,7 @@ func TestTheQueuePageSaysWhatRunsAndWhyTheRestWaits(t *testing.T) {
 	e.queued(t, 1, 1)
 	_, page := get(t, c, e.srv.URL+"/queue")
 	contains(t, page, `<section id="queue" class="stack" hx-get="/queue" hx-select="#queue" hx-target="this" hx-swap="outerHTML" hx-trigger="kipp-changed from:body">`,
-		`<h2>Running 1 build <span class="sub">built-in 1/4</span></h2>`,
-		`<h2>Waiting 1 build</h2>`,
+		`<h2>Now <span class="sub">1 running &middot; 1 waiting</span> <span class="sub">built-in 1/4</span></h2>`,
 		`<a class="link" href="/jobs/hold/1">hold #1</a>`,
 		`<span class="status running">running</span> <span class="sub stages">stage: s</span>`,
 		`<span class="tl">running </span><time class="elapsed" datetime="`,
@@ -2235,7 +2234,7 @@ func TestTheQueuePageSaysWhatRunsAndWhyTheRestWaits(t *testing.T) {
 		`</svg>1</span><span class="qb qb-queued"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true">`,
 		`</svg>1</span></a>`)
 	// the heading counts the builds that run, as the header's first count does
-	contains(t, page, `<h2>Running 1 build <span class="sub">`)
+	contains(t, page, `<h2>Now <span class="sub">1 running &middot; 1 waiting</span>`)
 	lacks(t, page, `1 running, 1 waiting</a>`)
 
 	// bob may view wait and nothing of hold: the lock is named, its holder is not.
@@ -2246,7 +2245,8 @@ func TestTheQueuePageSaysWhatRunsAndWhyTheRestWaits(t *testing.T) {
 	_, page = get(t, e.login(t, "bob"), e.srv.URL+"/queue")
 	contains(t, page, `waiting for lock <code>k</code>, held by another build`,
 		`aria-label="0 running, 1 waiting"`, `<span class="qb qb-queued">`)
-	lacks(t, page, `qb-running`, "hold", `/cancel"`, "executors", "slots", "<h2>Running")
+	lacks(t, page, `qb-running`, "hold", `/cancel"`, "executors", "slots", `<span class="status running">`)
+	contains(t, page, `<h2>Now <span class="sub">1 waiting</span></h2>`)
 
 	must(t, e.d.Cancel(ctx, hold, "test"))
 	e.queued(t, 0, 0)

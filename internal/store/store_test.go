@@ -662,3 +662,44 @@ func TestActiveJobsAreTheOnesWithABuildRunningOrQueuedNow(t *testing.T) {
 		t.Fatalf("%v", got)
 	}
 }
+
+func TestNewestEndedGivesTheNBuildsOfTheGivenJobsThatEndedLastNewestEndFirst(t *testing.T) {
+	s := open(t)
+	t0 := time.Date(2026, 10, 10, 1, 0, 0, 0, time.UTC)
+	ended := func(job string, st Status, end time.Duration) *Build {
+		b := &Build{Job: job, Status: Queued, Trigger: "cli", QueuedAt: t0}
+		must(t, s.CreateBuild(ctx, b))
+		must(t, s.SetBuildStatus(ctx, b.ID, Running, t0))
+		must(t, s.SetBuildStatus(ctx, b.ID, st, t0.Add(end)))
+		return b
+	}
+	old := ended("a", Success, time.Hour)
+	newest := ended("b", Cancelled, 5*time.Hour)
+	mid := ended("a", Failed, 3*time.Hour)
+	ended("hidden", Success, 9*time.Hour)
+	must(t, s.CreateBuild(ctx, &Build{Job: "a", Status: Queued, Trigger: "cli"}))
+	must(t, s.CreateBuild(ctx, &Build{Job: "a", Status: Running, Trigger: "cli"}))
+	noEnd := ended("a", Lost, 4*time.Hour)
+	_, err := s.db.ExecContext(ctx, `UPDATE builds SET finished_at = NULL WHERE id = ?`, noEnd.ID)
+	must(t, err)
+	got, err := s.NewestEnded(ctx, []string{"a", "b"}, 4)
+	must(t, err)
+	var ids []int64
+	for _, b := range got {
+		ids = append(ids, b.ID)
+	}
+	if !slices.Equal(ids, []int64{newest.ID, mid.ID, old.ID, noEnd.ID}) {
+		t.Fatalf("want newest end first, a build with no end by its start, no queued or running one, none of another job: %v", ids)
+	}
+	if two, err := s.NewestEnded(ctx, []string{"a", "b"}, 2); err != nil || len(two) != 2 {
+		t.Fatalf("the limit holds: %v %v", two, err)
+	}
+	if none, err := s.NewestEnded(ctx, nil, 3); err != nil || len(none) != 0 {
+		t.Fatalf("no job asked for gives no build: %v %v", none, err)
+	}
+	jobs, err := s.EndedJobs(ctx)
+	must(t, err)
+	if !slices.Equal(jobs, []string{"a", "b", "hidden"}) {
+		t.Fatalf("jobs with an ended build: %v", jobs)
+	}
+}

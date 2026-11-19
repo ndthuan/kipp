@@ -148,7 +148,7 @@ The columns follow, the left one with:
   needed), with its share of red builds ("20% failed (4/20)") and its flips.
   `kipp serve --flaky-flips <n>` sets the four; 0 hides the section.
 
-and the right one with **Running and queued**: the queue, as below. A job's
+and the right one with **Now**: the queue, as below, with the 10 newest ended builds under it. A job's
 next run is on its own page and in the job list.
 
 **Groups** comes last across the full width: one line per group, linking to
@@ -167,7 +167,7 @@ builds more than 100 times a week needs a larger `keep.builds` for the
 week's graphs to be whole. A user sees only the jobs they may view.
 `GET /api/v1/overview?window=24h|7d` gives the same as JSON ([API](api.md)).
 
-![The overview: failing, unstable and flaky on the left, with the stages that failed named in each failing row, running and queued on the right, then a strip of graphs (builds over time, slots and queue, pass rate by group) below; a group's row of the pass-rate graph says how many of its jobs are never built or disabled](screenshots/overview.png)
+![The overview: failing, unstable and flaky on the left, with the stages that failed named in each failing row, what runs, waits and just ended on the right, then a strip of graphs (builds over time, slots and queue, pass rate by group) below; a group's row of the pass-rate graph says how many of its jobs are never built or disabled](screenshots/overview.png)
 
 ## The queue
 
@@ -186,6 +186,12 @@ and on its own page, `/queue`, which the header links to from every page with a 
   alone, in the queue's heading: to anyone else
   a build waiting for a free executor is "waiting to start", since which
   it is would tell whether builds of other jobs hold every executor.
+- On the overview and on `/queue` the same table goes on under the running
+  and waiting builds with the 10 builds that ended last, of every status
+  (`success`, `unstable`, `failed`, `timeout`, `lost`, `cancelled`), newest
+  end first, each with how long it took and when it ended. They are the
+  builds of the jobs the viewer may view, and the job list does not show
+  them. The API and the MCP tools list only what runs and waits.
 
 `GET /api/v1/queue` answers the same: `running`, each with
 `waiting_stages`; `queued`, each with `waiting` (`job`, `lock`,

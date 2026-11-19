@@ -323,6 +323,42 @@ func (s *Store) RecentFinished(ctx context.Context, n int) (map[string][]*Build,
 	return out, nil
 }
 
+// EndedJobs is every job with a build that has ended, sorted.
+func (s *Store) EndedJobs(ctx context.Context) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT job FROM builds WHERE status NOT IN (?, ?) ORDER BY job`, Queued, Running)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []string
+	for rows.Next() {
+		var job string
+		if err := rows.Scan(&job); err != nil {
+			return nil, err
+		}
+		out = append(out, job)
+	}
+	return out, rows.Err()
+}
+
+// NewestEnded is up to n of the builds of jobs that have ended, the newest
+// end first. A build with no end recorded (a lost one from before ends were
+// kept) counts from its start, else from when it was queued.
+func (s *Store) NewestEnded(ctx context.Context, jobs []string, n int) ([]*Build, error) {
+	if len(jobs) == 0 {
+		return nil, nil
+	}
+	args := []any{Queued, Running}
+	marks := make([]string, len(jobs))
+	for i, j := range jobs {
+		marks[i] = "?"
+		args = append(args, j)
+	}
+	args = append(args, n)
+	return s.queryBuilds(ctx, `WHERE status NOT IN (?, ?) AND job IN (`+strings.Join(marks, ",")+`)
+		ORDER BY COALESCE(finished_at, started_at, queued_at) DESC, id DESC LIMIT ?`, args...)
+}
+
 // RecentColoured is up to n of the newest builds of every job that ended
 // green or red (Status.Green, Status.Red), newest first. A job with none
 // has no entry.

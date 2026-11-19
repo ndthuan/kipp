@@ -82,7 +82,8 @@
 </html>
 {{define "navmetrics"}}<a class="navlink" href="/metrics"{{if eq . "/metrics"}} aria-current="page"{{end}}>Metrics</a>{{end}}
 {{define "queue"}}<section id="queue" class="stack"{{if not .Nested}} hx-get="/queue" hx-select="#queue" hx-target="this" hx-swap="outerHTML" hx-trigger="kipp-changed from:body"{{end}}>
-{{with .Queue}}{{with nowOf .}}{{$loads := true}}{{if .Running}}<h2>Running {{len .Running}} {{if eq (len .Running) 1}}build{{else}}builds{{end}}{{template "loads" .Runners}}</h2>{{$loads = false}}
+{{with .Queue}}{{with nowOf .}}{{if and (not .Running) (not .Waiting) $.Full}}<p class="sub">Nothing runs and nothing waits.</p>
+{{end}}{{if or .Running .Waiting (and $.Full $.Ended)}}<h2>Now{{if or .Running .Waiting}} <span class="sub">{{if .Running}}{{len .Running}} running{{end}}{{if and .Running .Waiting}} &middot; {{end}}{{if .Waiting}}{{.Waiting}} waiting{{end}}</span>{{end}}{{template "loads" .Runners}}</h2>
 <div class="scroll">
 <table class="queue stacked two-line">
 <thead><tr><th>Build</th><th>Status</th><th>For</th><th><span class="sr-only">Cancel</span></th></tr></thead>
@@ -93,30 +94,27 @@
 <td class="lead" data-label="For">{{template "since" (elapsed .Build.StartedAt "running")}}</td>
 <td class="lead" data-label="Cancel">{{if .CanCancel}}{{template "queue-cancel" (cancelOf .Build $.Next)}}{{end}}</td>
 </tr>
-{{end}}</tbody>
-</table>
-</div>
-{{end}}{{if .Waiting}}<h2>Waiting {{.Waiting}} {{if eq .Waiting 1}}build{{else}}builds{{end}}{{if $loads}}{{template "loads" .Runners}}{{end}}</h2>
-<div class="scroll">
-<table class="queue queue-waiting stacked two-line">
-<thead><tr><th>Build</th><th>Status</th><th>For</th><th><span class="sr-only">Cancel</span></th></tr></thead>
-<tbody>
-{{range .Placing}}<tr>
+{{end}}{{range .Placing}}<tr class="wait">
 <td class="lead" data-label="Build"><a class="link" href="{{buildPath .Build}}">{{.Build.Job}} #{{.Build.Number}}</a></td>
 <td class="lead" data-label="Status"><span class="status queued">waiting</span>{{range placeLines .}}<br><span class="sub">{{.}}</span>{{end}}</td>
 <td class="lead" data-label="For">{{template "since" (elapsed .Build.StartedAt "started")}}</td>
 <td class="lead" data-label="Cancel">{{if .CanCancel}}{{template "queue-cancel" (cancelOf .Build $.Next)}}{{end}}</td>
 </tr>
-{{end}}{{range .Queued}}<tr>
+{{end}}{{range .Queued}}<tr class="wait">
 <td class="lead" data-label="Build"><a class="link" href="{{buildPath .Build}}">{{.Build.Job}} #{{.Build.Number}}</a></td>
 <td class="lead" data-label="Status"><span class="status queued">queued</span> <span class="sub">{{template "waiting" .}}</span></td>
 <td class="lead" data-label="For">{{template "since" (elapsed .Build.QueuedAt "queued")}}</td>
 <td class="lead" data-label="Cancel">{{if .CanCancel}}{{template "queue-cancel" (cancelOf .Build $.Next)}}{{end}}</td>
 </tr>
-{{end}}</tbody>
+{{end}}{{if $.Full}}{{range $.Ended}}<tr class="done">
+<td class="lead" data-label="Build"><a class="link" href="{{buildPath .}}">{{.Job}} #{{.Number}}</a></td>
+<td class="lead" data-label="Status"><span class="status {{.Status}}">{{.Status}}</span>{{with took .StartedAt .FinishedAt}} <span class="sub">took {{.}}</span>{{end}}</td>
+<td class="lead" data-label="For">{{template "since" (past (endedAt .) "ended")}}</td>
+<td class="lead" data-label="Cancel"></td>
+</tr>
+{{end}}{{end}}</tbody>
 </table>
 </div>
-{{end}}{{if and (not .Running) (not .Waiting) $.Full}}<p class="sub">Nothing runs and nothing waits.</p>
 {{end}}{{end}}{{end}}</section>
 {{end}}
 {{define "since"}}{{with .}}{{with .Word}}<span class="tl">{{.}} </span>{{end}}<time class="{{.Kind}}" datetime="{{.At}}" title="{{.Title}}"{{if eq .Kind "past"}} data-ago{{end}}>{{.Text}}</time>{{end}}{{end}}

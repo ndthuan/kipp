@@ -240,7 +240,12 @@ func (s *Site) home(w http.ResponseWriter, r *http.Request, u *store.User) {
 		s.fail(w, r, err)
 		return
 	}
-	d := overviewData{Why: why, Queue: queueData{Queue: q, CSRF: csrf(r), Next: thisPage(r), Full: true, Nested: true}, Overview: o, Range: rg,
+	ended, err := s.api.Service().NewestEnded(r.Context(), u)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	d := overviewData{Why: why, Queue: queueData{Queue: q, Ended: ended, CSRF: csrf(r), Next: thisPage(r), Full: true, Nested: true}, Overview: o, Range: rg,
 		Charts: chartsOf(o.Charts, s.api.Zone()), Self: windowHref(overview.Day, rg)}
 	for _, c := range []overview.Range{overview.Day, overview.Week} {
 		d.Ranges = append(d.Ranges, rangeLink{Label: c.Label, Href: windowHref(overview.Day, c), Current: c == rg})
@@ -301,6 +306,9 @@ func (s *Site) jobs(w http.ResponseWriter, r *http.Request, u *store.User) {
 // which says so when the queue is empty; elsewhere an empty one is not shown.
 type queueData struct {
 	Queue *api.QueueView
+	// Ended is the newest ended builds, listed under what runs and waits on
+	// a Full page.
+	Ended []*store.Build
 	CSRF  string
 	// Next is the page the reader is on, where a cancel leads back to.
 	Next string
@@ -316,7 +324,12 @@ func (s *Site) queue(w http.ResponseWriter, r *http.Request, u *store.User) {
 		s.fail(w, r, err)
 		return
 	}
-	s.render(w, r, "queue", http.StatusOK, page{Title: "Queue", Data: queueData{Queue: q, CSRF: csrf(r), Next: thisPage(r), Full: true}, Queue: q})
+	ended, err := s.api.Service().NewestEnded(r.Context(), u)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.render(w, r, "queue", http.StatusOK, page{Title: "Queue", Data: queueData{Queue: q, Ended: ended, CSRF: csrf(r), Next: thisPage(r), Full: true}, Queue: q})
 }
 
 // cancelForm is what a cancel button's form needs.
@@ -417,6 +430,19 @@ func nowOf(q *api.QueueView) *nowView {
 		}
 	}
 	return n
+}
+
+// endedAt is when a build ended: the end it recorded, else its start, else
+// when it was queued, so that a lost build from before ends were kept still
+// has a time.
+func endedAt(b *store.Build) time.Time {
+	switch {
+	case b.FinishedAt != nil:
+		return *b.FinishedAt
+	case b.StartedAt != nil:
+		return *b.StartedAt
+	}
+	return b.QueuedAt
 }
 
 // loadText is one runner's load as the queue's heading says it: what it

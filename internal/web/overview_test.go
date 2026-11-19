@@ -179,7 +179,7 @@ func TestTheOverviewTakesAWindowOfAWeekAndTheControlShowsWhichOneHolds(t *testin
 	// The week's page keeps its window when it redraws itself.
 	contains(t, week, `<a href="/">24 hours</a>`, `<a href="/?window=7d" aria-current="true">7 days</a>`, `hx-get="/?window=7d" hx-select="#overview"`,
 		`<h2 id="charts-heading">The last 7 days</h2>`)
-	lacks(t, week, "Failed in the last", "Nothing failed", "Coming up", `href="/jobs/smoke/1"`)
+	lacks(t, week, "Failed in the last", "Nothing failed", "Coming up")
 	eq(t, "the week's graph has its 29 rows", strings.Count(week, "<tr><td>") >= 29, true)
 }
 

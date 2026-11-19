@@ -8,6 +8,13 @@ lines and the data directory are the public surface.
 
 ## Unreleased
 
+Changed:
+
+- The overview's and `/queue`'s "Now" table, under what runs and waits, lists
+  the 10 builds that ended last, of every status, in the jobs the viewer may
+  view. Its heading is "Now" with the counts of what runs and waits. The API
+  and the MCP tools are unchanged.
+
 ## [1.4.0] - 2026-11-16
 
 Upgrading: the default of the new `kipp serve --job-edits` is `store`, so

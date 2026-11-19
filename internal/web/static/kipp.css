@@ -654,8 +654,9 @@
     .queue.two-line td:nth-child(2) > .sub:not(.stages) { display: block; }
     .queue td:first-child .link { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .queue td:nth-child(3)::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: calc(var(--space) * 2); border-radius: var(--radius-pill); background-color: var(--busy); animation: live 2s ease-in-out infinite; }
-    .queue-waiting.two-line td:nth-child(2), .queue-waiting.two-line td:nth-child(3) { color: var(--fg-muted); }
-    .queue-waiting td:nth-child(3)::before { background-color: var(--fg-subtle); animation: none; }
+    .queue.two-line tr.wait td:nth-child(2), .queue.two-line tr.wait td:nth-child(3), .queue.two-line tr.done td:nth-child(2), .queue.two-line tr.done td:nth-child(3) { color: var(--fg-muted); }
+    .queue tr.wait td:nth-child(3)::before { background-color: var(--fg-subtle); animation: none; }
+    .queue tr.done td:nth-child(3)::before { display: none; }
     .cancel-word { display: none; }
     .cancel-x { display: block; width: 18px; height: 18px; }
     .cancel { justify-content: center; min-width: 44px; min-height: 44px; margin-block: calc(var(--space) * -2); padding: 0; border-color: transparent; background-color: transparent; color: var(--fg-subtle); }

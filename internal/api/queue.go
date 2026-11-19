@@ -119,6 +119,24 @@ func (s *Service) Queue(ctx context.Context, u *store.User) (*QueueView, error) 
 	return v, nil
 }
 
+// EndedLimit is how many ended builds the pages that list them show.
+const EndedLimit = 10
+
+// NewestEnded is the EndedLimit builds that ended last among those of the
+// jobs u may view, the newest end first. The web pages show it with the
+// queue; the API does not.
+func (s *Service) NewestEnded(ctx context.Context, u *store.User) ([]*store.Build, error) {
+	jobs, err := s.deps.Store.EndedJobs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	visible, err := s.deps.Auth.Visible(ctx, u, jobs)
+	if err != nil {
+		return nil, err
+	}
+	return s.deps.Store.NewestEnded(ctx, visible, EndedLimit)
+}
+
 // loads is the load of every place that runs stages, the built-in runner
 // first, then the standing runners and the engines by name.
 func (s *Service) loads(q *dispatch.Queue) []RunnerLoad {
