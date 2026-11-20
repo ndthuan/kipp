@@ -370,6 +370,22 @@ func TestARemovedJobsBuildsAllGoOnceTheyAreOlderThanItsDaysAndNotBefore(t *testi
 	}
 }
 
+func TestARemovedJobKeepsASixDayOldBuildAndLosesAnEightDayOldOne(t *testing.T) {
+	st, logs := openStore(t)
+	ctx := context.Background()
+	now := time.Now()
+	seedEvery(t, st, logs, "gone", 2, now.Add(-4*24*time.Hour), 2*24*time.Hour) // queued eight and six days ago
+	snap := &config.Snapshot{Jobs: map[string]*config.Job{}}
+	n, err := Sweep(ctx, st, snap, logs, now)
+	if err != nil || n != 1 {
+		t.Fatalf("err %v, removed %d: want only the eight day old build gone", err, n)
+	}
+	left, _ := st.Builds(ctx, "gone", 10)
+	if len(left) != 1 || left[0].Number != 2 {
+		t.Fatalf("%+v: want the six day old build kept", left)
+	}
+}
+
 func TestSweepFindsARemovedJobThatHasBuildsAndNoLogs(t *testing.T) {
 	st, logs := openStore(t)
 	ctx := context.Background()

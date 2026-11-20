@@ -260,7 +260,7 @@ listed on the parent's page as not built.
   `rebuild_on_base` the rebuild on that base can start before GitHub says
   the pull request closed. Without one the status is `error`. After
   `orphans.days` it leaves the job set, and its builds are then kept as a
-  removed job's are (90 days). A branch pushed again, or a pull request
+  removed job's are (7 days). A branch pushed again, or a pull request
   reopened, is the same child again.
 - The job list shows the parent once, with how many children it builds
   and the worst status of their last builds. Its page lists them (a

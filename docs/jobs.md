@@ -315,7 +315,7 @@ form for its params), with `kipp run <job>`, or with
   disabled the job.
 - A job whose file is removed keeps its builds and logs, to read: its
   `keep` goes with its file, and from then on each build of it is kept
-  for 90 days from when it was queued, and no more than the newest 100.
+  for 7 days from when it was queued, and no more than the newest 100.
 
 ## Stages
 

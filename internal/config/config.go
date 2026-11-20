@@ -337,7 +337,7 @@ const DefaultKeepBuilds = 100
 // RemovedKeepDays is how long a build of a job whose file is gone is kept.
 // A job's own rule goes with its file, and the default one keeps the newest
 // builds for ever, which for a job that will never build again is for ever.
-const RemovedKeepDays = 90
+const RemovedKeepDays = 7
 
 // The logs a build has beside its stages' own: what went wrong before a
 // stage ran, the clone of a source job, and the hook's output. No stage

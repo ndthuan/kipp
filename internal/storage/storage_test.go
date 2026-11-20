@@ -180,7 +180,7 @@ func checkJobs(t *testing.T, jobs []Job) {
 	if jobs[0].Name != "big" || byName["big"].Tests != 1200 || byName["big"].DBBytes <= byName["small"].DBBytes || byName["big"].Logs != 30000 {
 		t.Fatalf("jobs %+v", jobs)
 	}
-	if g := byName["removed"]; g.Gone != GoneRemoved || g.Until.Sub(g.Newest) != 90*24*time.Hour || g.Keep.Days != config.RemovedKeepDays {
+	if g := byName["removed"]; g.Gone != GoneRemoved || g.Until.Sub(g.Newest) != config.RemovedKeepDays*24*time.Hour || g.Keep.Days != config.RemovedKeepDays || g.Until != g.Newest.AddDate(0, 0, 7) {
 		t.Fatalf("removed %+v", g)
 	}
 	if g := byName["multi.pr-43"]; g.Gone != GoneClosed || g.Parent != "multi" {
@@ -295,7 +295,7 @@ func TestAGoneJobsDataIsOfferedForRemovalUnlessOnlyKeptBuildsAreLeft(t *testing.
 		Job{Name: "kept", Gone: GoneRemoved, Builds: 1, Kept: 1},
 		Job{Name: "live", Builds: 3, Logs: 10},
 	))
-	if len(got) != 1 || got[0].Target != "gone" || got[0].Change != "remove now" || !got[0].Until.Equal(until) || !strings.Contains(got[0].Reason, "2027-01-02") {
+	if len(got) != 1 || got[0].Target != "gone" || got[0].Change != "remove now" || !got[0].Until.Equal(until) || !strings.Contains(got[0].Reason, "2027-01-02") || !strings.Contains(got[0].Reason, "7 days after the newest") {
 		t.Fatalf("%+v", got)
 	}
 }

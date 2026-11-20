@@ -267,7 +267,7 @@ Each says what it would save; kipp never edits a job file.
   with N chosen to bring it under a tenth, and, for a branch or pull
   request job, the parent's file.
 - **Remove now**: the builds of a job whose file is gone, which the
-  retention removes 90 days after the newest. The button asks first,
+  retention removes 7 days after the newest. The button asks first,
   removes every ended build that is not kept by hand with its logs and
   artifacts, and writes a row of the audit (`storage.remove-job`).
   `DELETE /api/v1/admin/storage/jobs/<name>` does the same.
