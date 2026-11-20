@@ -316,6 +316,8 @@ form for its params), with `kipp run <job>`, or with
 - A job whose file is removed keeps its builds and logs, to read: its
   `keep` goes with its file, and from then on each build of it is kept
   for 7 days from when it was queued, and no more than the newest 100.
+  An admin finds such a job, and a job deleted through kipp, in Deleted
+  jobs, in the user menu; anyone who may view it keeps its page by address.
 
 ## Stages
 
@@ -915,8 +917,10 @@ without it comes back in the editor, to be sent again.
   against the one before, and Restore on each that would change what
   serves.
 - New job, on the Jobs page, opens the editor with a small template; the
-  job takes its name from `name:`. Deleted jobs, beside it, lists the jobs
-  whose last version is a deletion; their history restores them.
+  job takes its name from `name:`. Deleted jobs, in the user menu, lists
+  the jobs whose last version is a deletion and the jobs whose file is gone
+  and whose builds stay, with their last build and how many builds are
+  kept; the history of one with versions restores it.
 - When an edit waits in conflict, the job's page shows the file beside the
   edit and the reason, with Use the file and Keep my edit. The Server page
   shows the mode under Flags and a banner counting the conflicts, each job

@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ndthuan/kipp/internal/config"
 	"github.com/ndthuan/kipp/internal/jobstore"
@@ -460,4 +463,85 @@ func (a *API) resolveJob(w http.ResponseWriter, r *http.Request, u *store.User) 
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// GoneJob is a job that serves no more: deleted through the job store, or
+// with builds and no job file, or both.
+type GoneJob struct {
+	Name string
+	// Deletion is the version that deleted it, nil when the job store holds
+	// none, as for a job whose file vanished with no version of it.
+	Deletion *store.JobVersion
+	// Versioned: the job store holds versions of it, which its history lists.
+	Versioned bool
+	// Last is its newest build, nil when it has none.
+	Last         *store.Build
+	Builds, Kept int
+}
+
+// GoneAt is when it was deleted or, failing that, queued last, the time the
+// list is ordered by.
+func (g GoneJob) GoneAt() time.Time {
+	if g.Deletion != nil {
+		return g.Deletion.At
+	}
+	if g.Last != nil {
+		return g.Last.QueuedAt
+	}
+	return time.Time{}
+}
+
+// GoneJobs lists, once by name, the jobs the job store deleted and the jobs
+// with builds and no job file, newest first. A server with no job store
+// lists the second only.
+func (s *Service) GoneJobs(ctx context.Context, u *store.User) ([]GoneJob, error) {
+	if err := readsJobs(u); err != nil {
+		return nil, err
+	}
+	rows := map[string]*GoneJob{}
+	row := func(name string) *GoneJob {
+		if rows[name] == nil {
+			rows[name] = &GoneJob{Name: name}
+		}
+		return rows[name]
+	}
+	var versions map[string]*store.JobVersion
+	if s.deps.Jobs != nil {
+		deleted, err := s.deps.Jobs.Deleted(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if versions, err = s.deps.Store.LastJobVersions(ctx); err != nil {
+			return nil, err
+		}
+		for _, v := range deleted {
+			row(v.Job).Deletion = v
+		}
+	}
+	snap := s.deps.Dispatch.Snapshot()
+	last, err := s.deps.Store.LastBuilds(ctx)
+	if err != nil {
+		return nil, err
+	}
+	parents, err := s.deps.Store.Parents(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, name := range removedWithBuilds(snap, last, childOfJob(snap, parents)) {
+		row(name)
+	}
+	names := slices.Sorted(maps.Keys(rows))
+	counts, err := s.deps.Store.BuildCounts(ctx, names)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]GoneJob, 0, len(names))
+	for _, name := range names {
+		g := rows[name]
+		g.Last, g.Builds, g.Kept = last[name], counts[name].Builds, counts[name].Kept
+		g.Versioned = versions[name] != nil
+		out = append(out, *g)
+	}
+	slices.SortStableFunc(out, func(a, b GoneJob) int { return b.GoneAt().Compare(a.GoneAt()) })
+	return out, nil
 }

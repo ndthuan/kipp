@@ -21,12 +21,10 @@ import (
 	"github.com/ndthuan/kipp/internal/store"
 )
 
-// group is one heading of the jobs page. Removed is the one that holds the
-// jobs whose files are gone, whatever group they were in.
+// group is one heading of the jobs page.
 type group struct {
-	Name    string
-	Removed bool
-	Jobs    []api.JobSummary
+	Name string
+	Jobs []api.JobSummary
 }
 
 type jobsData struct {
@@ -41,56 +39,53 @@ type jobsData struct {
 	Statuses []statusTab
 	// Heading names the view for a reader that goes by headings.
 	Heading string
-	// Admin: the reader may see the deleted jobs; Edits: and make a job.
-	Admin, Edits bool
+	// Edits: the reader may make a job.
+	Edits bool
 }
 
 // href is where a group's tab leads. A group's name is a job file's to
-// choose, so the jobs with none and the removed ones are asked for by
-// another parameter and cannot meet a group of the same name.
+// choose, so the jobs with none are asked for by another parameter and
+// cannot meet a group of the same name.
 func (g *group) href() string {
-	switch {
-	case g.Removed:
-		return "/jobs?only=removed"
-	case g.Name == "":
+	if g.Name == "" {
 		return "/jobs?only=ungrouped"
 	}
 	return "/jobs?group=" + url.QueryEscape(g.Name)
 }
 
-// crumb is the group a job's page and its builds' pages lead back to: the
-// tab of the job list that holds the job.
-func crumb(name string, removed bool) *group {
-	return &group{Name: name, Removed: removed}
+// crumbTo is the first step of the trail on a job's page and its builds'
+// pages.
+type crumbTo struct{ Href, Label string }
+
+// crumb leads back to the tab of the job list that holds the job. A removed
+// job is in none: an admin is led to the list of deleted jobs, anyone else
+// to the jobs.
+func crumb(name string, removed, admin bool) crumbTo {
+	switch {
+	case removed && admin:
+		return crumbTo{deletedPath, "Deleted jobs"}
+	case removed:
+		return crumbTo{"/jobs", "Jobs"}
+	}
+	g := &group{Name: name}
+	return crumbTo{g.href(), g.label()}
 }
 
-// Href is href for a template.
-func (g *group) Href() string { return g.href() }
-
-// Label is label for a template.
-func (g *group) Label() string { return g.label() }
-
 func (g *group) label() string {
-	switch {
-	case g.Removed:
-		return "Removed"
-	case g.Name == "":
+	if g.Name == "" {
 		return "No group"
 	}
 	return g.Name
 }
 
-// picked is the group the query asks for, or nil for all of them. All the
-// removed jobs share one tab, whatever group each was in.
+// picked is the group the query asks for, or nil for all of them.
 func picked(all []*group, q url.Values) []*group {
 	var want func(*group) bool
 	switch only, name := q.Get("only"), q.Get("group"); {
-	case only == "removed":
-		want = func(g *group) bool { return g.Removed }
 	case only == "ungrouped":
-		want = func(g *group) bool { return !g.Removed && g.Name == "" }
+		want = func(g *group) bool { return g.Name == "" }
 	case name != "":
-		want = func(g *group) bool { return !g.Removed && g.Name == name }
+		want = func(g *group) bool { return g.Name == name }
 	default:
 		return nil
 	}
@@ -148,7 +143,7 @@ func withStatus(all []*group, status string) []*group {
 	for _, g := range all {
 		jobs := slices.DeleteFunc(slices.Clone(g.Jobs), func(j api.JobSummary) bool { return !hasStatus(j, status) })
 		if len(jobs) > 0 {
-			out = append(out, &group{Name: g.Name, Removed: g.Removed, Jobs: jobs})
+			out = append(out, &group{Name: g.Name, Jobs: jobs})
 		}
 	}
 	return out
@@ -284,6 +279,10 @@ func windowHref(def, rg overview.Range) string {
 }
 
 func (s *Site) jobs(w http.ResponseWriter, r *http.Request, u *store.User) {
+	if r.URL.Query().Get("only") == "removed" {
+		redirect(w, r, deletedPath, http.StatusMovedPermanently)
+		return
+	}
 	jobs, err := s.api.Service().Jobs(r.Context(), u)
 	if err != nil {
 		s.fail(w, r, err)
@@ -297,7 +296,6 @@ func (s *Site) jobs(w http.ResponseWriter, r *http.Request, u *store.User) {
 	all := groups(jobs)
 	d := shown(all, r.URL.Query())
 	d.Queue = queueData{Queue: q, CSRF: csrf(r), Next: thisPage(r)}
-	d.Admin = u.Admin
 	d.Edits = u.Admin && s.api.Service().JobEditMode() != jobstore.Off
 	s.render(w, r, "jobs", http.StatusOK, page{Title: d.Heading, Data: d, Here: d.Self, groups: all, Queue: q})
 }
@@ -534,27 +532,25 @@ func placeWait(line string) string {
 // join is a list of names as a page shows it.
 func join(names []string) string { return strings.Join(names, ", ") }
 
-// groups sorts the jobs into their groups by name, the jobs with no group
-// after them and the removed jobs last.
+// groups sorts the jobs of the job files into their groups by name, the jobs
+// with no group last. A removed job is in none.
 func groups(jobs []api.JobSummary) []*group {
 	var out []*group
-	type key struct {
-		name    string
-		removed bool
-	}
-	byKey := map[key]*group{}
+	byName := map[string]*group{}
 	for _, j := range jobs {
-		k := key{j.Group, j.Removed}
-		g := byKey[k]
+		if j.Removed {
+			continue
+		}
+		g := byName[j.Group]
 		if g == nil {
-			g = &group{Name: j.Group, Removed: j.Removed}
-			byKey[k] = g
+			g = &group{Name: j.Group}
+			byName[j.Group] = g
 			out = append(out, g)
 		}
 		g.Jobs = append(g.Jobs, j)
 	}
 	slices.SortFunc(out, func(a, b *group) int {
-		return cmp.Or(cmp.Compare(btoi(a.Removed), btoi(b.Removed)), cmp.Compare(btoi(a.Name == ""), btoi(b.Name == "")), cmp.Compare(a.Name, b.Name))
+		return cmp.Or(cmp.Compare(btoi(a.Name == ""), btoi(b.Name == "")), cmp.Compare(a.Name, b.Name))
 	})
 	return out
 }
@@ -568,6 +564,7 @@ func btoi(b bool) int {
 
 type jobData struct {
 	View     *api.JobView
+	Admin    bool
 	CanBuild bool
 	Tests    testsView
 	// Why says where each red build of the page went wrong, by build id.
@@ -653,16 +650,16 @@ func (s *Site) job(w http.ResponseWriter, r *http.Request, u *store.User) {
 			return
 		}
 	}
-	here := crumb("", true).href()
+	here := ""
 	if v.Job != nil {
-		here = crumb(v.Job.Group, false).href()
+		here = (&group{Name: v.Job.Group}).href()
 	}
 	whys, err := s.jobWhys(r.Context(), v.Builds)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	data := jobData{Why: whys, View: v, CanBuild: canBuild, Tests: testsOf(historyRows(hist), r.URL.Query().Get("results") == "all")}
+	data := jobData{Admin: u.Admin, Why: whys, View: v, CanBuild: canBuild, Tests: testsOf(historyRows(hist), r.URL.Query().Get("results") == "all")}
 	if v.Job != nil {
 		data.StoreName = v.Job.StoreName()
 		data.Store = metricsPath(data.StoreName, "")
@@ -789,7 +786,8 @@ func (s *Site) buildByID(w http.ResponseWriter, r *http.Request, u *store.User) 
 }
 
 type buildData struct {
-	View *api.BuildView
+	View  *api.BuildView
+	Admin bool
 	// Status is the build's as its page says it: waiting while it runs
 	// nothing because every stage it is on waits to be placed.
 	Status string
@@ -877,7 +875,10 @@ func (s *Site) buildPage(w http.ResponseWriter, r *http.Request, u *store.User) 
 		return
 	}
 	b := data.View.Build
-	here := crumb(data.View.Group, data.View.Removed).href()
+	here := ""
+	if !data.View.Removed {
+		here = (&group{Name: data.View.Group}).href()
+	}
 	s.render(w, r, "build", http.StatusOK, page{Title: b.Job + " #" + strconv.Itoa(b.Number), Here: here, Job: b.Job, Data: data})
 }
 
@@ -910,7 +911,7 @@ func (s *Site) buildData(r *http.Request, u *store.User) (*buildData, error) {
 		v.Stages = planned(v.Needs)
 	}
 	status := showWaiting(v)
-	data := &buildData{View: v, Status: status, Tests: tests, Counts: map[string]int{}, Logs: s.logs(ctx, u, v), Guards: guardViews(guards), Artifacts: artifactViews(id, kept)}
+	data := &buildData{View: v, Admin: u.Admin, Status: status, Tests: tests, Counts: map[string]int{}, Logs: s.logs(ctx, u, v), Guards: guardViews(guards), Artifacts: artifactViews(id, kept)}
 	data.Notice = redNotice(v, data.Logs)
 	data.Live = !v.Complete
 	data.Waited, data.Exit = headline(v)

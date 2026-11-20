@@ -1,7 +1,7 @@
 {{define "scripts"}}<script src="{{static "jobs.js"}}" defer></script>{{end}}
 {{define "content"}}
 <h1 class="sr-only">{{.Data.Heading}}</h1>
-{{if .Data.Admin}}<div class="actions jobs-admin">{{if .Data.Edits}}<a class="action action-main" href="/admin/jobs/new">New job</a>{{end}}<a class="link" href="/admin/jobs/deleted">Deleted jobs</a></div>
+{{if .Data.Edits}}<div class="actions jobs-admin"><a class="action action-main" href="/admin/jobs/new">New job</a></div>
 {{end}}{{template "queue" .Data.Queue}}
 {{if or .Data.Groups .Data.Status}}<div id="jobs-bar" class="jobs-bar">
 <nav class="seg" aria-label="Show jobs by status">{{range .Data.Statuses}}<a href="{{.Href}}"{{if .Current}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>
@@ -9,7 +9,7 @@
 <div id="jobs" class="stack" hx-get="{{.Data.Refresh}}" hx-select="#jobs" hx-target="this" hx-swap="outerHTML" hx-trigger="kipp-changed from:body, every 60s">
 {{range .Data.Groups}}
 <section>
-<h2>{{if .Removed}}Removed from the job files{{else}}{{or .Name "No group"}}{{end}}</h2>
+<h2>{{or .Name "No group"}}</h2>
 <div class="scroll">
 <table class="jobs stacked">
 <thead><tr><th>Job</th><th>Last build</th><th>Schedule</th><th>Next</th></tr></thead>

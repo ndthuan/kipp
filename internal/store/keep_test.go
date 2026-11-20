@@ -78,3 +78,26 @@ func TestArtifactBuildsLeavesAKeptBuildOutButCountsItsBytes(t *testing.T) {
 		t.Fatalf("%d %+v", total, builds)
 	}
 }
+
+func TestBuildCountsCountsBuildsAndKeptBuildsOfTheNamedJobsOnly(t *testing.T) {
+	s := open(t)
+	var kept int64
+	for _, job := range []string{"a", "a", "a", "b", "c"} {
+		b := &Build{Job: job, Status: Success, Trigger: "cli"}
+		must(t, s.CreateBuild(ctx, b))
+		if job == "a" {
+			kept = b.ID
+		}
+	}
+	must(t, s.KeepBuild(ctx, kept, "ada", time.Now()))
+	got, err := s.BuildCounts(ctx, []string{"a", "b", "none"})
+	must(t, err)
+	if len(got) != 2 || got["a"] != (BuildCount{Builds: 3, Kept: 1}) || got["b"] != (BuildCount{Builds: 1}) {
+		t.Fatalf("%+v", got)
+	}
+	got, err = s.BuildCounts(ctx, nil)
+	must(t, err)
+	if len(got) != 0 {
+		t.Fatalf("%+v", got)
+	}
+}

@@ -165,9 +165,6 @@ func (s *Site) showUser(w http.ResponseWriter, r *http.Request, u *store.User, n
 		}
 	}
 	for _, g := range groups(jobs) {
-		if g.Removed { // not loaded: their grants are the gone ones, listed apart
-			continue
-		}
 		gg := grantGroup{Label: g.label()}
 		for _, j := range g.Jobs {
 			gg.Jobs = append(gg.Jobs, grantRowOf(j.Name, info.Grants[j.Name], fault))

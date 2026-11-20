@@ -100,7 +100,7 @@ func TestOnlyAnAdminSeesTheJobControlsAndTheYAML(t *testing.T) {
 		lacks(t, page, "echo lint")
 	}
 	_, page = get(t, bob, je.srv.URL+"/jobs")
-	lacks(t, page, "New job", "Deleted jobs")
+	lacks(t, page, "New job", "Deleted jobs", "/admin/jobs/deleted")
 	res, _ := je.form(t, bob, "/jobs/smoke/edit", url.Values{"yaml": {smokeChanged}, "version": {"*"}})
 	eq(t, "bob saves", res.StatusCode, http.StatusForbidden)
 
@@ -108,7 +108,7 @@ func TestOnlyAnAdminSeesTheJobControlsAndTheYAML(t *testing.T) {
 	_, page = get(t, admin, je.srv.URL+"/jobs/smoke")
 	contains(t, page, `href="/jobs/smoke/edit"`, `href="/jobs/smoke/history"`, `aria-current="page">Builds`)
 	_, page = get(t, admin, je.srv.URL+"/jobs")
-	contains(t, page, `href="/admin/jobs/new"`, `href="/admin/jobs/deleted"`)
+	contains(t, page, `href="/admin/jobs/new"`)
 	code, page = get(t, admin, je.srv.URL+"/jobs/smoke/edit")
 	eq(t, "the editor", code, http.StatusOK)
 	eq(t, "the editor's text", textareaOf(t, page), jobFiles["smoke.yml"])
@@ -378,4 +378,75 @@ func TestJobRefusalsAreAnsweredInWords(t *testing.T) {
 			t.Errorf("%v has no words", err)
 		}
 	}
+}
+
+func (je *jobsEnv) createJob(t *testing.T, c *http.Client, name string) {
+	t.Helper()
+	res, _ := je.form(t, c, "/admin/jobs", url.Values{"yaml": {"name: " + name + "\nstages:\n  s: {run: echo " + name + "}\n"}})
+	eq(t, "create "+name, res.StatusCode, http.StatusSeeOther)
+}
+
+func (je *jobsEnv) deleteJob(t *testing.T, c *http.Client, name string) {
+	t.Helper()
+	_, page := get(t, c, je.srv.URL+"/jobs/"+name+"/delete")
+	res, _ := je.form(t, c, "/jobs/"+name+"/delete", url.Values{"version": {versionOf(t, page)}})
+	eq(t, "delete "+name, res.StatusCode, http.StatusSeeOther)
+}
+
+func TestDeletedJobsListsOnceEachWhatWasDeletedAndWhatLostItsFile(t *testing.T) {
+	je := jobsSite(t, jobstore.Store)
+	admin := je.sudoAdmin(t)
+	je.createJob(t, admin, "unbuilt")
+	je.deleteJob(t, admin, "unbuilt")
+	je.createJob(t, admin, "both")
+	je.wait(t, je.build(t, admin, "both", nil))
+	je.deleteJob(t, admin, "both")
+	je.wait(t, je.build(t, admin, "smoke", nil))
+	je.drop("smoke")
+
+	code, page := get(t, admin, je.srv.URL+"/admin/jobs/deleted")
+	eq(t, "the list", code, http.StatusOK)
+	contains(t, page, "<h1 class=\"crumbs\">", "Deleted jobs", `<th>Last build</th>`, `<th>Builds kept</th>`)
+	_, body, _ := strings.Cut(page, "<tbody>")
+	rows := strings.Split(body, "<tr>")[1:]
+	eq(t, "rows", len(rows), 3)
+	byJob := map[string]string{}
+	for _, r := range rows {
+		m := regexp.MustCompile(`class="lead" data-label="Job"><a class="link" href="/jobs/([a-z]+)`).FindStringSubmatch(r)
+		byJob[m[1]] = r
+	}
+	contains(t, byJob["unbuilt"], `href="/jobs/unbuilt/history">unbuilt`, `href="/jobs/unbuilt/history">History`, "through")
+	lacks(t, byJob["unbuilt"], `href="/jobs/unbuilt/1"`)
+	contains(t, byJob["both"], `href="/jobs/both">both`, `href="/jobs/both/1">#1`, `href="/jobs/both/history">History`, "through", `data-label="Builds kept">1`)
+	contains(t, byJob["smoke"], `href="/jobs/smoke">smoke`, `href="/jobs/smoke/1">#1`, `data-label="Builds kept">1`)
+	lacks(t, byJob["smoke"], "through")
+
+	_, page = get(t, admin, je.srv.URL+"/admin/jobs/deleted")
+	if strings.Index(page, `>both</a>`) > strings.Index(page, `>unbuilt</a>`) {
+		t.Fatal("the job deleted last is not listed first")
+	}
+}
+
+func TestDeletedJobsOfAServerWithNoJobStoreListsTheJobsWithBuildsAndNoFile(t *testing.T) {
+	e := site(t)
+	admin := e.login(t, "admin")
+	e.wait(t, e.build(t, admin, "smoke", nil))
+	e.drop("smoke")
+	code, page := get(t, admin, e.srv.URL+"/admin/jobs/deleted")
+	eq(t, "the list", code, http.StatusOK)
+	contains(t, page, `href="/jobs/smoke">smoke`, `href="/jobs/smoke/1">#1`)
+	lacks(t, page, ">History<")
+}
+
+func TestJobsRemovedLeadsToTheDeletedJobsAndOnlyAnAdminMayOpenThem(t *testing.T) {
+	e := site(t)
+	for _, from := range []string{"/jobs?only=removed", "/jobs?only=removed&status=failing"} {
+		res, _ := do(t, e.login(t, "admin"), mustGet(t, e.srv.URL+from))
+		eq(t, from+" status", res.StatusCode, http.StatusMovedPermanently)
+		eq(t, from+" leads to", res.Header.Get("Location"), "/admin/jobs/deleted")
+	}
+	code, _ := get(t, e.login(t, "admin"), e.srv.URL+"/admin/jobs/deleted")
+	eq(t, "an admin", code, http.StatusOK)
+	code, _ = get(t, e.login(t, "bob"), e.srv.URL+"/admin/jobs/deleted")
+	eq(t, "a non-admin", code, http.StatusForbidden)
 }

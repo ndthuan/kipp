@@ -10,6 +10,14 @@ lines and the data directory are the public surface.
 
 Changed:
 
+- In the user menu the name leads to the Account page, and the "Account"
+  item and the "Admin" label are gone. Admins find a new Deleted jobs item
+  there: the Deleted jobs page now also lists the jobs whose file is gone
+  and whose builds stay, with their last build and how many builds are
+  kept. The "Removed" menu in the header and the removed jobs at the end of
+  the Jobs page are gone, and `/jobs?only=removed` leads to that page. A
+  user who is not an admin no longer gets a list of removed jobs, and keeps
+  the page of one by its address. The API is unchanged.
 - The builds of a job whose file is gone are kept 7 days from when they were
   queued, not 90 (still no more than the newest 100). This covers the builds
   of gone multibranch branches and pull requests too. The next sweep after an

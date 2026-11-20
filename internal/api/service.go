@@ -400,6 +400,21 @@ func nextFire(job *config.Job, now time.Time, zone *time.Location) *time.Time {
 	return &n
 }
 
+// childOfJob reports whether a name is listed under its parent: a child of
+// a job that is served.
+func childOfJob(snap *config.Snapshot, parents map[string]string) func(string) bool {
+	return func(n string) bool {
+		j := snap.Jobs[n]
+		return j != nil && (j.Parent != "" || j.Folder != "") || snap.Jobs[parents[n]] != nil
+	}
+}
+
+// removedWithBuilds are the names that have a build and no job in the set
+// served, a child of a served job apart, in name order.
+func removedWithBuilds(snap *config.Snapshot, last map[string]*store.Build, underParent func(string) bool) []string {
+	return slices.DeleteFunc(slices.Sorted(maps.Keys(last)), func(n string) bool { return snap.Jobs[n] != nil || underParent(n) })
+}
+
 // recentDots is how many finished builds the jobs list draws a dot for.
 const recentDots = 5
 
@@ -419,12 +434,8 @@ func (s *Service) Jobs(ctx context.Context, u *store.User) ([]JobSummary, error)
 	if err != nil {
 		return nil, err
 	}
-	// A child is listed under its parent, while the parent is a job.
-	underParent := func(n string) bool {
-		j := snap.Jobs[n]
-		return j != nil && (j.Parent != "" || j.Folder != "") || snap.Jobs[parents[n]] != nil
-	}
-	removed := slices.DeleteFunc(slices.Sorted(maps.Keys(last)), func(n string) bool { return snap.Jobs[n] != nil || underParent(n) })
+	underParent := childOfJob(snap, parents)
+	removed := removedWithBuilds(snap, last, underParent)
 	files := slices.DeleteFunc(slices.Clone(snap.Names), underParent)
 	names, err := s.deps.Auth.Visible(ctx, u, slices.Concat(files, removed))
 	if err != nil {

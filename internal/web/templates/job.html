@@ -1,6 +1,6 @@
 {{define "content"}}
 {{with .Data}}
-{{$group := crumb "" true}}{{if not .View.Removed}}{{$group = crumb .View.Job.Group false}}{{end}}
+{{$group := crumb "" true .Admin}}{{if not .View.Removed}}{{$group = crumb .View.Job.Group false .Admin}}{{end}}
 <div class="head">
 <h1 class="crumbs"><a class="link-plain" href="{{$group.Href}}">{{$group.Label}}</a><span aria-hidden="true">/</span><span>{{.View.Name}}</span>{{with .View.Source}} <span class="tag origin" title="Where this job comes from">{{.}}</span>{{end}}</h1>
 {{if and .CanBuild (not .View.Job.IsOwner)}}{{if .View.Job.Params}}<details class="build drop">

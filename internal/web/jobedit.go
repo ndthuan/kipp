@@ -32,7 +32,7 @@ const newJobTemplate = "name: my-job\ndescription: What this job does.\nstages:\
 func (s *Site) jobEditRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /admin/jobs/new", s.withUser(s.newJob))
 	mux.HandleFunc(createJobRoute, s.withUser(s.createJob))
-	mux.HandleFunc("GET /admin/jobs/deleted", s.withUser(s.deletedJobs))
+	mux.HandleFunc("GET "+deletedPath, s.withUser(s.deletedJobs))
 	mux.HandleFunc("GET /jobs/{name}/edit", s.withUser(s.editJob))
 	mux.HandleFunc(saveJobRoute, s.withUser(s.saveJob))
 	mux.HandleFunc("GET /jobs/{name}/delete", s.withUser(s.confirmDeleteJob))
@@ -275,7 +275,7 @@ func (s *Site) confirmDeleteJob(w http.ResponseWriter, r *http.Request, u *store
 		s.fail(w, r, err)
 		return
 	}
-	lines := []string{"Nothing starts it any more. Its builds and logs stay until retention removes them, and its versions stay: Deleted jobs, on the Jobs page, can restore it."}
+	lines := []string{"Nothing starts it any more. Its builds and logs stay until retention removes them, and its versions stay: Deleted jobs, in the user menu, can restore it."}
 	if d.Origin != jobstore.FromStore {
 		lines = append(lines, "It has a job file. In store mode the file stays and the deletion is kept over it; in files mode the file is removed.")
 	}
@@ -393,18 +393,21 @@ func (s *Site) resolveJob(w http.ResponseWriter, r *http.Request, u *store.User)
 	done(w, r, jobPath(name), "kept-"+keep)
 }
 
+// deletedPath is the list of jobs that serve no more.
+const deletedPath = "/admin/jobs/deleted"
+
 type deletedData struct {
-	Jobs   []*store.JobVersion
+	Jobs   []api.GoneJob
 	Notice string
 }
 
 func (s *Site) deletedJobs(w http.ResponseWriter, r *http.Request, u *store.User) {
-	gone, err := s.api.Service().DeletedJobs(r.Context(), u)
+	gone, err := s.api.Service().GoneJobs(r.Context(), u)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	s.render(w, r, "jobsdeleted", http.StatusOK, page{Title: "Deleted jobs", Here: "/jobs", Data: deletedData{Jobs: gone, Notice: noticeOf(r)}})
+	s.render(w, r, "jobsdeleted", http.StatusOK, page{Title: "Deleted jobs", Here: deletedPath, Data: deletedData{Jobs: gone, Notice: noticeOf(r)}})
 }
 
 // jobEdits fills what the job page shows an admin about changing a job of

@@ -45,8 +45,8 @@ A user's name is that of a job: 1 to 64 lower-case letters, digits, `.`,
 
 ## The Account page
 
-Everyone who logs in has an **Account** page, under their name at the
-top right:
+Everyone who logs in has an **Account** page, which their name at the top
+right leads to:
 
 - change the password: every other session of theirs ends, and the
   browser it was changed in gets a new one;

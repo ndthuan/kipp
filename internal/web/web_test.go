@@ -627,18 +627,14 @@ func TestTheHeaderHasAMenuForEachGroupAndTheJobsPageShowsOnlyTheOnePicked(t *tes
 	contains(t, page, `<a class="brand" href="/" aria-current="page">kipp</a>`, `<a class="navlink" href="/jobs">Jobs</a>`, `<a class="menu-all" href="/jobs?group=backend">All in backend</a>`)
 	lacks(t, page, `<summary aria-current="true">`)
 
-	// The removed jobs have a menu of their own, last.
+	// A removed job has no menu, for an admin or for a viewer of it.
 	e.wait(t, e.build(t, c, "smoke", nil))
 	e.drop("smoke")
-	_, page = get(t, c, e.srv.URL+"/jobs?only=removed")
-	contains(t, page, `<summary aria-current="true">Removed</summary>`, `class="link" href="/jobs/smoke"`)
-	lacks(t, page, `class="link" href="/jobs/slow"`)
-	eq(t, "removed is the last menu", strings.LastIndex(page, `<details class="group drop">`), strings.Index(page, `<details class="group drop">`+"\n"+`<summary aria-current="true">Removed`))
-
-	// One group is still a menu: alice sees hers and its one job.
+	_, page = get(t, c, e.srv.URL+"/jobs")
+	lacks(t, page, "Removed", "only=removed", `href="/jobs/smoke"`)
 	_, page = get(t, e.login(t, "alice"), e.srv.URL+"/jobs")
-	contains(t, page, `<summary>Removed</summary>`, `<a class="menu-all" href="/jobs?only=removed">All in Removed</a>`, `<a href="/jobs/smoke">`)
-	eq(t, "alice's menus", strings.Count(page, `<details class="group drop">`), 1)
+	lacks(t, page, "Removed", "only=removed", `href="/jobs/smoke"`)
+	eq(t, "alice's menus", strings.Count(page, `<details class="group drop">`), 0)
 }
 
 // A refresh swaps in a part of the page, never the header, so it is not
@@ -1640,9 +1636,17 @@ func TestAJobAndABuildSayWhereTheyAreByGroupThenJob(t *testing.T) {
 
 	e.drop("smoke")
 	_, page = get(t, c, e.srv.URL+e.at(t, id))
-	contains(t, page, `<h1 class="crumbs"><a class="link-plain" href="/jobs?only=removed">Removed</a>`+sep+`<a class="link-plain" href="/jobs/smoke">smoke</a>`+sep+`<span class="crumb-end"><span>#1</span>`)
+	contains(t, page, `<h1 class="crumbs"><a class="link-plain" href="/admin/jobs/deleted">Deleted jobs</a>`+sep+`<a class="link-plain" href="/jobs/smoke">smoke</a>`+sep+`<span class="crumb-end"><span>#1</span>`)
 	_, page = get(t, c, e.srv.URL+"/jobs/smoke")
-	contains(t, page, `<h1 class="crumbs"><a class="link-plain" href="/jobs?only=removed">Removed</a>`+sep+`<span>smoke</span></h1>`)
+	contains(t, page, `<h1 class="crumbs"><a class="link-plain" href="/admin/jobs/deleted">Deleted jobs</a>`+sep+`<span>smoke</span></h1>`)
+	lacks(t, page, `<summary aria-current="true"`)
+
+	alice := e.login(t, "alice")
+	_, page = get(t, alice, e.srv.URL+e.at(t, id))
+	contains(t, page, `<h1 class="crumbs"><a class="link-plain" href="/jobs">Jobs</a>`+sep+`<a class="link-plain" href="/jobs/smoke">smoke</a>`+sep)
+	_, page = get(t, alice, e.srv.URL+"/jobs/smoke")
+	contains(t, page, `<h1 class="crumbs"><a class="link-plain" href="/jobs">Jobs</a>`+sep+`<span>smoke</span></h1>`)
+	lacks(t, page, `<summary aria-current="true"`)
 }
 
 // When a job builds by itself is said apart from the prose around it.
@@ -1751,8 +1755,7 @@ func TestARemovedJobKeepsItsHistoryOnThePagesAndNothingToBuild(t *testing.T) {
 		lacks(t, page, `action="/jobs/smoke/build"`, `class="facts sched"`)
 		code, page = get(t, c, e.srv.URL+"/jobs")
 		eq(t, name+": the jobs", code, http.StatusOK)
-		contains(t, page, "Removed from the job files", `href="/jobs/smoke"`)
-		lacks(t, page, `href="/jobs/ask"`)
+		lacks(t, page, "Removed", `href="/jobs/smoke"`, `href="/jobs/ask"`)
 		code, page = get(t, c, e.srv.URL+"/jobs/smoke/1")
 		eq(t, name+": the build of the removed job", code, http.StatusOK)
 		contains(t, page, `href="/jobs/smoke"`)

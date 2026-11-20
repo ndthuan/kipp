@@ -161,12 +161,11 @@
      short rather than hiding it. */
   .who-name { max-width: calc(var(--space) * 40); overflow: hidden; text-overflow: ellipsis; }
   .icon-user { display: none; width: 18px; height: 18px; }
-  /* The user menu's groups: "Admin" labels the server's pages, set apart
-     from the person's own, and a rule keeps Log out from them. */
-  .menu-group { list-style: none; margin: 0; padding: 0; }
+  /* The user menu's groups: a rule sets the server's pages apart from the
+     person's own, and another keeps Log out from them. */
+  .menu-group { list-style: none; margin: calc(var(--space) * 1) 0 0; padding: calc(var(--space) * 1) 0 0; border-top: 1px solid var(--line); }
   .menu-out { margin-top: calc(var(--space) * 1); padding-top: calc(var(--space) * 1); border-top: 1px solid var(--line); }
-  .menu-who { padding: calc(var(--space) * 1.5) calc(var(--space) * 3); color: var(--fg); font-weight: var(--weight-medium); overflow-wrap: anywhere; }
-  .menu-label { color: var(--fg-subtle); font-weight: var(--weight-normal); }
+  .menu-who a { color: var(--fg); font-weight: var(--weight-medium); white-space: normal; overflow-wrap: anywhere; }
   /* The header is one row on a phone as on a desktop: the user shows as a
      person icon (the name stays its label and the menu's first line), and
      the gaps and the brand tighten, so the brand, the Groups button, the
@@ -712,7 +711,7 @@
 @layer kipp {
   @media (pointer: coarse) {
     .action, .action-small, .seg a, .navlink, .brand, .menu-toggle,
-    .group > summary, .user > summary, .menu a, .menu-button, .menu li.menu-who,
+    .group > summary, .user > summary, .menu a, .menu-button,
     .theme > summary, .queue-badge, .sort, .link-plain, td .link, th .link, .pager .link,
     .results > summary, .guards > summary, .artifacts > summary, .log summary, .frequent > summary, .fold > summary, .health a,
     .version-diff > summary {

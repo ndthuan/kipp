@@ -628,3 +628,32 @@ func scanStage(row scanner) (*Stage, error) {
 	}
 	return &st, nil
 }
+
+// BuildCount is how many builds a job has, and how many of them were kept
+// out of retention by hand.
+type BuildCount struct{ Builds, Kept int }
+
+// BuildCounts is the build count of each of the named jobs that has a
+// build.
+func (s *Store) BuildCounts(ctx context.Context, jobs []string) (map[string]BuildCount, error) {
+	named, err := json.Marshal(jobs)
+	if err != nil {
+		return nil, err
+	}
+	type row struct {
+		job string
+		BuildCount
+	}
+	rows, err := collect(ctx, s.db, func(r scanner) (row, error) {
+		var v row
+		return v, r.Scan(&v.job, &v.Builds, &v.Kept)
+	}, `SELECT job, COUNT(*), COUNT(kept_at) FROM builds WHERE job IN (SELECT value FROM json_each(?)) GROUP BY job`, string(named))
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]BuildCount, len(rows))
+	for _, v := range rows {
+		out[v.job] = v.BuildCount
+	}
+	return out, nil
+}

@@ -111,18 +111,18 @@ func TestTheUserMenuLeadsToTheAccountAndForAnAdminToTheAdminPages(t *testing.T) 
 	e := site(t)
 	_, page := get(t, e.login(t, "admin"), e.srv.URL+"/jobs/smoke")
 	contains(t, page, `<details class="user drop">`+"\n"+`<summary aria-label="admin" title="admin"><svg class="icon icon-user"`,
-		`<span class="who-name">admin</span></summary>`+"\n"+`<ul class="menu">`+"\n"+`<li class="menu-who">admin</li>`,
-		`<a href="/account">Account</a>`, `<a href="/admin/users">Users</a>`, `<a href="/admin/secrets">Secrets</a>`, `<a href="/admin/server">Server</a>`,
+		`<span class="who-name">admin</span></summary>`+"\n"+`<ul class="menu">`+"\n"+`<li class="menu-who"><a href="/account">admin</a></li>`,
+		`<ul class="menu-group" aria-label="Admin">`, `<a href="/admin/users">Users</a>`, `<a href="/admin/secrets">Secrets</a>`, `<a href="/admin/jobs/deleted">Deleted jobs</a>`, `<a href="/admin/server">Server</a>`,
 		`<form method="post" action="/logout">`, `<button class="menu-button">Log out</button>`)
-	lacks(t, page, `href="/admin">`)
+	lacks(t, page, `href="/admin">`, `>Account</a>`, `>Admin<`, `menu-label`)
 	idx := func(s string) int { return strings.Index(page, s) }
 	if queue, menu, theme := idx(`id="queue-badge"`), idx(`class="user drop"`), idx(`class="theme drop"`); queue > menu || menu > theme {
 		t.Fatal("the user menu is not between the queue and the theme picker")
 	}
 
 	_, page = get(t, e.login(t, "bob"), e.srv.URL+"/admin/server")
-	contains(t, page, `<span class="who-name">bob</span>`, `<a href="/account">Account</a>`, "Log out")
-	lacks(t, page, `href="/admin/`)
+	contains(t, page, `<span class="who-name">bob</span>`, `<li class="menu-who"><a href="/account">bob</a></li>`, "Log out")
+	lacks(t, page, `href="/admin/`, `Deleted jobs`, `>Account</a>`, `menu-group`)
 
 	// The page the menu leads to is marked in it, and the menu with it.
 	_, page = get(t, e.login(t, "admin"), e.srv.URL+"/admin/secrets")
@@ -130,8 +130,8 @@ func TestTheUserMenuLeadsToTheAccountAndForAnAdminToTheAdminPages(t *testing.T) 
 }
 
 // Metrics is a page for everyone who may see a job, so it is in the bar
-// beside Jobs; the menu holds the person's own page, and for an admin an
-// "Admin" group of the server's, in this order, then Log out after a rule.
+// beside Jobs; the menu's name leads to the person's own page, and for an
+// admin a group of the server's, in this order, then Log out after a rule.
 func TestTheUserMenuGroupsTheAdminPagesAndMetricsIsInTheBar(t *testing.T) {
 	e := site(t)
 	order := func(page string, subs ...string) {
@@ -147,18 +147,18 @@ func TestTheUserMenuGroupsTheAdminPagesAndMetricsIsInTheBar(t *testing.T) {
 	}
 
 	_, page := get(t, e.login(t, "bob"), e.srv.URL+"/jobs")
-	order(page, `<a class="navlink" href="/jobs"`, `<a class="navlink" href="/metrics">Metrics</a>`, `<li class="menu-who">bob</li>`,
-		`<a href="/account">Account</a>`, `<li class="menu-out"><form method="post" action="/logout">`)
-	lacks(t, page, `>Admin<`, `menu-group`, `<li><a href="/metrics"`)
+	order(page, `<a class="navlink" href="/jobs"`, `<a class="navlink" href="/metrics">Metrics</a>`, `<li class="menu-who"><a href="/account">bob</a></li>`,
+		`<li class="menu-out"><form method="post" action="/logout">`)
+	lacks(t, page, `>Admin<`, `>Account<`, `menu-group`, `<li><a href="/metrics"`)
 
 	_, page = get(t, e.login(t, "admin"), e.srv.URL+"/jobs")
-	order(page, `<li class="menu-who">admin</li>`, `<a href="/account">Account</a>`,
-		`<li class="menu-who menu-label" id="menu-admin">Admin</li>`, `<ul class="menu-group" aria-labelledby="menu-admin">`,
-		`>Users</a>`, `>Secrets</a>`, `>GitHub Apps</a>`, `>Runners</a>`, `>Cache</a>`, `>Server</a>`, `<li class="menu-out">`)
+	order(page, `<li class="menu-who"><a href="/account">admin</a></li>`, `<ul class="menu-group" aria-label="Admin">`,
+		`>Users</a>`, `>Secrets</a>`, `>GitHub Apps</a>`, `>Runners</a>`, `>Cache</a>`, `>Deleted jobs</a>`, `>Storage</a>`, `>Server</a>`, `<li class="menu-out">`)
+	lacks(t, page, `>Admin<`, `>Account<`)
 
 	// aria-current is on the one page, and the user menu is current on its own pages only.
 	admin := e.login(t, "admin")
-	for _, path := range []string{"/account", "/admin/users", "/admin/secrets", "/admin/apps", "/admin/runners", "/admin/cache", "/admin/server"} {
+	for _, path := range []string{"/account", "/admin/users", "/admin/secrets", "/admin/apps", "/admin/runners", "/admin/cache", "/admin/jobs/deleted", "/admin/server"} {
 		_, page = get(t, admin, e.srv.URL+path)
 		contains(t, page, `<a href="`+path+`" aria-current="page">`, `<summary aria-current="true" aria-label="admin"`)
 		lacks(t, page, `<a class="navlink" href="/metrics" aria-current`, `<a class="navlink" href="/jobs" aria-current`)
