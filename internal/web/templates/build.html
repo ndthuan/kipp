@@ -1,7 +1,7 @@
 {{define "scripts"}}<script src="{{static "build.js"}}" defer></script>{{end}}
 {{define "content"}}
 {{with .Data}}
-{{$build := .View.Build}}{{$waits := .View.Waiting}}{{$page := buildPath $build}}
+{{$build := .View.Build}}{{$waits := .View.Waiting}}{{$locks := .View.LockWaits}}{{$page := buildPath $build}}
 <section id="live" class="stack" data-logs="{{range .Logs}}{{.Name}} {{end}}" data-open="{{range .Logs}}{{if .Open}}{{.Name}} {{end}}{{end}}" data-states="{{range .Logs}}{{if .Status}}{{.Name}}={{.Status}} {{end}}{{end}}"{{if .Live}} hx-get="{{$page}}" hx-select="#live" hx-target="this" hx-swap="outerHTML" hx-trigger="every 2s"{{end}}>
 {{$group := crumb .View.Group .View.Removed .Admin}}<div class="head">
 <div class="title">
@@ -35,7 +35,7 @@
 <tbody>
 {{range .View.Stages}}<tr>
 <td class="lead" data-label="Stage"><a class="link" href="#log-{{.Name}}">{{.Name}}</a></td>
-<td class="lead" data-label="Status"><span class="status {{.Status}}">{{.Status}}</span>{{with index $waits .Name}}<span class="sub">, {{placeWait .}}</span>{{end}}{{if gt .Tries 1}}<span class="sub">, {{.Tries}} tries</span>{{end}}{{with .Reused}}<span class="sub">, reused from <a class="link" href="/jobs/{{.Job}}/{{.Number}}#log-{{.Stage}}">{{.Job}} #{{.Number}}</a></span>{{end}}</td>
+<td class="lead" data-label="Status"><span class="status {{.Status}}">{{.Status}}</span>{{with index $waits .Name}}<span class="sub">, {{placeWait .}}</span>{{end}}{{with (index $locks .Name).Blocker}}<span class="sub">, held by <a class="link" href="{{buildPath .}}">{{.Job}} #{{.Number}}</a></span>{{end}}{{if gt .Tries 1}}<span class="sub">, {{.Tries}} tries</span>{{end}}{{with .Reused}}<span class="sub">, reused from <a class="link" href="/jobs/{{.Job}}/{{.Number}}#log-{{.Stage}}">{{.Job}} #{{.Number}}</a></span>{{end}}</td>
 <td data-label="Exit">{{exitText . $build}}</td>
 <td data-label="Started">{{template "when" (when .StartedAt)}}</td>
 <td class="lead" data-label="Took">{{took .StartedAt .FinishedAt}}</td>

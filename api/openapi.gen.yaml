@@ -3805,7 +3805,15 @@ components:
             - "null"
         group:
           type: string
+        locked_stages:
+          additionalProperties:
+            items:
+              type: string
+            type: array
+          description: By stage of the job file, the locks the stage takes while it runs; a stage that takes none is not listed.
+          type: object
         locks:
+          description: The locks a build holds from its start to the end of its hooks.
           items:
             type: string
           type: array
@@ -3842,6 +3850,11 @@ components:
           oneOf:
             - $ref: "#/components/schemas/JobSource"
             - type: "null"
+        stage_locks:
+          description: The locks a stage of the stages file in a repo may take.
+          items:
+            type: string
+          type: array
         timezone:
           description: The zone the cron is read in, the job's own, else the server's, else `Local`.
           type: string
@@ -3857,6 +3870,8 @@ components:
         - timezone
         - concurrency
         - locks
+        - stage_locks
+        - locked_stages
         - builds
         - activity
         - parent
@@ -5062,10 +5077,31 @@ components:
           type: string
         trigger:
           type: string
+        waiting_stage_locks:
+          additionalProperties:
+            additionalProperties: false
+            properties:
+              blocker:
+                description: The build that holds the lock; null in the moment it is free and not yet taken, or when the build is one of a job the caller may not view.
+                oneOf:
+                  - $ref: "#/components/schemas/BuildRef"
+                  - type: "null"
+              lock:
+                type: string
+            required:
+              - lock
+              - blocker
+            type: object
+          description: By stage, of the stages in `waiting_stages`, those that wait for a lock, and the build that holds it.
+          type: object
         waiting_stages:
           additionalProperties:
             type: string
-          description: By stage, what one that waits for a runner or an engine waits for.
+          description: |
+            By stage, what one that waits for a lock, a runner or an engine waits
+            for. Anyone but an admin is told the lock a stage waits for, and of a
+            stage that waits for a runner or an engine only that it waits for a
+            place to run.
           type: object
       required:
         - id
@@ -5077,6 +5113,7 @@ components:
         - started_at
         - stages
         - waiting_stages
+        - waiting_stage_locks
       type: object
     Scan:
       additionalProperties: false

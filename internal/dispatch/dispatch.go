@@ -176,10 +176,17 @@ type Dispatcher struct {
 	snap    *config.Snapshot
 	running map[int64]*run              // by build id, from reserved to released
 	ending  map[int64]bool              // queued builds being ended, until released
-	locks   map[string]int64            // lock name to the build holding it
+	locks   map[string]lockHolder       // lock name to the build or stage holding it
 	done    map[int64][]chan struct{}   // waiters per build
 	waiting map[int64]map[string]string // by build and stage: what a stage waits for to be placed
 	changes chan struct{}               // closed and replaced at every change; see Changes
+	// lockWaits are the stages that wait to take their locks, by build and
+	// stage, and lockWanted counts them by lock: a queued build takes no
+	// lock a started build's stage waits for. lockFreed is closed and
+	// replaced each time a lock is given back.
+	lockWaits  map[int64]map[string]stageLockWait
+	lockWanted map[string]int
+	lockFreed  chan struct{}
 	// quiet is the time the server went quiet, zero while it is not; it is
 	// memory only: a restart ends quiet.
 	quiet time.Time
@@ -270,7 +277,8 @@ func New(st *store.Store, r runner.Runner, opts Options) *Dispatcher {
 		local: newLimit(opts.Executors),
 		wake:  make(chan struct{}, 1), quit: make(chan struct{}), waiting: map[int64]map[string]string{}, now: opts.Now,
 		snap:    &config.Snapshot{Jobs: map[string]*config.Job{}},
-		running: map[int64]*run{}, ending: map[int64]bool{}, locks: map[string]int64{},
+		running: map[int64]*run{}, ending: map[int64]bool{}, locks: map[string]lockHolder{},
+		lockWaits: map[int64]map[string]stageLockWait{}, lockWanted: map[string]int{}, lockFreed: make(chan struct{}),
 		done: map[int64][]chan struct{}{}, changes: make(chan struct{}),
 	}
 }
@@ -678,7 +686,8 @@ func (d *Dispatcher) start(ctx context.Context, b *store.Build, job *config.Job)
 
 // reserve applies the concurrency rule, the named locks and the built-in
 // runner's limit, in that order, and takes what the build needs when all
-// three allow it. The executor it takes is for the build's prepare.
+// three allow it. A lock a started build's stage waits for is not free to
+// a queued build. The executor it takes is for the build's prepare.
 func (d *Dispatcher) reserve(ctx context.Context, b *store.Build, job *config.Job) (context.Context, *run) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -686,7 +695,7 @@ func (d *Dispatcher) reserve(ctx context.Context, b *store.Build, job *config.Jo
 		return nil, nil
 	}
 	for _, l := range job.Locks {
-		d.locks[l] = b.ID
+		d.locks[l] = lockHolder{build: b.ID}
 	}
 	runCtx, cancel := context.WithCancelCause(ctx)
 	r := &run{build: b, job: job, cancel: cancel, preparing: true}
@@ -703,7 +712,7 @@ func (d *Dispatcher) mayStartLocked(b *store.Build, job *config.Job) bool {
 		}
 	}
 	for _, l := range job.Locks {
-		if _, held := d.locks[l]; held {
+		if _, held := d.locks[l]; held || d.lockWanted[l] > 0 {
 			return false
 		}
 	}
@@ -728,8 +737,11 @@ func (d *Dispatcher) release(id int64) {
 	delete(d.ending, id)
 	if r := d.running[id]; r != nil {
 		for _, l := range r.job.Locks {
-			delete(d.locks, l)
+			if d.locks[l] == (lockHolder{build: id}) {
+				delete(d.locks, l)
+			}
 		}
+		d.lockFreedLocked()
 		r.cancel(nil)
 		delete(d.running, id)
 		if r.preparing {

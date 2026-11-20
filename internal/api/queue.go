@@ -68,10 +68,15 @@ type RunningView struct {
 	Build     *store.Build
 	Stages    []string
 	CanCancel bool
-	// Waiting is what each stage that waits to be placed waits for: the
-	// line its log has for an admin, and only that it waits for anyone else,
-	// to whom the names and the state of the places are not told.
+	// Waiting is what each stage that waits for a lock or to be placed
+	// waits for: the line its log has for an admin, and for anyone else the
+	// lock, or only that it waits to be placed, since the names and the
+	// state of the places are not told to them.
 	Waiting map[string]string
+	// LockWaits is, of the stages in Waiting, those that wait for a lock,
+	// with the build that holds it; Blocker is nil when the user may not
+	// view that build.
+	LockWaits map[string]dispatch.StageLockWait
 	// Remote is where each stage that runs off the server runs: the name of
 	// the runner or the container for an admin, and "" for anyone else.
 	Remote map[string]string
@@ -100,7 +105,8 @@ func (s *Service) Queue(ctx context.Context, u *store.User) (*QueueView, error) 
 	v := &QueueView{Executors: q.Executors, Busy: q.Busy, Runners: s.loads(q), Running: []RunningView{}, Queued: []QueuedView{}}
 	for _, r := range q.Running {
 		if p.view[r.Build.Job] {
-			v.Running = append(v.Running, RunningView{Build: r.Build, Stages: r.Stages, CanCancel: p.cancel[r.Build.Job], Waiting: r.Waiting, Remote: r.Remote})
+			v.Running = append(v.Running, RunningView{Build: r.Build, Stages: r.Stages, CanCancel: p.cancel[r.Build.Job], Waiting: r.Waiting, Remote: r.Remote,
+				LockWaits: visibleLockWaits(r.LockWaits, p.view)})
 		}
 	}
 	for _, w := range q.Queued {
@@ -181,7 +187,7 @@ func hideCapacity(v *QueueView) {
 			}
 			v.Running[i].Remote = hidden
 		}
-		v.Running[i].Waiting = hideWaits(r.Waiting)
+		v.Running[i].Waiting = hideWaits(r.Waiting, r.LockWaits)
 	}
 	for i, w := range v.Queued {
 		if w.Waiting == dispatch.WaitExecutor || w.Waiting == dispatch.WaitNothing {
@@ -191,16 +197,35 @@ func hideCapacity(v *QueueView) {
 }
 
 // hideWaits is what each stage waits for, told to whoever is not an admin:
-// that it waits, and not for which place.
-func hideWaits(w map[string]string) map[string]string {
+// the lock a stage waits for, as a queued build's is told, and of one that
+// waits to be placed that it waits, and not for which place.
+func hideWaits(w map[string]string, locks map[string]dispatch.StageLockWait) map[string]string {
 	if w == nil {
 		return nil
 	}
 	hidden := make(map[string]string, len(w))
-	for stage := range w {
+	for stage, line := range w {
 		hidden[stage] = WaitPlace
+		if _, lock := locks[stage]; lock {
+			hidden[stage] = line
+		}
 	}
 	return hidden
+}
+
+// visibleLockWaits is w with each blocker the user may not view taken out.
+func visibleLockWaits(w map[string]dispatch.StageLockWait, view map[string]bool) map[string]dispatch.StageLockWait {
+	if w == nil {
+		return nil
+	}
+	out := make(map[string]dispatch.StageLockWait, len(w))
+	for stage, lw := range w {
+		if lw.Blocker != nil && !view[lw.Blocker.Job] {
+			lw.Blocker = nil
+		}
+		out[stage] = lw
+	}
+	return out
 }
 
 // queuePerms is what u may do with each job the queue names.
@@ -210,6 +235,11 @@ func (s *Service) queuePerms(ctx context.Context, u *store.User, q *dispatch.Que
 	var names []string
 	for _, r := range q.Running {
 		names = append(names, r.Build.Job)
+		for _, lw := range r.LockWaits {
+			if lw.Blocker != nil {
+				names = append(names, lw.Blocker.Job)
+			}
+		}
 	}
 	for _, w := range q.Queued {
 		names = append(names, w.Build.Job)

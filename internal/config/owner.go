@@ -59,10 +59,10 @@ type Owner struct {
 // Env is added to the job's; Metrics and Fingerprint replace the job's
 // where given.
 type RepoSettings struct {
-	Locks, Secrets []string
-	Env            map[string]string
-	Metrics        *JobMetrics
-	Fingerprint    []string
+	Locks, StageLocks, Secrets []string
+	Env                        map[string]string
+	Metrics                    *JobMetrics
+	Fingerprint                []string
 }
 
 // ownerFile is the YAML shape of owner:.
@@ -87,10 +87,11 @@ type ownerFile struct {
 }
 
 type repoSettingsFile struct {
-	Locks   []string          `yaml:"locks"`
-	Secrets []string          `yaml:"secrets"`
-	Env     map[string]string `yaml:"env"`
-	Metrics *JobMetrics       `yaml:"metrics"`
+	Locks      []string          `yaml:"locks"`
+	StageLocks []string          `yaml:"stage_locks"`
+	Secrets    []string          `yaml:"secrets"`
+	Env        map[string]string `yaml:"env"`
+	Metrics    *JobMetrics       `yaml:"metrics"`
 
 	Fingerprint yaml.Node `yaml:"fingerprint"`
 }
@@ -199,7 +200,7 @@ func (o *Owner) check(f *ownerFile) error {
 		if err != nil {
 			return err
 		}
-		o.Repos[strings.ToLower(name)] = RepoSettings{Locks: r.Locks, Secrets: r.Secrets, Env: r.Env, Metrics: r.Metrics, Fingerprint: fp}
+		o.Repos[strings.ToLower(name)] = RepoSettings{Locks: r.Locks, StageLocks: r.StageLocks, Secrets: r.Secrets, Env: r.Env, Metrics: r.Metrics, Fingerprint: fp}
 	}
 	return nil
 }
@@ -208,6 +209,9 @@ func (o *Owner) check(f *ownerFile) error {
 func (r repoSettingsFile) check(name string) error {
 	if !repoNameRe.MatchString(name) {
 		return fmt.Errorf("owner.repos: %q is not a repo name, like site (the owner is not part of it)", name)
+	}
+	if err := checkLockList("owner.repos."+name+".stage_locks", r.StageLocks); err != nil {
+		return err
 	}
 	for _, s := range r.Secrets {
 		if !ValidEnvName(s) {
@@ -305,6 +309,9 @@ func (j *Job) Node(rec RepoRecord) *Job {
 	if r, ok := o.Repos[strings.ToLower(name)]; ok {
 		if r.Locks != nil {
 			n.Locks = r.Locks
+		}
+		if r.StageLocks != nil {
+			n.StageLocks = r.StageLocks
 		}
 		if r.Secrets != nil {
 			n.Secrets = r.Secrets

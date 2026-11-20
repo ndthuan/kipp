@@ -18,7 +18,8 @@ const (
 	// WaitJob: a build of the same job is ahead of it in the queue, or
 	// runs, and the job does not run its builds in parallel.
 	WaitJob WaitReason = "job"
-	// WaitLock: another build holds one of the job's locks.
+	// WaitLock: another build holds one of the job's locks, or a stage of
+	// a running build waits for it and takes it first.
 	WaitLock WaitReason = "lock"
 	// WaitExecutor: its prepare waits for an executor of the built-in
 	// runner: every one is taken, or a started stage that waits for one is
@@ -42,12 +43,14 @@ type Queue struct {
 }
 
 // RunningBuild is a build that runs, with the stages it runs now, and
-// what each of them that waits to be placed on a runner or an engine
-// waits for.
+// what each of them that waits for a lock, or to be placed on a runner or
+// an engine, waits for.
 type RunningBuild struct {
 	Build   *store.Build
 	Stages  []string
 	Waiting map[string]string
+	// LockWaits is, of the stages in Waiting, those that wait for a lock.
+	LockWaits map[string]StageLockWait
 	// Remote is where each running stage that runs off the server runs: a
 	// runner's name, or an engine's container.
 	Remote map[string]string
@@ -104,6 +107,7 @@ func (d *Dispatcher) Queue(ctx context.Context) (*Queue, error) {
 	defer d.mu.Unlock()
 	for i := range q.Running {
 		q.Running[i].Waiting = d.waitingOfLocked(q.Running[i].Build.ID)
+		q.Running[i].LockWaits = d.lockWaitsOfLocked(q.Running[i].Build.ID)
 	}
 	q.Busy, q.Executors = d.local.load()
 	ahead := map[string]*store.Build{} // the first queued build of each job
@@ -162,11 +166,8 @@ func (d *Dispatcher) whyWaitingLocked(b *store.Build, ahead map[string]*store.Bu
 		}
 	}
 	for _, l := range job.Locks {
-		if id, held := d.locks[l]; held {
-			w.Waiting, w.Lock = WaitLock, l
-			if r := d.running[id]; r != nil {
-				w.Blocker = copyOf(r.build)
-			}
+		if _, held := d.locks[l]; held || d.lockWanted[l] > 0 {
+			w.Waiting, w.Lock, w.Blocker = WaitLock, l, d.lockBlockerLocked(l)
 			return w
 		}
 	}

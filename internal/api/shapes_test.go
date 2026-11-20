@@ -344,11 +344,12 @@ func TestAQueuedBuildAndARunningOneKeepAllTheirFieldsInV1(t *testing.T) {
 	})
 	eqKeys(t, "queue keys", q, "busy,executors,queued,runners,running")
 	run := q["running"].([]any)[0].(map[string]any)
-	eqKeys(t, "running keys", run, "id,job,number,queued_at,started_at,started_by,stages,trigger,waiting_stages")
+	eqKeys(t, "running keys", run, "id,job,number,queued_at,started_at,started_by,stages,trigger,waiting_stage_locks,waiting_stages")
 	if _, old := run["waiting"]; old {
 		t.Fatalf("waiting is waiting_stages: %v", run)
 	}
 	eq(t, "no stage waits", fmt.Sprint(run["waiting_stages"]), "map[]")
+	eq(t, "no stage waits for a lock", fmt.Sprint(run["waiting_stage_locks"]), "map[]")
 	queued := q["queued"].([]any)[0].(map[string]any)
 	eqKeys(t, "queued keys", queued, "blocker,id,job,lock,number,queued_at,started_by,trigger,waiting")
 	eq(t, "no lock", queued["lock"], nil)
@@ -365,7 +366,7 @@ func TestNoListOfV1IsNullAndNoOptionalFieldIsLeftOut(t *testing.T) {
 	e, owner := shapeEnv(t)
 	detail := e.object(t, 200, e.admin, "GET", "/api/v1/jobs/plain", "")
 	eqKeys(t, "detail keys", detail,
-		"activity,builds,concurrency,cron,description,disabled,edit_waits,folder,group,locks,multibranch,name,next,owner,parent,params,removed,scan,source,timezone")
+		"activity,builds,concurrency,cron,description,disabled,edit_waits,folder,group,locked_stages,locks,multibranch,name,next,owner,parent,params,removed,scan,source,stage_locks,timezone")
 	for _, k := range []string{"parent", "multibranch", "scan", "folder", "owner"} {
 		eq(t, k, detail[k], nil)
 	}

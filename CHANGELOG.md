@@ -8,6 +8,24 @@ lines and the data directory are the public surface.
 
 ## Unreleased
 
+Added:
+
+- A stage takes `locks:` too, held only while it runs: a deploy can lock
+  `production` around its `deploy` stage and leave the lock free while its
+  build and tests run. Stage locks and job locks are one set of names and
+  exclude each other. A stage takes all its locks at once before it is
+  given an executor or a place, holds nothing while it waits, gives them
+  back as it ends however it ends, and takes a freed lock before a queued
+  build. A stage whose wait for another build's job lock would never end,
+  since that build waits for one of its own, fails at once. A stages file
+  in a repo (`source`, `.kipp.yml`) may take only the locks its job grants
+  in the new `stage_locks` key, which an owner job's `owner.repos` can set
+  per repo; a build whose file names another fails before any stage runs.
+  The queue and the build's page say which lock a stage waits for and who
+  holds it; `GET /api/v1/queue` gives a running build's
+  `waiting_stage_locks`, and a job's detail its `stage_locks` and
+  `locked_stages`. See docs/jobs.md.
+
 Changed:
 
 - The Storage page is the Housekeeping page, at `/admin/housekeeping`; the

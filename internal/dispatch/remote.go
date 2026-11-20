@@ -215,8 +215,8 @@ func (d *Dispatcher) setWaiting(build int64, stage, line string) {
 	d.changed()
 }
 
-// Waiting is what each stage of the build that waits to be placed waits
-// for, nil when none does.
+// Waiting is what each stage of the build that waits for a lock or to be
+// placed waits for, nil when none does.
 func (d *Dispatcher) Waiting(build int64) map[string]string {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -225,10 +225,14 @@ func (d *Dispatcher) Waiting(build int64) map[string]string {
 
 // waitingOfLocked is a copy of what the build's stages wait for. mu is held.
 func (d *Dispatcher) waitingOfLocked(build int64) map[string]string {
-	if w := d.waiting[build]; w != nil {
-		return maps.Clone(w)
+	out := maps.Clone(d.waiting[build])
+	for stage, w := range d.lockWaits[build] {
+		if out == nil {
+			out = map[string]string{}
+		}
+		out[stage] = LockWaitLine(w.lock)
 	}
-	return nil
+	return out
 }
 
 // endRemote tells the runners and the engines that the build is over.

@@ -261,7 +261,7 @@ func (d *Dispatcher) repoStages(ctx context.Context, b *store.Build, job *config
 	if err := checkFile(job, e, secrets, path); err != nil {
 		return err
 	}
-	if err := errors.Join(job.CheckWhenParams(e.stages), job.CheckCaches(e.stages, e.declared()), job.CheckReuse(e.stages, false)); err != nil {
+	if err := errors.Join(job.CheckWhenParams(e.stages), job.CheckCaches(e.stages, e.declared()), job.CheckReuse(e.stages, false), job.CheckStageLocks(e.stages)); err != nil {
 		return fmt.Errorf("%s: %w", path, err)
 	}
 	d.useSecrets(b, job, e, secrets)
@@ -488,8 +488,10 @@ func (d *Dispatcher) runStages(ctx context.Context, b *store.Build, e *buildEnv)
 	return store.Success
 }
 
-// runStage waits for an executor, runs the command and records how it ended.
-// Once the build is cancelled a stage that has not started never does.
+// runStage takes the stage's locks, waits for an executor, runs the command
+// and records how it ended, and gives the locks back before what needs it
+// starts. Once the build is cancelled a stage that has not started never
+// does.
 func (d *Dispatcher) runStage(ctx context.Context, b *store.Build, e *buildEnv, s *config.Stage) pipeline.Outcome {
 	tree := ""
 	if s.Reuse != nil && ctx.Err() == nil {
@@ -498,6 +500,12 @@ func (d *Dispatcher) runStage(ctx context.Context, b *store.Build, e *buildEnv, 
 			return pipeline.Succeeded
 		}
 	}
+	unlock, why := d.stageLocks(ctx, b, e, s)
+	if why != "" {
+		d.setStage(ctx, b, s.Name, why, nil)
+		return outcome(why)
+	}
+	defer unlock()
 	free, ok := func() {}, ctx.Err() == nil
 	if !d.remote(s) {
 		free, ok = d.executor(ctx)

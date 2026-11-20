@@ -1,6 +1,6 @@
 type: object
 additionalProperties: false
-required: [id, job, number, trigger, started_by, queued_at, started_at, stages, waiting_stages]
+required: [id, job, number, trigger, started_by, queued_at, started_at, stages, waiting_stages, waiting_stage_locks]
 properties:
   id:
     type: integer
@@ -26,4 +26,23 @@ properties:
     type: object
     additionalProperties:
       type: string
-    description: By stage, what one that waits for a runner or an engine waits for.
+    description: |
+      By stage, what one that waits for a lock, a runner or an engine waits
+      for. Anyone but an admin is told the lock a stage waits for, and of a
+      stage that waits for a runner or an engine only that it waits for a
+      place to run.
+  waiting_stage_locks:
+    type: object
+    additionalProperties:
+      type: object
+      additionalProperties: false
+      required: [lock, blocker]
+      properties:
+        lock:
+          type: string
+        blocker:
+          description: The build that holds the lock; null in the moment it is free and not yet taken, or when the build is one of a job the caller may not view.
+          oneOf:
+            - $ref: BuildRef.yaml
+            - type: "null"
+    description: By stage, of the stages in `waiting_stages`, those that wait for a lock, and the build that holds it.
