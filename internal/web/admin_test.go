@@ -153,7 +153,7 @@ func TestTheUserMenuGroupsTheAdminPagesAndMetricsIsInTheBar(t *testing.T) {
 
 	_, page = get(t, e.login(t, "admin"), e.srv.URL+"/jobs")
 	order(page, `<li class="menu-who"><a href="/account">admin</a></li>`, `<ul class="menu-group" aria-label="Admin">`,
-		`>Users</a>`, `>Secrets</a>`, `>GitHub Apps</a>`, `>Runners</a>`, `>Cache</a>`, `>Deleted jobs</a>`, `>Storage</a>`, `>Server</a>`, `<li class="menu-out">`)
+		`>Users</a>`, `>Secrets</a>`, `>GitHub Apps</a>`, `>Runners</a>`, `>Cache</a>`, `>Deleted jobs</a>`, `>Housekeeping</a>`, `>Server</a>`, `<li class="menu-out">`)
 	lacks(t, page, `>Admin<`, `>Account<`)
 
 	// aria-current is on the one page, and the user menu is current on its own pages only.

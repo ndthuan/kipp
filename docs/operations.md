@@ -216,7 +216,7 @@ update-check.json
                the newest release the update check found, and when
 self-check.json
                the result of the last self-check of the database; see
-               Storage
+               Housekeeping
 secret.key     the key the secrets are sealed with (mode 600)
 device.key     the key the device cookies are signed with (mode 600)
 lock           held by the running server; one server per directory
@@ -236,11 +236,15 @@ secret-files/, stage-tmp/
 A server that starts removes what a crashed one left in `workspace/`,
 `secret-files/` and `stage-tmp/`.
 
-## Storage
+## Housekeeping
 
-The Storage page (**Storage** in the admin menu, `/admin/storage`) and
+The Housekeeping page (**Housekeeping** in the admin menu,
+`/admin/housekeeping`; `/admin/storage` leads to it) and
 `GET /api/v1/admin/storage` say what the data directory holds and what to
-change. An admin's alone.
+change. An admin's alone. The page opens at once and each of its sections
+loads by itself, so that the slow ones, which walk the data directory or read
+every job, hold none of the others back; the Recommendations need all of it
+and come last. The API keeps its path and answers the whole report.
 
 - **Disk**: the free and total room of the data directory's disk, and its
   floor (below).
@@ -278,7 +282,7 @@ Each says what it would save; kipp never edits a job file.
 
 Deleting rows leaves free pages in `db.sqlite`; SQLite reuses them but
 does not give them back to the disk. A compact (`VACUUM`) rewrites the
-file without them. Start one with **Compact database** on the Storage
+file without them. Start one with **Compact database** on the Housekeeping
 page, `kipp db compact` or `POST /api/v1/admin/storage/compact`. It:
 
 1. turns quiet on, unless it is on already, and waits for the running and
@@ -301,7 +305,7 @@ nothing and is a row of the audit too.
 
 Every day after the 03:30 retention sweep kipp runs `PRAGMA quick_check`
 on a read-only connection; it does not hold quiet. The result is kept in
-`self-check.json`, shown on the Storage page and as `self_check` in
+`self-check.json`, shown on the Housekeeping page and as `self_check` in
 `GET /api/v1/admin/server`. A failure is logged at ERROR and puts a
 banner on every page an admin opens, until a check passes.
 
@@ -310,7 +314,7 @@ banner on every page an admin opens, until a check passes.
 kipp never restores a backup by itself: that would lose every build newer
 than the backup without a word. When a self-check fails:
 
-1. Read the problems on the Storage page. Take a copy of the data
+1. Read the problems on the Housekeeping page. Take a copy of the data
    directory as it is before anything else.
 2. Stop the server (`kipp quiet on --wait`, then stop the service).
 3. Try SQLite's recovery into a new file, and check it:
@@ -339,7 +343,7 @@ order, and stops as soon as the floor is met:
 2. `workspace/<job>` of jobs whose file is gone and that run no build;
 3. cache entries not restored for 7 days.
 
-Each step is logged and shown on the Storage page. kipp removes nothing
+Each step is logged and shown on the Housekeeping page. kipp removes nothing
 else: when the floor is still not met, free room by hand.
 
 ### Metrics per case

@@ -1160,7 +1160,7 @@ func (s *server) startWork(work context.Context, hup <-chan os.Signal, wg *sync.
 	zone := s.d.Zone(nil)
 	wg.Go(func() { every(work, func() time.Time { return time.Now().In(zone) }, sleep, sweepAt, s.sweep) })
 	wg.Go(func() { every(work, time.Now, sleep, floorAt, s.floor) })
-	// The tables are measured once at the start, so the Storage page has
+	// The tables are measured once at the start, so the Housekeeping page has
 	// them by the time anyone reads it.
 	wg.Go(func() { _ = s.storage.Measure(work) })
 	wg.Go(func() { s.reloadOn(work, hup) })

@@ -25,16 +25,60 @@ func storageErr(err error) error {
 	return err
 }
 
-// Storage is what the data directory holds and what to change, for an
-// admin; a token may read it.
-func (s *Service) Storage(ctx context.Context, u *store.User) (*storage.Report, error) {
+// CheckStorage says whether u may see the storage page and whether this
+// server keeps one, without reading anything.
+func (s *Service) CheckStorage(u *store.User) error {
+	_, err := s.storageOf(u)
+	return err
+}
+
+// storageOf is the storage of an admin's request.
+func (s *Service) storageOf(u *store.User) (*storage.Service, error) {
 	if !u.Admin {
 		return nil, ErrForbidden
 	}
 	if s.deps.Storage == nil {
 		return nil, errNoStorage
 	}
-	return s.deps.Storage.Report(ctx)
+	return s.deps.Storage, nil
+}
+
+// Storage is what the data directory holds and what to change, for an
+// admin; a token may read it.
+func (s *Service) Storage(ctx context.Context, u *store.User) (*storage.Report, error) {
+	st, err := s.storageOf(u)
+	if err != nil {
+		return nil, err
+	}
+	return st.Report(ctx)
+}
+
+// StorageOverview is Storage without the walk of the data directory and the
+// jobs: the disk, the database, the compact, the self-check and the heal.
+func (s *Service) StorageOverview(ctx context.Context, u *store.User) (*storage.Report, error) {
+	st, err := s.storageOf(u)
+	if err != nil {
+		return nil, err
+	}
+	return st.Overview(ctx)
+}
+
+// StorageParts walks the data directory, for an admin.
+func (s *Service) StorageParts(u *store.User) ([]storage.Part, error) {
+	st, err := s.storageOf(u)
+	if err != nil {
+		return nil, err
+	}
+	return st.Parts()
+}
+
+// StorageJobs is what each job holds, for an admin.
+func (s *Service) StorageJobs(ctx context.Context, u *store.User) ([]storage.Job, error) {
+	st, err := s.storageOf(u)
+	if err != nil {
+		return nil, err
+	}
+	return st.Jobs(ctx)
 }
 
 // CompactState is the compact that runs or ran last, for an admin.

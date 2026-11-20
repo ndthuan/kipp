@@ -109,8 +109,27 @@ type Job struct {
 func (j Job) Bytes() int64 { return j.DBBytes + j.Logs + j.Artifacts }
 
 // Report reads the data directory and the database now. The measure of
-// the tables is the last one taken; a stale one is taken again apart.
+// the tables is the last one taken; a stale one is taken again apart. It is
+// Overview with the data directory's parts and the jobs and what to change.
 func (s *Service) Report(ctx context.Context) (*Report, error) {
+	r, err := s.Overview(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if r.Parts, err = s.Parts(); err != nil {
+		return nil, err
+	}
+	if r.Jobs, err = s.Jobs(ctx); err != nil {
+		return nil, err
+	}
+	r.Recommendations = Recommend(r)
+	return r, nil
+}
+
+// Overview is the report without what takes a walk of the data directory or
+// a read of every job: the disk, the database's facts and measure, the
+// compact, the self-check and the heal.
+func (s *Service) Overview(ctx context.Context) (*Report, error) {
 	r := &Report{At: s.o.Now()}
 	free, total, ok := s.space(s.o.Data)
 	r.Disk = Disk{Known: ok, Free: free, Total: total, Floor: floor(total)}
@@ -123,23 +142,34 @@ func (s *Service) Report(ctx context.Context) (*Report, error) {
 		FreeBytes: f.FreeBytes(), UsedBytes: f.UsedBytes(), AutoVacuum: f.AutoVacuum.String()}
 	s.MeasureSoon()
 	s.mu.Lock()
-	r.Database.Objects = s.objects.Objects
-	r.Database.Exact = s.objects.Exact
-	r.Database.MeasuredAt = s.measuredAt
-	r.Database.Measuring = s.measuring
-	r.Database.MeasureError = s.measureErr
+	s.measuredInto(&r.Database)
 	r.Compact = s.compact
 	r.Check = s.check
 	r.Heal = s.heal
 	s.mu.Unlock()
-	if r.Parts, err = parts(s.o.Data); err != nil {
-		return nil, err
-	}
-	if r.Jobs, err = s.jobs(ctx, &r.Database); err != nil {
-		return nil, err
-	}
-	r.Recommendations = Recommend(r)
 	return r, nil
+}
+
+// measuredInto copies the last measure of the tables into db; s.mu is held.
+func (s *Service) measuredInto(db *Database) {
+	db.Objects = s.objects.Objects
+	db.Exact = s.objects.Exact
+	db.MeasuredAt = s.measuredAt
+	db.Measuring = s.measuring
+	db.MeasureError = s.measureErr
+}
+
+// Parts walks the data directory.
+func (s *Service) Parts() ([]Part, error) { return parts(s.o.Data) }
+
+// Jobs reads what each job holds: the data directory's folders of logs and
+// artifacts, and the rows by the last measure of the tables.
+func (s *Service) Jobs(ctx context.Context) ([]Job, error) {
+	var db Database
+	s.mu.Lock()
+	s.measuredInto(&db)
+	s.mu.Unlock()
+	return s.jobs(ctx, &db)
 }
 
 func fileSize(path string) int64 {

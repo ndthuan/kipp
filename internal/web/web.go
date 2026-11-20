@@ -366,6 +366,20 @@ func (s *Site) render(w http.ResponseWriter, r *http.Request, name string, code 
 	_, _ = buf.WriteTo(w)
 }
 
+// fragment writes one named template of a page's file, without the layout,
+// for a part of a page that loads by itself. Like render it writes nothing
+// of a template that fails.
+func (s *Site) fragment(w http.ResponseWriter, page, name string, data any) {
+	var buf bytes.Buffer
+	if err := s.pages[page].ExecuteTemplate(&buf, name, data); err != nil {
+		slog.Error("web: render", "fragment", name, "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = buf.WriteTo(w)
+}
+
 // notices fills what every page says above its content: a refused reload,
 // quiet, and to an admin a failed self-check of the database.
 func (s *Site) notices(p *page) {

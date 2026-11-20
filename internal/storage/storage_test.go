@@ -171,6 +171,30 @@ func TestTheReportOfASeededDatabaseNamesTablesJobsGoneJobsFreePagesAndStrayFiles
 	checkRecommendations(t, r.Recommendations)
 }
 
+func TestTheOverviewAndTheJobsNeedNoWalkOfTheDataDirectoryAndTheReportIsMadeOfThem(t *testing.T) {
+	h := newHarness(t, "big")
+	h.seed(t, "big", 3, 2)
+	h.seed(t, "removed", 2, 1)
+	must(t, os.WriteFile(filepath.Join(h.data, "db.sqlite.before-reset"), []byte("copy"), 0o600))
+	full, err := h.svc.Report(ctx)
+	must(t, err)
+
+	h.svc.o.Data = filepath.Join(h.data, "db.sqlite.before-reset")
+	o, err := h.svc.Overview(ctx)
+	must(t, err)
+	if o.Parts != nil || o.Jobs != nil || o.Recommendations != nil || o.Database.File != full.Database.File || !o.Disk.Known {
+		t.Fatalf("overview %+v", o)
+	}
+	if _, err := h.svc.Parts(); err == nil {
+		t.Fatal("a walk of a file is not a walk of a directory")
+	}
+	jobs, err := h.svc.Jobs(ctx)
+	must(t, err)
+	if len(jobs) != len(full.Jobs) || jobs[0].Name != full.Jobs[0].Name || jobs[0].DBBytes != full.Jobs[0].DBBytes {
+		t.Fatalf("jobs %+v, report %+v", jobs, full.Jobs)
+	}
+}
+
 func checkJobs(t *testing.T, jobs []Job) {
 	t.Helper()
 	byName := map[string]Job{}

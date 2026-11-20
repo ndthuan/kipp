@@ -276,7 +276,7 @@ These reads work whatever `--job-edits` is.
 ## Storage
 
 An admin's token, or an admin's browser session. What each part means is
-in [Storage](operations.md#storage).
+in [Housekeeping](operations.md#housekeeping).
 
 - `GET /api/v1/admin/storage`: `at`; `disk` (`free_bytes`,
   `total_bytes`, `floor_bytes`, null when they cannot be read); `parts`

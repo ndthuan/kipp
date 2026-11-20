@@ -1,0 +1,14 @@
+{{define "content"}}
+{{with .Data}}
+<h1>Housekeeping</h1>
+{{with .Notice}}<p class="notice" role="status">{{.}}</p>{{end}}
+{{with $.Error}}<p class="notice notice-error" role="alert">{{.}}</p>{{end}}
+<p class="lead">What the data directory holds, what to change, and the compact of the database. kipp shows a file it did not make and never removes it, and never edits a job file: a recommendation says what to change.</p>
+{{range .Sections}}{{if .Heading}}<section id="{{.Name}}" class="stack" aria-busy="true" hx-get="/admin/housekeeping/sections/{{.Name}}" hx-trigger="load" hx-swap="outerHTML">
+<h2>{{.Heading}}</h2>
+<p class="sub">Loading...</p>
+</section>
+{{else}}<p id="{{.Name}}" class="sub" aria-busy="true" hx-get="/admin/housekeeping/sections/{{.Name}}" hx-trigger="load" hx-swap="outerHTML">Loading...</p>
+{{end}}{{end}}
+{{end}}
+{{end}}
