@@ -86,9 +86,13 @@ minutes) is handled all the same and logged with its age. The log says
 `delivery kept while quiet` and `delivery replayed after quiet` for each. A
 delivery with a bad signature is refused as always. A build that was
 already queued is accepted work and still runs, and a running one ends by
-itself. A cron fire that was refused runs once, for its job, when quiet
-ends. An `after` trigger has nobody to repeat it either: when a build ends
-while quiet, each job that runs after it is kept in the database, and is
+itself. A cron fire that was refused is kept in the database and runs once,
+for its job, however many fires were refused: when quiet ends or, past a
+restart, at the next start, before the kept webhooks. The job's catch-up is
+one build of trigger `cron`, run at that moment and not at the time it was
+due. The log says `a cron fire kept through quiet was not queued` when the
+job could not be queued. An `after` trigger has nobody to repeat it
+either: when a build ends while quiet, each job that runs after it is kept in the database, and is
 triggered after that build, with it named in the trigger, when quiet ends
 or, past a restart, at the next start, after the builds the restart stopped
 are queued again and before the kept webhooks. The job's activity says

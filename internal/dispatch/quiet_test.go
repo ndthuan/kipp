@@ -184,3 +184,27 @@ func TestAKeptAfterTriggerStaysKeptWhileTheServerIsQuietAgain(t *testing.T) {
 		t.Fatalf("down was queued while quiet: %+v", downs)
 	}
 }
+
+func TestACronFireRefusedDuringQuietRunsOnceAfterARestart(t *testing.T) {
+	h := newHarness(t, map[string]string{"c": "name: c\ntriggers: {cron: '* * * * *'}\nstages:\n  s: {run: 'true'}\n"})
+	ctx := context.Background()
+	if _, err := h.d.SetQuiet(ctx, true); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	for i := range 3 {
+		h.d.Tick(ctx, now.Add(time.Duration(i)*time.Minute))
+	}
+	again, _ := h.restart(t)
+	eventually(t, "the kept fire ran", func() bool {
+		builds, _ := h.st.BuildsWithStatus(ctx, store.Success)
+		return len(builds) == 1 && builds[0].Trigger == "cron"
+	})
+	again.d.schedule(ctx)
+	if builds, _ := h.st.BuildsWithStatus(ctx, store.Queued, store.Running, store.Success); len(builds) != 1 {
+		t.Fatalf("%d builds, want the one", len(builds))
+	}
+	if kept, _ := h.st.PendingCrons(ctx); len(kept) != 0 {
+		t.Fatalf("kept after running: %v", kept)
+	}
+}

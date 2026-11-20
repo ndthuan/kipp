@@ -23,6 +23,10 @@ Fixed:
   ends then, is no longer lost: it is kept in the database and runs when
   quiet ends, or at the next start when the server is restarted meanwhile.
   The database gains a table `pending_afters` (a new schema).
+- A cron fire refused while the server is quiet is kept in the database too,
+  so a restart that follows the quiet no longer loses it: the job runs once
+  at the next start, however many fires were refused. The database gains a
+  table `pending_crons` (a new schema).
 
 ## [1.4.0] - 2026-11-16
 

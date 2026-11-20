@@ -60,21 +60,47 @@ func (d *Dispatcher) Quiet() bool {
 	return !d.quiet.IsZero()
 }
 
-// refusedQuiet is true while the server is quiet, and notes the job of a
-// cron fire it refuses.
-func (d *Dispatcher) refusedQuiet(req TriggerRequest) bool {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	if d.quiet.IsZero() {
-		return false
+// refusedQuiet is true while the server is quiet.
+func (d *Dispatcher) refusedQuiet() bool {
+	return d.Quiet()
+}
+
+// keepCron keeps the job of a cron fire refused while quiet, to run once
+// when quiet ends or at the next start.
+func (d *Dispatcher) keepCron(ctx context.Context, job string) {
+	if err := d.st.KeepCron(ctx, job); err != nil {
+		d.log.Error("a cron fire refused while quiet was not kept; it is lost", "job", job, "err", err)
+		return
 	}
-	if req.Kind == "cron" {
-		if d.skipped == nil {
-			d.skipped = map[string]bool{}
+	if !d.Quiet() {
+		d.TriggerKeptCrons(ctx)
+	}
+}
+
+// TriggerKeptCrons triggers once each job whose cron fired while the server
+// was quiet, and forgets each once triggered or refused for good. The server
+// calls it when quiet ends and at start, after TriggerKeptAfters. It stops
+// at the first one the server is quiet again for, and leaves it and the
+// ones after it kept.
+func (d *Dispatcher) TriggerKeptCrons(ctx context.Context) {
+	d.keptCronsMu.Lock()
+	defer d.keptCronsMu.Unlock()
+	jobs, err := d.st.PendingCrons(ctx)
+	if err != nil {
+		d.log.Error("reading the cron fires kept while quiet", "err", err)
+		return
+	}
+	for _, name := range jobs {
+		if _, err := d.Trigger(ctx, TriggerRequest{Job: name, Kind: "cron", By: "kipp"}); errors.Is(err, ErrQuiet) {
+			d.log.Info("quiet again, kept cron fires left for when it ends")
+			return
+		} else if err != nil {
+			d.log.Info("a cron fire kept through quiet was not queued", "job", name, "err", err)
 		}
-		d.skipped[req.Job] = true
+		if err := d.st.DropCron(ctx, name); err != nil {
+			d.log.Error("forgetting a kept cron fire", "job", name, "err", err)
+		}
 	}
-	return true
 }
 
 // OnQuietEnd sets what is called, once and after the cron fires and the
@@ -92,7 +118,6 @@ func (d *Dispatcher) OnQuietEnd(f func()) {
 func (d *Dispatcher) SetQuiet(ctx context.Context, on bool) (QuietState, error) {
 	d.mu.Lock()
 	was := !d.quiet.IsZero()
-	var again []string
 	var ended func()
 	switch {
 	case on && !was:
@@ -100,22 +125,14 @@ func (d *Dispatcher) SetQuiet(ctx context.Context, on bool) (QuietState, error) 
 		d.log.Info("quiet: no build starts until quiet is turned off or the server restarts")
 	case !on && was:
 		d.quiet = time.Time{}
-		for name := range d.skipped {
-			again = append(again, name)
-		}
-		d.skipped = nil
 		d.chosen = nil
 		ended = d.quietEnded
-		d.log.Info("quiet ends", "cron fires to run", len(again))
+		d.log.Info("quiet ends")
 	}
 	d.mu.Unlock()
 	d.changed()
-	for _, name := range again {
-		if _, err := d.Trigger(ctx, TriggerRequest{Job: name, Kind: "cron", By: "kipp"}); err != nil {
-			d.log.Info("a cron fire kept through quiet was not queued", "job", name, "err", err)
-		}
-	}
 	if !on && was {
+		d.TriggerKeptCrons(ctx)
 		d.TriggerKeptAfters(ctx)
 	}
 	if ended != nil {

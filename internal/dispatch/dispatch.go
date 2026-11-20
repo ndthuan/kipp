@@ -167,6 +167,8 @@ type Dispatcher struct {
 	// keptAftersMu is held while the kept after triggers are run, so that
 	// one is never triggered twice.
 	keptAftersMu sync.Mutex
+	// keptCronsMu is the same for the kept cron fires.
+	keptCronsMu sync.Mutex
 
 	// mu guards the fields below and each run's fields. It is never held
 	// across a store call or a command.
@@ -178,11 +180,9 @@ type Dispatcher struct {
 	done    map[int64][]chan struct{}   // waiters per build
 	waiting map[int64]map[string]string // by build and stage: what a stage waits for to be placed
 	changes chan struct{}               // closed and replaced at every change; see Changes
-	// quiet is the time the server went quiet, zero while it is not; and
-	// skipped the jobs whose cron fired meanwhile, which run once when it
-	// ends. Both are memory only: a restart ends quiet.
-	quiet   time.Time
-	skipped map[string]bool
+	// quiet is the time the server went quiet, zero while it is not; it is
+	// memory only: a restart ends quiet.
+	quiet time.Time
 	// quietEnded is told, once, each time quiet is turned off.
 	quietEnded func()
 	// chosen are the running builds an admin chose to run again after the
@@ -365,7 +365,10 @@ func (d *Dispatcher) kick() {
 // A disabled job is ErrDisabled whoever asks: a caller that should ignore
 // its trigger without a word does not ask.
 func (d *Dispatcher) Trigger(ctx context.Context, req TriggerRequest) (*store.Build, error) {
-	if d.refusedQuiet(req) {
+	if d.refusedQuiet() {
+		if req.Kind == "cron" {
+			d.keepCron(ctx, req.Job)
+		}
 		return nil, ErrQuiet
 	}
 	snap := d.Snapshot()

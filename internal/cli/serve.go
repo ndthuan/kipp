@@ -739,6 +739,7 @@ func (s *server) listen(ctx context.Context) (net.Listener, error) {
 	// ahead of them.
 	s.d.Rerun(ctx)
 	s.d.TriggerKeptAfters(ctx)
+	s.d.TriggerKeptCrons(ctx)
 	return ln, nil
 }
 

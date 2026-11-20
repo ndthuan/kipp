@@ -200,6 +200,8 @@ CREATE TABLE builtin_runner (id INTEGER PRIMARY KEY CHECK (id = 1), executors IN
 CREATE TABLE pending_afters (
   build_id INTEGER NOT NULL REFERENCES builds(id) ON DELETE CASCADE, job TEXT NOT NULL,
   PRIMARY KEY (build_id, job));
+`, `
+CREATE TABLE pending_crons (job TEXT PRIMARY KEY);
 `}
 
 // Upgrade is what Open did to the schema of the database it opened.
