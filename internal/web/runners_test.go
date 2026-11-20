@@ -346,3 +346,16 @@ func TestTheRunnersPageChangesEachRunnersLimitOnItsRow(t *testing.T) {
 	eq(t, "a label that is not one", res.StatusCode, http.StatusBadRequest)
 	contains(t, page, `label &#34;Linux&#34;`, `role="alert"`)
 }
+
+func TestAStageThatWaitsForALockSaysWhichAndWhoHoldsIt(t *testing.T) {
+	e := site(t)
+	v := waitingBuild()
+	v.Waiting = map[string]string{"run": dispatch.LockWaitLine("production")}
+	v.LockWaits = map[string]dispatch.StageLockWait{"run": {Lock: "production", Blocker: &store.Build{ID: 7, Job: "deploy", Number: 4, Status: store.Running}}}
+	contains(t, renderBuild(t, e, v),
+		`<span class="status waiting">waiting</span><span class="sub">, waiting for lock production</span><span class="sub">, held by <a class="link" href="/jobs/deploy/4">deploy #4</a></span>`)
+	v.LockWaits["run"] = dispatch.StageLockWait{Lock: "production"}
+	body := renderBuild(t, e, v)
+	contains(t, body, `<span class="sub">, waiting for lock production</span>`)
+	lacks(t, body, "held by")
+}

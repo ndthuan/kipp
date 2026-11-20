@@ -8,7 +8,8 @@ terms: [`source`](jobs.md#stages-from-a-repo-source) plus discovery.
 The job file stays in the jobs directory and holds what a repo may not
 grant itself: secrets, locks, concurrency, timeout, keep, cron, `after`
 and the hooks. The repo's file holds stages and an `env:` and nothing
-else.
+else; a stage there takes only the locks the job file grants it in
+`stage_locks`.
 
 - [The job file](#the-job-file)
 - [What is built](#what-is-built)
@@ -39,6 +40,7 @@ multibranch:
   token: GITHUB_TOKEN_ACME         # a kipp secret's name; optional
 secrets: [DEPLOY_KEY]
 locks: [site-ports]
+stage_locks: [production]          # the locks a stage of .kipp.yml may take
 triggers:
   cron: "H 3 * * *"                # builds the default branch's child
 keep: {builds: 50}
@@ -235,6 +237,13 @@ listed on the parent's page as not built.
   branch and pull request. `locks` are
   shared by name as always, so builds that must take turns across
   branches name a lock.
+- A stage of `.kipp.yml` may lock only what the parent names in
+  `stage_locks` (`deploy: {run: ./deploy.sh, locks: [production]}`), and
+  holds it only while it runs ([locks](jobs.md#concurrency-locks-timeout-and-retention)).
+  A build whose file names a lock outside it fails before any stage runs,
+  naming the stage and the lock: a pull request cannot hold back the
+  default branch's deploy by taking its lock. Every child has the
+  parent's `stage_locks`.
 - `cron` and `after` belong to the parent and build the default branch's
   child, and so does a build of the parent asked for by hand (its Build
   button, `POST /api/v1/jobs/<parent>/builds`, `kipp run <parent>`).

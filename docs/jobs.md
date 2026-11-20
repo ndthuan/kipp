@@ -86,6 +86,7 @@ stages:
     needs: [smoke]
     artifacts_from: [unit]    # unit's files, under $KIPP_WORKSPACE/.kipp/artifacts/unit/
     when: {default_branch: true, params: {DRY_RUN: [false]}}
+    locks: [production]       # held while this stage runs, not the whole build
     run: ./deploy.sh
   cleanup: {needs: [deploy], when: {needs_status: always}, run: ./cleanup.sh}
 on_failure: {run: ./notify.sh}
@@ -111,6 +112,7 @@ The top-level keys:
 | `triggers` | `cron`, `webhook` and `after` ([Triggers](#triggers)). |
 | `concurrency` | `queue` (default), `drop`, `parallel` or `supersede`. |
 | `locks` | Names of locks a build holds while it runs. |
+| `stage_locks` | With `source`, `multibranch` or `owner`: the locks a stage of the stages file in the repo may take ([locks](#concurrency-locks-timeout-and-retention)). |
 | `timeout` | How long a build may run, a duration like `30m` or `2h`. None is no limit. |
 | `keep` | `{builds, days}`: how many builds, and for how long, are kept. |
 | `env` | Plain variables for every stage ([Variables](#variables)). |
@@ -302,6 +304,32 @@ form for its params), with `kipp run <job>`, or with
 - `locks` are names shared across jobs: no two builds holding the same
   lock run at once, whatever their jobs. A build waits for its locks
   before it starts, and holds them until its hooks have ended.
+- A stage's `locks` are the same names, held only while that stage runs:
+  a deploy that locks `production` in its `deploy` stage leaves the lock
+  free while its build and tests run. Job locks and stage locks exclude
+  each other: a stage waits while another build holds the name as a job
+  lock or another stage holds it, and a queued build waits while a stage
+  holds it. A stage takes all its locks at once, just before it runs and
+  before it is given an executor or a place on a runner or an engine;
+  while it waits it holds none of them, nor an executor, and reads
+  `waiting` on the build's page, naming the lock and the build that holds
+  it. It gives them back as it ends, however it ends (cancelled and timed
+  out too), before the stages that need it start. A stage that names a
+  lock its build holds as a job lock has it already; two stages of one
+  build that name one lock take turns. A started build's stage that waits
+  for a lock takes it before a queued build that wants it. Cancelling the
+  build ends the wait at once.
+- Two builds could each hold a job lock the other's stage waits for, and
+  neither would end: the stage whose wait would close that circle fails
+  at once, saying which build holds its lock, and the other build goes
+  on once the failed one has ended.
+- A stage in a stages file of a repo (a `source` job's file, a multibranch
+  job's `.kipp.yml`) may take only the locks its job names in
+  `stage_locks`; a build whose file names another fails before any stage
+  runs, naming the stage and the lock. Without it, whoever pushes a branch
+  could hold back what the job's owner deploys under that lock. A stage of
+  the job file itself takes any lock. A job lock is no grant: a name in
+  `locks` and not in `stage_locks` is refused in the file.
 - `timeout` ends a build that runs longer as `timeout`. Without it a
   build may run for ever.
 - `keep: {builds, days}` removes a job's oldest ended builds, with their
@@ -343,6 +371,7 @@ name is lower-case letters, digits, `.`, `-` and `_`, and may not be
 | `runs_on` | Labels of the runner or engine the stage runs on ([Runners and engines](runners.md)). |
 | `image` | With `runs_on`, the image of the container the stage runs in. |
 | `reuse` | Ends the stage `success` without running it when a green run of the same tree exists ([Reusing a green run](#reusing-a-green-run-reuse-and-fingerprint)). |
+| `locks` | Locks held while the stage runs, taken all at once before it starts ([locks](#concurrency-locks-timeout-and-retention)). In a stages file of a repo, only those the job's `stage_locks` names. |
 
 - Stages form a DAG through `needs`. Those that are ready run at once, up
   to the server's `--executors` (and a runner's executors). A stage is
@@ -574,7 +603,8 @@ clone's output is the build's `clone` log.
   (`workdir: services/api`); one that leads out of it is refused.
 - The stages in the file are checked against the job's params when the
   build reads them, and a build whose file names a param the job lacks
-  fails before any stage runs.
+  fails before any stage runs; so does one whose stage takes a lock the
+  job's `stage_locks` does not name.
 - git is never asked for a password: a private repo needs an ssh URL, or
   a credential helper in the server's environment. The clone has the
   server's whole environment, whatever `--pass-env` says. A user and

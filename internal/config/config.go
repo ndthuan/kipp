@@ -56,11 +56,15 @@ type Job struct {
 	// server's. Zone says which one applies.
 	TimeZone    *time.Location
 	Concurrency Concurrency
-	Locks       []string
-	Timeout     time.Duration
-	Keep        Keep
-	Env         map[string]string
-	Secrets     []string
+	// Locks are held from the build's start to the end of its hooks.
+	Locks []string
+	// StageLocks are the locks a stage of a stages file in a repo may
+	// take; a stage of the job file takes any.
+	StageLocks []string
+	Timeout    time.Duration
+	Keep       Keep
+	Env        map[string]string
+	Secrets    []string
 	// Workdir is where the stages run: with Source a path inside the
 	// clone, otherwise a directory of the machine. Empty is the build's
 	// workspace.
@@ -222,6 +226,9 @@ type Stage struct {
 	// Reuse lets the stage end success without running when a green run of
 	// the same tree, toolset and runner class exists; nil always runs.
 	Reuse *Reuse `yaml:"reuse"`
+	// Locks are taken all at once just before the stage runs and given
+	// back when it ends. They are the same locks as a job's.
+	Locks []string `yaml:"locks"`
 }
 
 // Remote reports whether the stage runs somewhere other than the server.
@@ -295,6 +302,7 @@ type file struct {
 	TimeZone    string            `yaml:"timezone"`
 	Concurrency string            `yaml:"concurrency"`
 	Locks       []string          `yaml:"locks"`
+	StageLocks  []string          `yaml:"stage_locks"`
 	Timeout     string            `yaml:"timeout"`
 	Keep        *Keep             `yaml:"keep"`
 	Env         map[string]string `yaml:"env"`
@@ -389,7 +397,7 @@ func ParseJob(filename string, data []byte) (*Job, error) {
 	}
 	j := &Job{
 		Name: f.Name, Group: f.Group, Description: f.Description, Disabled: f.Disabled, Triggers: f.Triggers,
-		Concurrency: Concurrency(f.Concurrency), Locks: f.Locks, Env: f.Env, Secrets: f.Secrets,
+		Concurrency: Concurrency(f.Concurrency), Locks: f.Locks, StageLocks: f.StageLocks, Env: f.Env, Secrets: f.Secrets,
 		Workdir: f.Workdir, Source: f.Source, OnFailure: f.OnFailure, OnSuccess: f.OnSuccess,
 		Metrics: f.Metrics, Keep: Keep{Builds: DefaultKeepBuilds}, CacheWritesDefault: f.CacheWritesDefault,
 		Permissions: f.Permissions, MaxPermissions: f.MaxPermissions, RerunOnRestart: f.RerunOnRestart,
@@ -415,6 +423,7 @@ func ParseJob(filename string, data []byte) (*Job, error) {
 		j.checkHooks,
 		j.checkMetrics,
 		j.checkPermissions,
+		j.checkLocks,
 	}
 	for _, step := range steps {
 		if err := step(); err != nil {
@@ -771,6 +780,9 @@ func (s *Stage) check() error {
 		return err
 	}
 	if err := s.checkReuse(); err != nil {
+		return err
+	}
+	if err := checkLockList("stage "+s.Name+": locks", s.Locks); err != nil {
 		return err
 	}
 	return s.Metrics.check(s.Name)

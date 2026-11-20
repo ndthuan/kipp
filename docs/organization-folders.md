@@ -35,6 +35,7 @@ owner:
     api:                           # the repo's name, without the owner
       secrets: [API_DEPLOY_KEY]
       locks: [api-deploy]
+      stage_locks: [production]    # the locks a stage of its .kipp.yml may take
       env: {REGION: eu}
       fingerprint: [go version]    # replaces the job's for this repo
 secrets: [DEPLOY_KEY]
@@ -49,9 +50,10 @@ triggers:
 repo: with no `tags`, every repo builds every tag pushed to it
 ([Tags](multibranch.md#tags)).
 
-The job's `secrets`, `locks`, `env`, `timeout`, `keep` and `cron` are the
-defaults of every repo. A repo listed under `owner.repos` replaces the
-job's `secrets` or `locks` where it gives them (an empty list too), adds
+The job's `secrets`, `locks`, `stage_locks`, `env`, `timeout`, `keep` and
+`cron` are the defaults of every repo. A repo listed under `owner.repos`
+replaces the job's `secrets`, `locks` or `stage_locks` where it gives them
+(an empty list too), adds
 its `env` to the job's, names its own `metrics` (`store` and
 `remember`) where the job's would not suit it, and replaces the job's
 `fingerprint` with its own `fingerprint` (a list of one or more commands,

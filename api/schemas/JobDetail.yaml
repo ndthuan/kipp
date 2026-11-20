@@ -3,7 +3,7 @@ additionalProperties: false
 description: |
   One job with its latest builds and activity. A removed job holds its name,
   its builds and its activity; what the job file said went with the file.
-required: [name, removed, disabled, group, description, params, cron, next, timezone, concurrency, locks, builds, activity, parent, multibranch, scan, folder, owner, source, edit_waits]
+required: [name, removed, disabled, group, description, params, cron, next, timezone, concurrency, locks, stage_locks, locked_stages, builds, activity, parent, multibranch, scan, folder, owner, source, edit_waits]
 properties:
   name:
     type: string
@@ -34,6 +34,19 @@ properties:
     type: array
     items:
       type: string
+    description: The locks a build holds from its start to the end of its hooks.
+  stage_locks:
+    type: array
+    items:
+      type: string
+    description: The locks a stage of the stages file in a repo may take.
+  locked_stages:
+    type: object
+    additionalProperties:
+      type: array
+      items:
+        type: string
+    description: By stage of the job file, the locks the stage takes while it runs; a stage that takes none is not listed.
   builds:
     $ref: BuildList.yaml
   activity:

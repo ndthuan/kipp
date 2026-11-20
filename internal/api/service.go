@@ -281,9 +281,11 @@ type BuildView struct {
 	// whose file is gone: where the build's page says the build belongs.
 	Group   string
 	Removed bool
-	// Waiting is what each stage that waits to be placed waits for, as the
-	// queue tells it to the same user.
-	Waiting map[string]string
+	// Waiting is what each stage that waits for a lock or to be placed
+	// waits for, and LockWaits the stages of it that wait for a lock, as
+	// the queue tells them to the same user.
+	Waiting   map[string]string
+	LockWaits map[string]dispatch.StageLockWait
 }
 
 // buildable is nil if u may build the job: otherwise ErrNotFound (not
@@ -577,6 +579,32 @@ func (s *Service) page(ctx context.Context, name string, before, limit int) ([]*
 	return s.deps.Store.Builds(ctx, name, limit)
 }
 
+// waits fills in what the stages of the running build of v wait for, as u
+// may be told it.
+func (s *Service) waits(ctx context.Context, u *store.User, v *BuildView) error {
+	id := v.Build.ID
+	v.Waiting, v.LockWaits = s.deps.Dispatch.Waiting(id), s.deps.Dispatch.LockWaits(id)
+	var jobs []string
+	for _, lw := range v.LockWaits {
+		if lw.Blocker != nil {
+			jobs = append(jobs, lw.Blocker.Job)
+		}
+	}
+	visible, err := s.deps.Auth.Visible(ctx, u, jobs)
+	if err != nil {
+		return err
+	}
+	view := map[string]bool{}
+	for _, n := range visible {
+		view[n] = true
+	}
+	v.LockWaits = visibleLockWaits(v.LockWaits, view)
+	if !u.Admin {
+		v.Waiting = hideWaits(v.Waiting, v.LockWaits)
+	}
+	return nil
+}
+
 // Build is one build with its stages and the needs between them.
 func (s *Service) Build(ctx context.Context, u *store.User, id int64) (*BuildView, error) {
 	b, err := s.build(ctx, u, id, "view")
@@ -594,9 +622,8 @@ func (s *Service) Build(ctx context.Context, u *store.User, id int64) (*BuildVie
 	}
 	v := &BuildView{Build: b, Stages: stages, Needs: needs, Complete: complete, Removed: true}
 	if !b.Status.Terminal() {
-		v.Waiting = s.deps.Dispatch.Waiting(id)
-		if !u.Admin {
-			v.Waiting = hideWaits(v.Waiting)
+		if err := s.waits(ctx, u, v); err != nil {
+			return nil, err
 		}
 	}
 	// A job whose file is gone plans nothing: its queued build never starts.

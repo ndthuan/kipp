@@ -173,9 +173,11 @@ every one taken waits in the queue (`waiting for a free executor`). Each
 stage the server runs holds one too. A stage on a runner or an engine
 holds nothing of the server's, and a build whose stages all wait to be
 placed holds nothing either; it still holds its job's place among the
-running builds and its locks. A started build's stage that waits for the
-built-in runner gets the first executor to free, before a build queued
-later.
+running builds and its locks. A stage that waits for one of its own
+`locks` holds no executor or place either: it takes its locks first, and
+only then waits for an executor or a place. A started build's stage that
+waits for the built-in runner gets the first executor to free, before a
+build queued later.
 
 The built-in runner's limit is changed on the Runners page, or with
 `kipp runner set built-in --executors N` (a running server takes that at

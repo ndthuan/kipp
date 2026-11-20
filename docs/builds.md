@@ -175,13 +175,16 @@ What runs and what waits is at the top of the overview and the job list,
 and on its own page, `/queue`, which the header links to from every page with a count
 ("2 running, 1 queued", or "idle").
 
-- A running build shows the stages it runs, and for a stage that waits to
-  be placed on a runner or an engine, what it waits for.
+- A running build shows the stages it runs, and for a stage that waits
+  for a lock (`waiting for lock <name>`, with the build that holds it), or
+  to be placed on a runner or an engine, what it waits for.
 - A queued one says why it waits: behind a build of its job, for a lock
-  and the build that holds it, for a free executor of the built-in runner
-  to prepare on, or that its job is
-  gone and it will not start. A build that holds a lock is named only to
-  whoever may view its job; anyone else reads "another build".
+  and the build that holds it (or whose stage waits for it, and so takes
+  it first), for a free executor of the built-in runner to prepare on, or
+  that its job is gone and it will not start. A build that holds a lock is
+  named only to whoever may view its job; anyone else reads "another
+  build". Anyone who may view the build is told which lock it or its stage
+  waits for.
 - How busy each runner is, the built-in runner first, is told to an admin
   alone, in the queue's heading: to anyone else
   a build waiting for a free executor is "waiting to start", since which
@@ -194,7 +197,9 @@ and on its own page, `/queue`, which the header links to from every page with a 
   them. The API and the MCP tools list only what runs and waits.
 
 `GET /api/v1/queue` answers the same: `running`, each with
-`waiting_stages`; `queued`, each with `waiting` (`job`, `lock`,
+`waiting_stages` (a line by stage) and `waiting_stage_locks` (by stage,
+of those, the ones that wait for a lock: `lock` and `blocker`, the build
+that holds it, null to whoever may not view its job); `queued`, each with `waiting` (`job`, `lock`,
 `executor`, `nothing` or `gone`, and `start` in place of `executor` and
 `nothing` for whoever is not an admin), `lock` and `blocker`; and to an
 admin `executors` and `busy` (the built-in runner's) and `runners`, each

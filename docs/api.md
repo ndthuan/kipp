@@ -83,8 +83,8 @@ view is 404, as one that does not exist is.
   `duration_ms` of a test case.
 - A build is `{id, job, number, status}` wherever another answer refers
   to one (a `BuildRef`): the build a remembered metric came from, a
-  queued build's `blocker`, the `saved_by` of a cache entry, a stage an
-  runner runs. Its `status` is `null` once retention has removed the
+  queued build's or a waiting stage's `blocker`, the `saved_by` of a
+  cache entry, a stage an runner runs. Its `status` is `null` once retention has removed the
   build.
 - A build in a list, in a job's `last` and in the answer to a trigger has
   no `stages`; `GET /api/v1/builds/<id>` has its `stages` and `complete`,

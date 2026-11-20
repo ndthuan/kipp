@@ -235,30 +235,34 @@ func toOwnerV1(v *JobView, job *config.Job) *ownerV1 {
 // jobDetailV1 holds its builds and its activity as the first pages of the
 // lists of the same names.
 type jobDetailV1 struct {
-	Name        string                   `json:"name"`
-	Removed     bool                     `json:"removed"`
-	Disabled    bool                     `json:"disabled"`
-	Group       string                   `json:"group"`
-	Description string                   `json:"description"`
-	Params      []paramV1                `json:"params"`
-	Cron        string                   `json:"cron"`
-	Next        *stamp                   `json:"next"`
-	TimeZone    string                   `json:"timezone"`
-	Concurrency config.Concurrency       `json:"concurrency"`
-	Locks       []string                 `json:"locks"`
-	Builds      listJSON[buildSummaryV1] `json:"builds"`
-	Activity    listJSON[activityJSON]   `json:"activity"`
-	Parent      *string                  `json:"parent"`
-	Multibranch *string                  `json:"multibranch"`
-	Scan        *scanV1                  `json:"scan"`
-	Folder      *string                  `json:"folder"`
-	Owner       *ownerV1                 `json:"owner"`
-	Source      *string                  `json:"source"`
-	EditWaits   bool                     `json:"edit_waits"`
+	Name        string             `json:"name"`
+	Removed     bool               `json:"removed"`
+	Disabled    bool               `json:"disabled"`
+	Group       string             `json:"group"`
+	Description string             `json:"description"`
+	Params      []paramV1          `json:"params"`
+	Cron        string             `json:"cron"`
+	Next        *stamp             `json:"next"`
+	TimeZone    string             `json:"timezone"`
+	Concurrency config.Concurrency `json:"concurrency"`
+	Locks       []string           `json:"locks"`
+	StageLocks  []string           `json:"stage_locks"`
+	// LockedStages are the stages of the job file that take locks; a
+	// stages file in a repo is read only by a build.
+	LockedStages map[string][]string      `json:"locked_stages"`
+	Builds       listJSON[buildSummaryV1] `json:"builds"`
+	Activity     listJSON[activityJSON]   `json:"activity"`
+	Parent       *string                  `json:"parent"`
+	Multibranch  *string                  `json:"multibranch"`
+	Scan         *scanV1                  `json:"scan"`
+	Folder       *string                  `json:"folder"`
+	Owner        *ownerV1                 `json:"owner"`
+	Source       *string                  `json:"source"`
+	EditWaits    bool                     `json:"edit_waits"`
 }
 
 func toJobDetailV1(v *JobView) jobDetailV1 {
-	out := jobDetailV1{Name: v.Name, Removed: v.Removed, Params: []paramV1{}, Locks: []string{}, Next: stampPtr(v.Next), Parent: orNil(v.Parent), Folder: orNil(v.Folder),
+	out := jobDetailV1{Name: v.Name, Removed: v.Removed, Params: []paramV1{}, Locks: []string{}, StageLocks: []string{}, LockedStages: map[string][]string{}, Next: stampPtr(v.Next), Parent: orNil(v.Parent), Folder: orNil(v.Folder),
 		Builds: listJSON[buildSummaryV1]{Items: toBuildsV1(v.Builds)}, Activity: listJSON[activityJSON]{Items: toActivityJSON(v.Activity)},
 		Source: orNil(string(v.Source)), EditWaits: v.EditWaits}
 	if v.Older > 0 {
@@ -272,6 +276,12 @@ func toJobDetailV1(v *JobView) jobDetailV1 {
 		out.Disabled = job.Disabled
 		out.TimeZone = v.Zone.String()
 		out.Locks = append(out.Locks, job.Locks...)
+		out.StageLocks = append(out.StageLocks, job.StageLocks...)
+		for _, st := range job.Stages {
+			if len(st.Locks) > 0 {
+				out.LockedStages[st.Name] = slices.Clone(st.Locks)
+			}
+		}
 		if job.IsParent() {
 			out.Multibranch = orNil(job.Multibranch.Repo)
 			out.Scan = toScanV1(v.Scan)
@@ -334,6 +344,26 @@ type runningV1 struct {
 	StartedAt     *stamp            `json:"started_at"`
 	Stages        []string          `json:"stages"`
 	WaitingStages map[string]string `json:"waiting_stages"`
+	// WaitingStageLocks is, of WaitingStages, the stages that wait for a
+	// lock: waiting_stages stays a map of lines, which its readers expect.
+	WaitingStageLocks map[string]stageLockV1 `json:"waiting_stage_locks"`
+}
+
+type stageLockV1 struct {
+	Lock    string      `json:"lock"`
+	Blocker *buildRefV1 `json:"blocker"`
+}
+
+func toStageLocksV1(w map[string]dispatch.StageLockWait) map[string]stageLockV1 {
+	out := make(map[string]stageLockV1, len(w))
+	for stage, lw := range w {
+		sl := stageLockV1{Lock: lw.Lock}
+		if k := lw.Blocker; k != nil {
+			sl.Blocker = &buildRefV1{k.ID, k.Job, k.Number, &k.Status}
+		}
+		out[stage] = sl
+	}
+	return out
 }
 
 type queuedV1 struct {
@@ -364,7 +394,7 @@ func toQueueV1(v *QueueView) queueV1 {
 			waiting = map[string]string{}
 		}
 		b := r.Build
-		out.Running = append(out.Running, runningV1{b.ID, b.Job, b.Number, b.Trigger, b.StartedBy, stampOf(b.QueuedAt), stampPtr(b.StartedAt), nonNil(r.Stages), waiting})
+		out.Running = append(out.Running, runningV1{b.ID, b.Job, b.Number, b.Trigger, b.StartedBy, stampOf(b.QueuedAt), stampPtr(b.StartedAt), nonNil(r.Stages), waiting, toStageLocksV1(r.LockWaits)})
 	}
 	for _, w := range v.Queued {
 		b := w.Build
