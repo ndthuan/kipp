@@ -14,6 +14,8 @@ Changed:
   the 10 builds that ended last, of every status, in the jobs the viewer may
   view. Its heading is "Now" with the counts of what runs and waits. The API
   and the MCP tools are unchanged.
+- On a phone, an ended build in "Now" says how it ended ("failed 1m ago") in
+  the colour of that status, where it said only "ended".
 
 ## [1.4.0] - 2026-11-16
 

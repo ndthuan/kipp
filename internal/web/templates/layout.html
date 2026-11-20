@@ -106,10 +106,10 @@
 <td class="lead" data-label="For">{{template "since" (elapsed .Build.QueuedAt "queued")}}</td>
 <td class="lead" data-label="Cancel">{{if .CanCancel}}{{template "queue-cancel" (cancelOf .Build $.Next)}}{{end}}</td>
 </tr>
-{{end}}{{if $.Full}}{{range $.Ended}}<tr class="done">
+{{end}}{{if $.Full}}{{range $.Ended}}<tr class="done {{.Status}}">
 <td class="lead" data-label="Build"><a class="link" href="{{buildPath .}}">{{.Job}} #{{.Number}}</a></td>
 <td class="lead" data-label="Status"><span class="status {{.Status}}">{{.Status}}</span>{{with took .StartedAt .FinishedAt}} <span class="sub">took {{.}}</span>{{end}}</td>
-<td class="lead" data-label="For">{{template "since" (past (endedAt .) "ended")}}</td>
+<td class="lead" data-label="For">{{template "since" (past (endedAt .) (printf "%s" .Status))}}</td>
 <td class="lead" data-label="Cancel"></td>
 </tr>
 {{end}}{{end}}</tbody>

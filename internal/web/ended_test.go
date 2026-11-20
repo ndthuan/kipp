@@ -53,7 +53,8 @@ func TestAnEndedRowHasTheStatusTheTimeItTookAndWhenItEndedAndNoCancel(t *testing
 		`<a class="link" href="/jobs/smoke/7">smoke #7</a>`,
 		`<span class="status cancelled">cancelled</span> <span class="sub">took 1m 30s</span>`,
 		`<span class="status lost">lost</span>`,
-		`<span class="tl">ended </span><time class="past" datetime="`)
+		`<span class="tl">cancelled </span><time class="past" datetime="`,
+		`<span class="tl">lost </span><time class="past" datetime="`)
 	lacks(t, body, "/cancel", "<h2>Running", "<h2>Waiting")
 	contains(t, body, `<h2>Now</h2>`)
 }
@@ -63,7 +64,7 @@ func TestAnEndedBuildThatNeverStartedHasNoTookAndOneWithNoEndStillShows(t *testi
 	queued := time.Now().Add(-time.Hour)
 	b := &store.Build{ID: 3, Job: "smoke", Number: 3, Status: store.Cancelled, QueuedAt: queued}
 	body := renderNow(t, e, &api.QueueView{}, []*store.Build{b}, true)
-	contains(t, body, `smoke #3`, `<span class="status cancelled">cancelled</span>`, `<span class="tl">ended </span>`)
+	contains(t, body, `smoke #3`, `<span class="status cancelled">cancelled</span>`, `<span class="tl">cancelled </span>`)
 	lacks(t, body, "took")
 }
 
@@ -89,7 +90,16 @@ func TestTheJobListShowsNoEndedRowAndTheNowHeadingOnlyWhenSomethingRuns(t *testi
 	lacks(t, body, "ended")
 }
 
-func endedRows(page string) int { return strings.Count(page, `<span class="tl">ended </span>`) }
+func endedRows(page string) int { return strings.Count(page, `<tr class="done `) }
+
+func TestAnEndedRowNamesHowItEndedInItsStatusColourOnAPhoneWhereTheStatusBadgeIsHidden(t *testing.T) {
+	e := site(t)
+	for _, st := range []store.Status{store.Success, store.Unstable, store.Failed, store.Cancelled, store.Lost, store.Timeout} {
+		body := renderNow(t, e, &api.QueueView{}, []*store.Build{endedBuild(5, "smoke", st, time.Hour)}, true)
+		contains(t, body, `<tr class="done `+string(st)+`">`, `<span class="tl">`+string(st)+` </span><time class="past" datetime="`)
+		lacks(t, body, `<span class="tl">ended `)
+	}
+}
 
 func TestTheOverviewAndTheQueueListTheTenNewestEndedBuildsOfEveryTerminalStatus(t *testing.T) {
 	e := site(t)

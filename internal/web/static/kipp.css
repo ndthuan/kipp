@@ -657,6 +657,9 @@
     .queue.two-line tr.wait td:nth-child(2), .queue.two-line tr.wait td:nth-child(3), .queue.two-line tr.done td:nth-child(2), .queue.two-line tr.done td:nth-child(3) { color: var(--fg-muted); }
     .queue tr.wait td:nth-child(3)::before { background-color: var(--fg-subtle); animation: none; }
     .queue tr.done td:nth-child(3)::before { display: none; }
+    .queue.two-line tr.done.success td:nth-child(3) { color: var(--on-ok-soft); }
+    .queue.two-line tr.done.failed td:nth-child(3) { color: var(--on-bad-soft); }
+    .queue.two-line tr.done.unstable td:nth-child(3), .queue.two-line tr.done.timeout td:nth-child(3), .queue.two-line tr.done.lost td:nth-child(3) { color: var(--on-warn-soft); }
     .cancel-word { display: none; }
     .cancel-x { display: block; width: 18px; height: 18px; }
     .cancel { justify-content: center; min-width: 44px; min-height: 44px; margin-block: calc(var(--space) * -2); padding: 0; border-color: transparent; background-color: transparent; color: var(--fg-subtle); }
