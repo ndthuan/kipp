@@ -20,6 +20,9 @@ const (
 	// DefaultFlips is how many times the colour must change inside the
 	// window for a job to be flaky; 0 switches the section off.
 	DefaultFlips = 4
+	// DefaultQuiet is how many green builds in a row, newest first, end a
+	// job's flakiness; 0 switches the rule off.
+	DefaultQuiet = 5
 	// Dots is the run of dots beside a job.
 	Dots = 5
 )
@@ -98,7 +101,6 @@ type Group struct {
 func Compute(jobs []Job, cfg Config, now time.Time) *Overview {
 	o := &Overview{Groups: groups(jobs), Charts: chartsOf(jobs, cfg, now)}
 	o.Charts.addCounts(o.Groups)
-	flips := cfg.Flips
 	for _, j := range jobs {
 		if j.Disabled || j.Gone {
 			continue
@@ -107,7 +109,7 @@ func Compute(jobs []Job, cfg Config, now time.Time) *Overview {
 		if len(h) > Window {
 			h = h[:Window]
 		}
-		o.addStanding(j, h, flips)
+		o.addStanding(j, h, cfg)
 	}
 	o.sort()
 	return o
@@ -115,12 +117,12 @@ func Compute(jobs []Job, cfg Config, now time.Time) *Overview {
 
 // addStanding puts a job into Failing, Unstable or Flaky, by its newest
 // build; a job that is unstable now and flaky is in both of the last two.
-func (o *Overview) addStanding(j Job, h []*store.Build, flips int) {
+func (o *Overview) addStanding(j Job, h []*store.Build, cfg Config) {
 	if len(h) == 0 {
 		return
 	}
 	n := flipsOf(h)
-	flaky := flips > 0 && len(h) >= MinFinished && n >= flips
+	flaky := cfg.Flips > 0 && len(h) >= MinFinished && n >= cfg.Flips && !quietFor(h, cfg.Quiet)
 	dots := h[:min(len(h), Dots)]
 	switch {
 	case h[0].Status.Red():
@@ -162,6 +164,20 @@ func streakStart(h []*store.Build, in func(store.Status) bool) time.Time {
 		i++
 	}
 	return endOf(h[i])
+}
+
+// quietFor reports whether the newest quiet builds of h are all green; with
+// quiet 0 none is.
+func quietFor(h []*store.Build, quiet int) bool {
+	if quiet <= 0 || len(h) < quiet {
+		return false
+	}
+	for _, b := range h[:quiet] {
+		if b.Status.Red() {
+			return false
+		}
+	}
+	return true
 }
 
 func flipsOf(h []*store.Build) int {

@@ -146,7 +146,11 @@ The columns follow, the left one with:
 - **Flaky**: a job that is green now but changed colour at least four times
   between consecutive builds among its last 20 finished ones (at least 5
   needed), with its share of red builds ("20% failed (4/20)") and its flips.
-  `kipp serve --flaky-flips <n>` sets the four; 0 hides the section.
+  `kipp serve --flaky-flips <n>` sets the four; 0 hides the section. A job
+  whose newest 5 finished builds are all green (unstable counts as green) is
+  not flaky, and loses the Flaky tag in Failing and Unstable too, however
+  many flips its window holds; `kipp serve --flaky-quiet <n>` sets the five,
+  and 0 turns the rule off.
 
 and the right one with **Now**: the queue, as below, with the 10 newest ended builds under it. A job's
 next run is on its own page and in the job list.

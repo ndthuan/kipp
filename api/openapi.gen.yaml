@@ -4244,7 +4244,8 @@ components:
           description: |
             Jobs that are green now and changed colour at least `--flaky-flips`
             times in their last 20 builds, with at least 5 of them; empty when the
-            server has the section off. The most flips first, then the larger share
+            server has the section off, and without a job whose newest `--flaky-quiet`
+            builds (5) are all green. The most flips first, then the larger share
             of red.
           items:
             $ref: "#/components/schemas/OverviewFlaky"

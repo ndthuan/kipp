@@ -236,3 +236,41 @@ func compute(jobs []Job, flips int, at time.Time) *Overview {
 	}
 	return Compute(jobs, Config{Flips: flips}, at)
 }
+
+func TestAJobWhoseNewestBuildsAreAllGreenIsNotFlaky(t *testing.T) {
+	flappy := "sssss" + "fsfsfsfsfsfsfsf"
+	for name, tc := range map[string]struct {
+		shape string
+		quiet int
+		want  string
+	}{
+		"newest five green leaves":        {flappy, 5, ""},
+		"one red among the newest five":   {"ssfss" + "fsfsfsfsfsfsfsf", 5, "j"},
+		"quiet 0 keeps the old result":    {flappy, 0, "j"},
+		"unstable counts as green":        {"usuus" + "fsfsfsfsfsfsfsf", 5, ""},
+		"a larger quiet needs more green": {flappy, 6, "j"},
+		"fewer than five builds":          {"sfsf", 5, ""},
+		"exactly five green builds":       {"sssss", 5, ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			jobs := []Job{job("j", tc.shape)}
+			jobs[0].Builds = jobs[0].History
+			o := Compute(jobs, Config{Flips: 2, Quiet: tc.quiet}, now)
+			if got := flaky(o); got != tc.want {
+				t.Fatalf("flaky %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestTheFlakyTagOfAnUnstableRowFollowsTheQuietRule(t *testing.T) {
+	shape := "uuuuu" + "fsfsfsfsfsfsfsf"
+	for quiet, want := range map[int]bool{0: true, 5: false} {
+		jobs := []Job{job("j", shape)}
+		jobs[0].Builds = jobs[0].History
+		o := Compute(jobs, Config{Flips: 2, Quiet: quiet}, now)
+		if len(o.Unstable) != 1 || o.Unstable[0].Flaky != want {
+			t.Fatalf("quiet %d: %+v", quiet, o.Unstable)
+		}
+	}
+}

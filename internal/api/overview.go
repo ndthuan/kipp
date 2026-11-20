@@ -56,7 +56,7 @@ func (s *Service) Overview(ctx context.Context, u *store.User, rg overview.Range
 			Running: running, History: history[n],
 			Builds: byJob[n], Before: before[n]})
 	}
-	cfg := overview.Config{Flips: s.deps.FlakyFlips, Range: rg, Zone: zone}
+	cfg := overview.Config{Flips: s.deps.FlakyFlips, Quiet: s.deps.FlakyQuiet, Range: rg, Zone: zone}
 	return overview.Compute(jobs, cfg, now), nil
 }
 

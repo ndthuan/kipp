@@ -40,6 +40,9 @@ func ParseRange(name string) (Range, bool) {
 type Config struct {
 	// Flips is how many flips make a job flaky, 0 for no Flaky section.
 	Flips int
+	// Quiet is how many of a job's newest finished builds, all green, end
+	// its flakiness whatever its flips; 0 never does.
+	Quiet int
 	// Range is how far back the graphs look; the zero Range is Day.
 	Range Range
 	// Zone is where the columns' edges fall, so that a day's columns start

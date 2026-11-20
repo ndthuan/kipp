@@ -125,6 +125,10 @@ type Deps struct {
 	// it flaky on the overview: 0 for no such section. kipp serve sets it
 	// (default overview.DefaultFlips).
 	FlakyFlips int
+	// FlakyQuiet is how many green builds in a row, the newest, end a job's
+	// flakiness whatever its flips: 0 for no such rule. kipp serve sets it
+	// (default overview.DefaultQuiet).
+	FlakyQuiet int
 	// Jobs is where the jobs come from and what changes them through kipp;
 	// without it no job can be read as YAML or changed.
 	Jobs *jobstore.Jobs

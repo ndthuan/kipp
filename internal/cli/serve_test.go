@@ -199,6 +199,7 @@ func TestServeSaysWhatItCannotStartWith(t *testing.T) {
 		"executors below zero":       {[]string{"--data", data, "--jobs", jobs, "--executors", "-1"}, 2, "--executors is 0 or more"},
 		"the builds limit, gone":     {[]string{"--data", data, "--jobs", jobs, "--builds", "8"}, 2, "--builds is gone: no limit counts builds across runners; --executors is the built-in runner's"},
 		"flaky flips below zero":     {[]string{"--data", data, "--jobs", jobs, "--flaky-flips", "-1"}, 2, "--flaky-flips is 0"},
+		"flaky quiet below zero":     {[]string{"--data", data, "--jobs", jobs, "--flaky-quiet", "-1"}, 2, "--flaky-quiet is 0"},
 		"a label that is none":       {[]string{"--data", data, "--jobs", jobs, "--default-runs-on", "Linux"}, 2, `--default-runs-on label "Linux"`},
 		"a runner-env prefix":        {[]string{"--data", data, "--jobs", jobs, "--runner-env", "LC_*"}, 2, `--runner-env "LC_*"`},
 		"a runner URL that is none":  {[]string{"--data", data, "--jobs", jobs, "--runner-url", "192.0.2.1:8087"}, 2, "--runner-url is an http:// or https:// URL"},
@@ -1561,6 +1562,7 @@ func TestTheServiceIsGivenWhatServeRunsWithAndSealsWithItsKey(t *testing.T) {
 	d := s.deps(auth.New(s.st, time.Hour, s.deviceKey))
 	eq(t, "the address the API is told it listens on", d.Listen, ln.Addr().String())
 	eq(t, "the flips that make a job flaky, by default", d.FlakyFlips, 4)
+	eq(t, "the green builds that end flaky, by default", d.FlakyQuiet, 5)
 
 	info := d.ServerInfo()
 	abs, err := filepath.Abs(data)

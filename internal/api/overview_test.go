@@ -145,6 +145,15 @@ func TestFlakyFlipsOfZeroLeavesTheFlakySectionEmpty(t *testing.T) {
 	eq(t, "once is failing, untagged", fmt.Sprint(jobsOf(failing, "job"), failing[0]["flaky"]), "oncefalse")
 }
 
+func TestFlakyQuietEndsFlakyAfterThatManyGreenBuilds(t *testing.T) {
+	for quiet, want := range map[int]int{0: 1, 5: 0} {
+		e := newEnv(t, func(a *API) { a.deps.FlakyFlips = 4; a.deps.FlakyQuiet = quiet })
+		e.ended(t, "slow", "sssssfsfsfsfsfsfsfsf")
+		o := e.object(t, http.StatusOK, e.admin, "GET", "/api/v1/overview", "")
+		eq(t, fmt.Sprint("flaky rows, quiet ", quiet), len(rowsOf(t, o, "flaky")), want)
+	}
+}
+
 // endedAt writes one build of a job with the status, ended ago ago.
 func (e *env) endedAt(t *testing.T, job string, st store.Status, ago time.Duration) {
 	t.Helper()

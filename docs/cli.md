@@ -66,6 +66,7 @@ directory.
 | `--base-url <url>` | `http://<listen>` | The URL stages see as `KIPP_URL`. Build links, commit statuses' links, webhook URLs and GitHub App manifests need it given. |
 | `--executors <n>` | 4 | The built-in runner's limit: stages the server runs itself at once, each build's prepare counted while it runs, until an admin sets one (Runners page, `kipp runner set built-in`), which is kept over it; 0 runs none ([Each runner has its own limit](runners.md#each-runner-has-its-own-limit)). |
 | `--flaky-flips <n>` | 4 | Changes of colour among a job's last 20 finished builds (at least 5 needed) that put it in the front page's Flaky section; 0 hides the section. |
+| `--flaky-quiet <n>` | 5 | Newest finished builds that, all green (unstable counts), take a job out of the Flaky section whatever its flips; 0 turns the rule off. |
 | `--shell <sh>` | `sh` | The shell that runs stages, as `<shell> -c <command>`. |
 | `--session-ttl <d>` | `720h` | How long a browser login lasts. |
 | `--timezone <zone>` | the host's | The IANA zone a cron is read in when its job names none, and the pages' zone. |

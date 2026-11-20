@@ -10,6 +10,10 @@ lines and the data directory are the public surface.
 
 Added:
 
+- A job whose newest 5 finished builds are all green is no longer listed as
+  flaky on the overview, however often its colour changed before: a fixed
+  job leaves the Flaky section as soon as it has been green five times in a
+  row. `kipp serve --flaky-quiet <n>` sets the five, 0 turns the rule off.
 - A stage takes `locks:` too, held only while it runs: a deploy can lock
   `production` around its `deploy` stage and leave the lock free while its
   build and tests run. Stage locks and job locks are one set of names and
