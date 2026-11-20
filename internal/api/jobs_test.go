@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ndthuan/kipp/internal/jobstore"
 	"github.com/ndthuan/kipp/internal/store"
@@ -217,4 +218,45 @@ func TestDeletedJobsAreForAnAdminAndTheModeIsOffWithoutAJobStore(t *testing.T) {
 	}
 	eq(t, "mode", svc.JobEditMode(), jobstore.Store)
 	eq(t, "no job store", (&Service{deps: &Deps{}}).JobEditMode(), jobstore.Off)
+}
+
+func TestGoneJobsMergesDeletedAndFileGoneJobsOnceEachNewestFirst(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	e.object(t, 201, e.admin, "POST", "/api/v1/jobs", bodyOf(t, map[string]string{"name": "fresh", "yaml": freshJob}))
+	_, h := e.call(t, 200, e.admin, "GET", "/api/v1/jobs/fresh/definition", "")
+	e.call(t, 204, e.admin, "DELETE", "/api/v1/jobs/fresh", "", "If-Match", h.Get("ETag"))
+	st := e.api.deps.Store
+	built := &store.Build{Job: "fresh", Status: store.Success, Trigger: "cli"}
+	must(t, st.CreateBuild(ctx, built))
+	for range 2 {
+		must(t, st.CreateBuild(ctx, &store.Build{Job: "orphan", Status: store.Success, Trigger: "cli", QueuedAt: time.Now().Add(time.Hour)}))
+	}
+	orphan, err := st.LastBuilds(ctx)
+	must(t, err)
+	must(t, st.KeepBuild(ctx, orphan["orphan"].ID, "ada", time.Now()))
+
+	svc := e.api.Service()
+	gone, err := svc.GoneJobs(ctx, e.user(t, "admin"))
+	must(t, err)
+	if len(gone) != 2 || gone[0].Name != "orphan" || gone[1].Name != "fresh" {
+		t.Fatalf("gone %+v", gone)
+	}
+	if o := gone[0]; o.Deletion != nil || o.Versioned || o.Builds != 2 || o.Kept != 1 || o.Last == nil {
+		t.Fatalf("orphan %+v", o)
+	}
+	if f := gone[1]; f.Deletion == nil || !f.Versioned || f.Builds != 1 || f.Last == nil || !f.GoneAt().Equal(f.Deletion.At) {
+		t.Fatalf("fresh %+v", f)
+	}
+	if _, err := svc.GoneJobs(ctx, e.user(t, "viewer")); err == nil {
+		t.Fatal("a viewer read the gone jobs")
+	}
+	eq(t, "no time known", (GoneJob{}).GoneAt().IsZero(), true)
+
+	e.api.deps.Jobs = nil
+	gone, err = svc.GoneJobs(ctx, e.user(t, "admin"))
+	must(t, err)
+	if len(gone) != 2 || gone[1].Deletion != nil || gone[1].Versioned {
+		t.Fatalf("without a job store %+v", gone)
+	}
 }
