@@ -17,6 +17,13 @@ Changed:
 - On a phone, an ended build in "Now" says how it ended ("failed 1m ago") in
   the colour of that status, where it said only "ended".
 
+Fixed:
+
+- An `after` trigger that comes while the server is quiet, from a build that
+  ends then, is no longer lost: it is kept in the database and runs when
+  quiet ends, or at the next start when the server is restarted meanwhile.
+  The database gains a table `pending_afters` (a new schema).
+
 ## [1.4.0] - 2026-11-16
 
 Upgrading: the default of the new `kipp serve --job-edits` is `store`, so

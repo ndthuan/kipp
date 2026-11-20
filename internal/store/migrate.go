@@ -196,6 +196,10 @@ CREATE TABLE job_files (job TEXT PRIMARY KEY, hash TEXT NOT NULL);
 CREATE TABLE marks (name TEXT PRIMARY KEY, at TEXT NOT NULL);
 `, `
 CREATE TABLE builtin_runner (id INTEGER PRIMARY KEY CHECK (id = 1), executors INTEGER NOT NULL);
+`, `
+CREATE TABLE pending_afters (
+  build_id INTEGER NOT NULL REFERENCES builds(id) ON DELETE CASCADE, job TEXT NOT NULL,
+  PRIMARY KEY (build_id, job));
 `}
 
 // Upgrade is what Open did to the schema of the database it opened.

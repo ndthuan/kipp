@@ -87,7 +87,13 @@ minutes) is handled all the same and logged with its age. The log says
 delivery with a bad signature is refused as always. A build that was
 already queued is accepted work and still runs, and a running one ends by
 itself. A cron fire that was refused runs once, for its job, when quiet
-ends.
+ends. An `after` trigger has nobody to repeat it either: when a build ends
+while quiet, each job that runs after it is kept in the database, and is
+triggered after that build, with it named in the trigger, when quiet ends
+or, past a restart, at the next start, after the builds the restart stopped
+are queued again and before the kept webhooks. The job's activity says
+`kept the after trigger of <job> #<n> while quiet`, and the log says
+`an after trigger kept while quiet` and `a kept after trigger queued`.
 
 A kipp that predates this still answers 503 to a webhook that arrives while
 it is quiet, so the restart that upgrades to this version may still lose one.

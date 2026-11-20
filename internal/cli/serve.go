@@ -735,8 +735,10 @@ func (s *server) listen(ctx context.Context) (net.Listener, error) {
 		return nil, err
 	}
 	// Before the kept webhooks are handled (run), so that the builds the
-	// last restart stopped are queued ahead of them.
+	// last restart stopped, then the after triggers it kept, are queued
+	// ahead of them.
 	s.d.Rerun(ctx)
+	s.d.TriggerKeptAfters(ctx)
 	return ln, nil
 }
 

@@ -29,6 +29,7 @@ var migrationSums = []string{
 	"5e0ee4fd24e498f20d82fed862ce3a8f7374449cf29f3b2615b2ef27ef3b079d",
 	"92b1a89b593b0fb87135a0369d0db71ba75a8671628ec9688c5f8af6bc6fc2b7",
 	"6fe081671cac21c333772347d74f7d6b879cfb9a74a51ef731571cecdda22485",
+	"73e7ca1f28137ea93c0046dffd77ef43b906d2947ae3aefcae885c0879d62cb7",
 }
 
 func TestMigrationsAreAppendOnly(t *testing.T) {

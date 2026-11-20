@@ -30,6 +30,7 @@ func (h *harness) restart(t *testing.T) (*harness, []*store.Build) {
 		t.Fatal(err)
 	}
 	again := d.Rerun(ctx)
+	d.TriggerKeptAfters(ctx)
 	runCtx, cancel := context.WithCancel(ctx)
 	ended := make(chan struct{})
 	go func() { d.Run(runCtx); close(ended) }()

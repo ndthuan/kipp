@@ -2,6 +2,7 @@ package dispatch
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -237,15 +238,30 @@ func (d *Dispatcher) triggerDownstream(ctx context.Context, b *store.Build, job 
 		}
 		up = job.Parent
 	}
+	kept := false
 	for _, name := range snap.Names {
 		if down := snap.Jobs[name]; down.Disabled || !slices.Contains(down.Triggers.After, up) {
 			continue
 		}
-		req := TriggerRequest{Job: name, Kind: "after", Detail: fmt.Sprintf("%s#%d", job.Name, b.Number), UpstreamStatus: status, UpstreamCommit: b.BuiltCommit, UpstreamTag: b.TriggerTag, By: "kipp"}
-		if _, err := d.Trigger(ctx, req); err != nil {
+		_, err := d.Trigger(ctx, afterRequest(b, name, status))
+		switch {
+		case errors.Is(err, ErrQuiet):
+			kept = d.keepAfter(ctx, b, name) || kept
+		case err != nil:
 			d.log.Warn("downstream trigger", "job", name, "after", up, "err", err)
 		}
 	}
+	// Quiet may have ended between the refusal and the keeping, after the
+	// end of quiet had already looked for kept triggers.
+	if kept && !d.Quiet() {
+		d.TriggerKeptAfters(ctx)
+	}
+}
+
+// afterRequest is the trigger of the job name after the build b, which
+// ended as status.
+func afterRequest(b *store.Build, name string, status store.Status) TriggerRequest {
+	return TriggerRequest{Job: name, Kind: "after", Detail: fmt.Sprintf("%s#%d", b.Job, b.Number), UpstreamStatus: status, UpstreamCommit: b.BuiltCommit, UpstreamTag: b.TriggerTag, By: "kipp"}
 }
 
 func exists(path string) bool {

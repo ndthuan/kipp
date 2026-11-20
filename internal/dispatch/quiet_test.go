@@ -3,6 +3,8 @@ package dispatch
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -93,5 +95,92 @@ func TestACronFireRefusedDuringQuietRunsOnceWhenItEnds(t *testing.T) {
 	}
 	if h.d.Quiet() {
 		t.Fatal("still quiet")
+	}
+}
+
+func upAndDown(block string) map[string]string {
+	return map[string]string{
+		"up":   "name: up\nstages:\n  s: {run: '" + block + "'}\n",
+		"down": "name: down\ntriggers: {after: [up]}\nstages:\n  s: {run: 'echo from=$KIPP_UPSTREAM_BUILD'}\n",
+	}
+}
+
+// endUpstreamDuringQuiet runs up, makes the server quiet while it runs, and
+// lets it end: its after trigger comes while quiet.
+func (h *harness) endUpstreamDuringQuiet(t *testing.T, open func()) *store.Build {
+	t.Helper()
+	ctx := context.Background()
+	up := h.trigger(t, "up")
+	h.untilRunning(t, up.ID)
+	if _, err := h.d.SetQuiet(ctx, true); err != nil {
+		t.Fatal(err)
+	}
+	open()
+	if b := h.wait(t, up.ID); b.Status != store.Success {
+		t.Fatalf("up ended %v", b.Status)
+	}
+	if downs, _ := h.st.Builds(ctx, "down", 5); len(downs) != 0 {
+		t.Fatalf("down was queued while quiet: %+v", downs)
+	}
+	return up
+}
+
+func (h *harness) downAfter(t *testing.T, up *store.Build) {
+	t.Helper()
+	var downs []*store.Build
+	eventually(t, "down was triggered", func() bool {
+		downs, _ = h.st.Builds(context.Background(), "down", 5)
+		return len(downs) > 0
+	})
+	if len(downs) != 1 {
+		t.Fatalf("%d builds of down, want one", len(downs))
+	}
+	down := h.wait(t, downs[0].ID)
+	want := fmt.Sprintf("up#%d", up.Number)
+	if down.Status != store.Success || down.Trigger != "after" || down.TriggerDetail != want || down.UpstreamStatus != store.Success {
+		t.Fatalf("down %+v, want a green after trigger from %s", down, want)
+	}
+	if !strings.Contains(h.log(t, down, "s"), "from="+want) {
+		t.Fatalf("down's log %q", h.log(t, down, "s"))
+	}
+}
+
+func TestAnAfterTriggerRefusedDuringQuietRunsAfterTheRestart(t *testing.T) {
+	block, open := gated(t)
+	h := newHarness(t, upAndDown(block))
+	up := h.endUpstreamDuringQuiet(t, open)
+	h2, _ := h.restart(t)
+	h2.downAfter(t, up)
+	if pending, err := h2.st.PendingAfters(context.Background()); err != nil || len(pending) != 0 {
+		t.Fatalf("still kept %+v %v", pending, err)
+	}
+}
+
+func TestAnAfterTriggerRefusedDuringQuietRunsOnceWhenItEnds(t *testing.T) {
+	block, open := gated(t)
+	h := newHarness(t, upAndDown(block))
+	ctx := context.Background()
+	up := h.endUpstreamDuringQuiet(t, open)
+	if _, err := h.d.SetQuiet(ctx, false); err != nil {
+		t.Fatal(err)
+	}
+	h.downAfter(t, up)
+	h.d.TriggerKeptAfters(ctx)
+	if downs, _ := h.st.Builds(ctx, "down", 5); len(downs) != 1 {
+		t.Fatalf("%d builds of down, want the one", len(downs))
+	}
+}
+
+func TestAKeptAfterTriggerStaysKeptWhileTheServerIsQuietAgain(t *testing.T) {
+	block, open := gated(t)
+	h := newHarness(t, upAndDown(block))
+	ctx := context.Background()
+	h.endUpstreamDuringQuiet(t, open)
+	h.d.TriggerKeptAfters(ctx)
+	if pending, err := h.st.PendingAfters(ctx); err != nil || len(pending) != 1 || pending[0].Job != "down" {
+		t.Fatalf("kept %+v %v, want down still kept", pending, err)
+	}
+	if downs, _ := h.st.Builds(ctx, "down", 5); len(downs) != 0 {
+		t.Fatalf("down was queued while quiet: %+v", downs)
 	}
 }

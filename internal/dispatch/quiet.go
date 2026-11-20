@@ -3,6 +3,7 @@ package dispatch
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -15,11 +16,13 @@ import (
 // no new build starts, the ones running end by themselves, and a trigger
 // that comes meanwhile is refused with ErrQuiet. A build that was queued
 // before the server went quiet is accepted work and still runs. A cron fire
-// that was refused is kept by job and runs once when quiet ends; the other
-// triggers are their callers' to repeat (a scan finds the commit it missed);
-// a webhook is the exception, since its sender never repeats it: the webhook
-// package keeps one that arrives meanwhile and runs it when quiet ends (see
-// OnQuietEnd).
+// that was refused is kept by job and runs once when quiet ends. An after
+// trigger has nobody to repeat it, so one refused is kept in the store and
+// runs when quiet ends or, past a restart, at the next start (see
+// TriggerKeptAfters). The other triggers are their callers' to repeat (a
+// scan finds the commit it missed); a webhook is the exception, since its
+// sender never repeats it: the webhook package keeps one that arrives
+// meanwhile and runs it when quiet ends (see OnQuietEnd).
 
 // QuietState is what the server says of its quiet.
 type QuietState struct {
@@ -74,8 +77,8 @@ func (d *Dispatcher) refusedQuiet(req TriggerRequest) bool {
 	return true
 }
 
-// OnQuietEnd sets what is called, once and after the cron fires are queued,
-// each time quiet is turned off.
+// OnQuietEnd sets what is called, once and after the cron fires and the
+// kept after triggers are queued, each time quiet is turned off.
 func (d *Dispatcher) OnQuietEnd(f func()) {
 	d.mu.Lock()
 	d.quietEnded = f
@@ -83,8 +86,9 @@ func (d *Dispatcher) OnQuietEnd(f func()) {
 }
 
 // SetQuiet turns quiet on or off, and reports it as it is then. Turning it
-// off triggers once each job whose cron fired while it was on, and wakes
-// the loop. Turning on what is on, or off what is off, changes nothing.
+// off triggers once each job whose cron fired while it was on, then the
+// kept after triggers, and wakes the loop. Turning on what is on, or off
+// what is off, changes nothing.
 func (d *Dispatcher) SetQuiet(ctx context.Context, on bool) (QuietState, error) {
 	d.mu.Lock()
 	was := !d.quiet.IsZero()
@@ -111,10 +115,55 @@ func (d *Dispatcher) SetQuiet(ctx context.Context, on bool) (QuietState, error) 
 			d.log.Info("a cron fire kept through quiet was not queued", "job", name, "err", err)
 		}
 	}
+	if !on && was {
+		d.TriggerKeptAfters(ctx)
+	}
 	if ended != nil {
 		ended()
 	}
 	return d.QuietState(ctx)
+}
+
+// keepAfter keeps the after trigger of the job name, refused while quiet,
+// to run once quiet ends, and reports whether it was kept.
+func (d *Dispatcher) keepAfter(ctx context.Context, up *store.Build, name string) bool {
+	if err := d.st.KeepAfter(ctx, up.ID, name); err != nil {
+		d.log.Error("an after trigger refused while quiet was not kept; it is lost", "job", name, "after", up.Job, "number", up.Number, "err", err)
+		return false
+	}
+	d.log.Info("an after trigger kept while quiet", "job", name, "after", up.Job, "number", up.Number)
+	d.activity(ctx, name, fmt.Sprintf("kept the after trigger of %s #%d while quiet; it runs when quiet ends", up.Job, up.Number))
+	return true
+}
+
+// TriggerKeptAfters triggers each after trigger kept while the server was
+// quiet, in the order they were kept, and forgets each once triggered or
+// refused for good. The server calls it when quiet ends and at start, after
+// Rerun. It stops at the first one the server is quiet again for, and
+// leaves it and the ones after it kept.
+func (d *Dispatcher) TriggerKeptAfters(ctx context.Context) {
+	d.keptAftersMu.Lock()
+	defer d.keptAftersMu.Unlock()
+	pending, err := d.st.PendingAfters(ctx)
+	if err != nil {
+		d.log.Error("reading the after triggers kept while quiet", "err", err)
+		return
+	}
+	for _, p := range pending {
+		_, err := d.Trigger(ctx, afterRequest(p.Upstream, p.Job, p.Upstream.Status))
+		if errors.Is(err, ErrQuiet) {
+			d.log.Info("quiet again, kept after triggers left for when it ends")
+			return
+		}
+		if err != nil {
+			d.log.Warn("a kept after trigger was not queued", "job", p.Job, "after", p.Upstream.Job, "number", p.Upstream.Number, "err", err)
+		} else {
+			d.log.Info("a kept after trigger queued", "job", p.Job, "after", p.Upstream.Job, "number", p.Upstream.Number)
+		}
+		if err := d.st.DropAfter(ctx, p.Upstream.ID, p.Job); err != nil {
+			d.log.Error("forgetting a kept after trigger", "job", p.Job, "after", p.Upstream.Job, "number", p.Upstream.Number, "err", err)
+		}
+	}
 }
 
 // QuietState is the quiet as it is now, with what still runs or waits.

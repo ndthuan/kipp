@@ -164,6 +164,9 @@ type Dispatcher struct {
 	queueMu sync.Mutex
 	// trimMu is held while the artifacts over ArtifactsMax are removed.
 	trimMu sync.Mutex
+	// keptAftersMu is held while the kept after triggers are run, so that
+	// one is never triggered twice.
+	keptAftersMu sync.Mutex
 
 	// mu guards the fields below and each run's fields. It is never held
 	// across a store call or a command.
