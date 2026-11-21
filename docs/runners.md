@@ -101,8 +101,11 @@ change at its next reload:
 | `kipp runner rm <name>` / `kipp runner ls` | Removes one / lists them, each with its executors and weight. |
 
 An admin does the same on the **Runners** page (`/admin/runners`, in the
-menu under their name), in [sudo mode](accounts.md#sudo-mode), and a
-change made there takes effect at once. The page shows each engine and
+menu under their name), and a change made there takes effect at once.
+Adding an engine or a standing runner and giving a runner a new token ask
+for the password ([sudo mode](accounts.md#sudo-mode)); changing,
+enabling, disabling or removing one, and the built-in runner's limit, do
+not. The page shows each engine and
 runner with its labels, whether it is online or reachable, its version
 and what it runs now. Each row's Change form sets a standing runner's
 labels, executors (0 for no limit) and weight, with the same checks as

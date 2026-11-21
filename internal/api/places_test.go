@@ -47,7 +47,9 @@ func TestTheEnginesAndRunnersAreReadWithWhatTheServerSeesOfThem(t *testing.T) {
 	}
 }
 
-func TestAnEngineOrAnRunnerIsChangedOnlyByAnAdminInSudoMode(t *testing.T) {
+// Adding an engine takes an ssh key, and adding a runner or giving it a new
+// token shows a token: those keep sudo mode.
+func TestAnEngineOrARunnerIsAddedOrGivenATokenOnlyByAnAdminInSudoMode(t *testing.T) {
 	var changed atomic.Int32
 	e := newEnv(t, func(a *API) { a.deps.PlacesChanged = func(context.Context) { changed.Add(1) } })
 	ctx := context.Background()
@@ -58,6 +60,10 @@ func TestAnEngineOrAnRunnerIsChangedOnlyByAnAdminInSudoMode(t *testing.T) {
 	is(t, "an admin not in sudo mode", e.api.svc.AddEngine(ctx, admin.u, admin.sess, engine), ErrSudoRequired)
 	_, err := e.api.svc.AddRunner(ctx, admin.u, admin.sess, "box", []string{"linux"}, 1)
 	is(t, "a runner from an admin not in sudo mode", err, ErrSudoRequired)
+	must(t, e.st.PutRunner(ctx, store.Runner{Name: "standing", Labels: []string{"linux"}, Executors: 1, Enabled: true, TokenHash: "h"}))
+	_, err = e.api.svc.NewRunnerToken(ctx, admin.u, admin.sess, "standing")
+	is(t, "a runner's new token from an admin not in sudo mode", err, ErrSudoRequired)
+	must(t, e.st.DeleteRunner(ctx, "standing"))
 	e.sudo(t, admin)
 	must(t, e.api.svc.AddEngine(ctx, admin.u, admin.sess, engine))
 	is(t, "the same engine again", e.api.svc.AddEngine(ctx, admin.u, admin.sess, engine), ErrConflict)
@@ -130,7 +136,7 @@ func TestOnlyAnAdminIsToldWhatAStageWaitsForByName(t *testing.T) {
 	}
 }
 
-func TestTheCacheIsReadAndClearedOnlyByAnAdminInSudoMode(t *testing.T) {
+func TestTheCacheIsReadAndClearedOnlyByAnAdminInTheirOwnSessionWithoutSudo(t *testing.T) {
 	e := newEnv(t, func(a *API) {
 		a.deps.Cache = cachesrv.New(cachesrv.Options{Dir: t.TempDir(), Store: a.deps.Store})
 	})
@@ -144,13 +150,12 @@ func TestTheCacheIsReadAndClearedOnlyByAnAdminInSudoMode(t *testing.T) {
 	_, err := e.api.svc.Caches(ctx, user.u)
 	is(t, "a user reading", err, ErrForbidden)
 	is(t, "a user removing", e.api.svc.RemoveCacheEntry(ctx, user.u, user.sess, 1), ErrForbidden)
-	is(t, "an admin not in sudo mode", e.api.svc.RemoveCacheEntry(ctx, admin.u, admin.sess, 1), ErrSudoRequired)
+	is(t, "an admin's token", e.api.svc.RemoveCacheEntry(ctx, admin.u, nil, 1), ErrForbidden)
 	var list []map[string]any
 	text := e.decode(t, "/api/v1/admin/cache", &list)
 	if len(list) != 3 || list[0]["scope"] != "site" || list[0]["key"] != "a" || list[0]["size"] != 5.0 || list[0]["last_restored_at"] != nil {
 		t.Fatalf("%s", text)
 	}
-	e.sudo(t, admin)
 	must(t, e.api.svc.RemoveCacheEntry(ctx, admin.u, admin.sess, 1))
 	is(t, "an entry that is gone", e.api.svc.RemoveCacheEntry(ctx, admin.u, admin.sess, 1), ErrNotFound)
 	n, err := e.api.svc.RemoveCacheScope(ctx, admin.u, admin.sess, "site")
@@ -187,8 +192,9 @@ func TestAStageTellsHowManyTimesItsCommandRan(t *testing.T) {
 }
 
 // A standing runner's executors and labels, an engine's limit and labels,
-// and the built-in runner's limit are changed by an admin in sudo mode,
-// through the checks kipp runner set makes, audited, and in effect at once.
+// and the built-in runner's limit are changed by an admin in their own
+// session without sudo mode, through the checks kipp runner set makes,
+// audited, and in effect at once.
 func TestAnAdminChangesEachRunnersLimitAndLabels(t *testing.T) {
 	var changed atomic.Int32
 	e := newEnv(t, func(a *API) { a.deps.PlacesChanged = func(context.Context) { changed.Add(1) } })
@@ -199,9 +205,7 @@ func TestAnAdminChangesEachRunnersLimitAndLabels(t *testing.T) {
 	must(t, e.st.PutEngine(ctx, store.Engine{Name: "mac", Kind: "docker", URL: "unix:///var/run/docker.sock", Labels: []string{"linux"}, Max: 1, Enabled: true}))
 	three, none, minus := 3, 0, -1
 	is(t, "a user", e.api.svc.SetRunner(ctx, user.u, user.sess, "box", RunnerEdit{Executors: &three}), ErrForbidden)
-	is(t, "an admin not in sudo mode", e.api.svc.SetRunner(ctx, admin.u, admin.sess, "box", RunnerEdit{Executors: &three}), ErrSudoRequired)
 	is(t, "the built-in limit from a user", e.api.svc.SetBuiltInExecutors(ctx, user.u, user.sess, 3), ErrForbidden)
-	e.sudo(t, admin)
 	must(t, e.api.svc.SetRunner(ctx, admin.u, admin.sess, "box", RunnerEdit{Executors: &three, Labels: []string{"linux", "arm64"}}))
 	must(t, e.api.svc.SetRunner(ctx, admin.u, admin.sess, "box", RunnerEdit{Executors: &none}))
 	ten := 10
@@ -243,4 +247,102 @@ func TestAnAdminChangesEachRunnersLimitAndLabels(t *testing.T) {
 	if changed.Load() != 5 {
 		t.Fatalf("the server was told of %d changes", changed.Load())
 	}
+}
+
+// placeEditCalls are the changes to a runner, an engine and the cache that
+// make and show no credential, so they need no sudo mode: each call is made
+// as u with sess.
+func placeEditCalls(e *env) map[string]func(u *store.User, sess *store.Session) error {
+	ctx := context.Background()
+	svc := e.api.svc
+	two := 2
+	return map[string]func(u *store.User, sess *store.Session) error{
+		"SetEngine": func(u *store.User, sess *store.Session) error {
+			return svc.SetEngine(ctx, u, sess, "mac", EngineEdit{Labels: []string{"linux", "amd64"}, Max: &two})
+		},
+		"DisableEngine": func(u *store.User, sess *store.Session) error {
+			return svc.SetEngineEnabled(ctx, u, sess, "mac", false)
+		},
+		"EnableEngine": func(u *store.User, sess *store.Session) error { return svc.SetEngineEnabled(ctx, u, sess, "mac", true) },
+		"SetRunner": func(u *store.User, sess *store.Session) error {
+			return svc.SetRunner(ctx, u, sess, "box", RunnerEdit{Labels: []string{"linux", "arm64"}, Executors: &two, Weight: &two})
+		},
+		"DisableRunner": func(u *store.User, sess *store.Session) error {
+			return svc.SetRunnerEnabled(ctx, u, sess, "box", false)
+		},
+		"EnableRunner":        func(u *store.User, sess *store.Session) error { return svc.SetRunnerEnabled(ctx, u, sess, "box", true) },
+		"SetBuiltInExecutors": func(u *store.User, sess *store.Session) error { return svc.SetBuiltInExecutors(ctx, u, sess, 3) },
+		"RemoveCacheEntry":    func(u *store.User, sess *store.Session) error { return svc.RemoveCacheEntry(ctx, u, sess, 1) },
+		"RemoveCacheScope": func(u *store.User, sess *store.Session) error {
+			_, err := svc.RemoveCacheScope(ctx, u, sess, "api")
+			return err
+		},
+		"DeleteEngine": func(u *store.User, sess *store.Session) error { return svc.DeleteEngine(ctx, u, sess, "mac") },
+		"DeleteRunner": func(u *store.User, sess *store.Session) error { return svc.DeleteRunner(ctx, u, sess, "box") },
+	}
+}
+
+// placeEditOrder runs the deletes last, so every other change finds what it
+// changes.
+var placeEditOrder = []string{"SetEngine", "DisableEngine", "EnableEngine", "SetRunner", "DisableRunner", "EnableRunner",
+	"SetBuiltInExecutors", "RemoveCacheEntry", "RemoveCacheScope", "DeleteEngine", "DeleteRunner"}
+
+func placesEnv(t *testing.T) *env {
+	t.Helper()
+	e := newEnv(t, func(a *API) {
+		a.deps.Cache = cachesrv.New(cachesrv.Options{Dir: t.TempDir(), Store: a.deps.Store})
+	})
+	ctx := context.Background()
+	must(t, e.st.PutEngine(ctx, store.Engine{Name: "mac", Kind: "docker", URL: "unix:///var/run/docker.sock", Labels: []string{"linux"}, Max: 1, Enabled: true}))
+	must(t, e.st.PutRunner(ctx, store.Runner{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true, TokenHash: "h"}))
+	for _, k := range []struct{ scope, key string }{{"site", "a"}, {"api", "b"}} {
+		_, err := e.st.PutCacheEntry(ctx, &store.CacheEntry{Scope: k.scope, Namespace: "default", Key: k.key, Size: 5, SavedAt: time.Now()})
+		must(t, err)
+	}
+	return e
+}
+
+func TestAnAdminInTheirOwnSessionChangesRunnersEnginesAndTheCacheWithoutSudo(t *testing.T) {
+	e := placesEnv(t)
+	admin := e.person(t, "boss", true)
+	if admin.sess.SudoUntil != nil {
+		t.Fatal("the admin's session is in sudo mode")
+	}
+	calls := placeEditCalls(e)
+	eq(t, "every change is run", len(placeEditOrder), len(calls))
+	for _, name := range placeEditOrder {
+		must(t, calls[name](admin.u, admin.sess))
+	}
+	ctx := context.Background()
+	if _, err := e.st.Engine(ctx, "mac"); err == nil {
+		t.Fatal("the engine is still there")
+	}
+	if _, err := e.st.Runner(ctx, "box"); err == nil {
+		t.Fatal("the runner is still there")
+	}
+	if left, err := e.st.CacheEntries(ctx); err != nil || len(left) != 0 {
+		t.Fatalf("the cache kept %+v, %v", left, err)
+	}
+	var actions []string
+	for _, a := range e.audit(t) {
+		actions = append(actions, a.Actor+" "+a.Action+" "+a.Target)
+	}
+	eq(t, "the audit", strings.Join(actions, "|"), strings.Join([]string{
+		"boss engine.set mac", "boss engine.set mac", "boss engine.set mac",
+		"boss runner.set box", "boss runner.set box", "boss runner.set box",
+		"boss runner.set built-in", "boss cache.remove site/default/a", "boss cache.remove api/default/b",
+		"boss engine.rm mac", "boss runner.rm box",
+	}, "|"))
+}
+
+func TestARunnerEngineOrCacheChangeIsRefusedToANonAdminATokenAndAnotherUsersSession(t *testing.T) {
+	e := placesEnv(t)
+	admin, bob := e.person(t, "boss", true), e.person(t, "bob", false)
+	e.sudo(t, bob)
+	for name, call := range placeEditCalls(e) {
+		is(t, name+" from a non-admin in sudo mode", call(bob.u, bob.sess), ErrForbidden)
+		is(t, name+" from an admin's token", call(admin.u, nil), ErrForbidden)
+		is(t, name+" from another user's session", call(admin.u, bob.sess), ErrForbidden)
+	}
+	eq(t, "audit rows", len(e.audit(t)), 0)
 }

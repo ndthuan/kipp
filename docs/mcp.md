@@ -179,7 +179,7 @@ next call.
 password as making an API token does ([sudo mode](accounts.md#sudo-mode)).
 You type it once if you reach the consent page through the login (the
 login counts as having typed it), and once more if you were logged in
-already and the 10 minutes have run out. Denying needs none.
+already and the 2 hours have run out. Denying needs none.
 
 **How long it lasts.** An access token lasts 1 hour. A refresh token lasts
 30 days from its last use and each use gives a new one; a refresh token

@@ -42,7 +42,7 @@ func TestTheCachePageListsEntriesByScope(t *testing.T) {
 	contains(t, page, "npm-1", "npm-2", "go-1", "2 entries, 3.0 KiB", "1 entry, 10 B", "/admin/cache/scopes/site/delete")
 }
 
-func TestTheCachePageRemovesAnEntryAndAScopeAsAnAdminAfterSudo(t *testing.T) {
+func TestTheCachePageRemovesAnEntryAndAScopeAsAnAdminWithoutSudo(t *testing.T) {
 	e := site(t)
 	admin := e.login(t, "admin")
 	one := putCache(t, e, "site", "npm-1", 100)
@@ -53,19 +53,18 @@ func TestTheCachePageRemovesAnEntryAndAScopeAsAnAdminAfterSudo(t *testing.T) {
 	eq(t, "confirm", code, http.StatusOK)
 	contains(t, page, "Remove the cache entry npm-1?")
 	path := "/admin/cache/entries/" + strconv.FormatInt(one, 10) + "/delete"
-	res, _ := e.form(t, admin, path, url.Values{})
-	eq(t, "without sudo", res.StatusCode, http.StatusForbidden)
-	e.sudo(t, admin)
-	res, _ = e.form(t, admin, path, url.Values{})
-	eq(t, "remove an entry", res.StatusCode, http.StatusSeeOther)
+	res, page := e.form(t, admin, path, url.Values{})
+	eq(t, "remove an entry without sudo", res.StatusCode, http.StatusSeeOther)
+	lacks(t, page, "Confirm your password")
 	if _, err := e.st.CacheEntry(context.Background(), one); err == nil {
 		t.Fatal("the entry is still there")
 	}
 	res, _ = e.form(t, admin, path, url.Values{})
 	eq(t, "again", res.StatusCode, http.StatusNotFound)
 
-	res, _ = e.form(t, admin, "/admin/cache/scopes/site/delete", url.Values{})
-	eq(t, "clear a scope", res.StatusCode, http.StatusSeeOther)
+	res, page = e.form(t, admin, "/admin/cache/scopes/site/delete", url.Values{})
+	eq(t, "clear a scope without sudo", res.StatusCode, http.StatusSeeOther)
+	lacks(t, page, "Confirm your password")
 	left, err := e.st.CacheEntries(context.Background())
 	must(t, err)
 	if len(left) != 1 || left[0].Scope != "api" {

@@ -77,7 +77,7 @@ func (e *env) lastAudit(t *testing.T) string {
 	return a.Actor + " " + a.Action + " " + a.Target + ": " + a.Detail
 }
 
-func TestSudoTakesTheOwnPasswordAndLastsTenMinutes(t *testing.T) {
+func TestSudoTakesTheOwnPasswordAndLastsTwoHoursFromIt(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
 	alice := e.person(t, "alice", false)
@@ -87,9 +87,12 @@ func TestSudoTakesTheOwnPasswordAndLastsTenMinutes(t *testing.T) {
 	if alice.sess.SudoUntil != nil {
 		t.Fatal("a wrong password gave sudo")
 	}
+	eq(t, "the window", SudoFor, 2*time.Hour)
+	before := time.Now()
 	e.sudo(t, alice)
-	if until := alice.sess.SudoUntil; until == nil || time.Until(*until) < 9*time.Minute || time.Until(*until) > 10*time.Minute {
-		t.Fatalf("sudo until %v", until)
+	after := time.Now()
+	if until := alice.sess.SudoUntil; until == nil || until.Before(before.Add(SudoFor)) || until.After(after.Add(SudoFor)) {
+		t.Fatalf("sudo until %v, given between %v and %v", until, before, after)
 	}
 	stored, err := e.st.Session(ctx, alice.sess.ID)
 	must(t, err)
@@ -182,6 +185,22 @@ func TestASessionChangesCredentialsOrSecretsOnlyInSudoMode(t *testing.T) {
 		is(t, name+" with sudo that has ended", call(root.u, &expired), ErrSudoRequired)
 	}
 	eq(t, "audit rows", len(e.audit(t)), 0)
+}
+
+// A session whose password was given just under SudoFor ago is in sudo
+// mode, and one whose was given just over is not.
+func TestASessionIsInSudoModeJustUnderTwoHoursAfterThePasswordAndNotJustAfter(t *testing.T) {
+	e := newEnv(t)
+	root, bob := e.person(t, "root", true), e.person(t, "bob", false)
+	givenAt := func(ago time.Duration) *store.Session {
+		s := *root.sess
+		s.SudoUntil = new(time.Now().Add(-ago).Add(SudoFor))
+		return &s
+	}
+	justUnder, justOver := givenAt(2*time.Hour-time.Minute), givenAt(2*time.Hour+time.Second)
+	calls := credentialCalls(e, bob)
+	must(t, calls["AddUser"](root.u, justUnder))
+	is(t, "SetAdmin just over", calls["SetAdmin"](root.u, justOver), ErrSudoRequired)
 }
 
 func TestAnAdminCallIsRefusedToANonAdminEvenInSudoMode(t *testing.T) {

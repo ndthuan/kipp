@@ -38,7 +38,7 @@ func (s *Service) CachesPage(ctx context.Context, u *store.User, at time.Time, i
 
 // RemoveCacheEntry removes one cache entry by hand.
 func (s *Service) RemoveCacheEntry(ctx context.Context, u *store.User, sess *store.Session, id int64) error {
-	if err := administers(u, sess); err != nil {
+	if err := administersHere(u, sess); err != nil {
 		return err
 	}
 	if s.deps.Cache == nil {
@@ -53,7 +53,7 @@ func (s *Service) RemoveCacheEntry(ctx context.Context, u *store.User, sess *sto
 // RemoveCacheScope removes every entry of a scope by hand and is how many
 // it removed. A scope with none is not found.
 func (s *Service) RemoveCacheScope(ctx context.Context, u *store.User, sess *store.Session, scope string) (int, error) {
-	if err := administers(u, sess); err != nil {
+	if err := administersHere(u, sess); err != nil {
 		return 0, err
 	}
 	if s.deps.Cache == nil {

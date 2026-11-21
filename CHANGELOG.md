@@ -40,6 +40,14 @@ Added:
 
 Changed:
 
+- Sudo mode lasts 2 hours instead of 10 minutes, still counted from the
+  moment the password was given: a change to logins, tokens, grants,
+  secrets, GitHub Apps or jobs asks for the password once a sitting.
+- Changing, enabling, disabling and removing an engine or a standing
+  runner, setting the built-in runner's limit and removing cache entries
+  no longer ask for the password: an admin makes them in their own browser
+  session. Adding an engine or a runner and a runner's new token still ask;
+  an API token still makes none of them.
 - The Storage page is the Housekeeping page, at `/admin/housekeeping`; the
   old address leads to it. It opens at once and each section (disk and
   database, compact, recommendations, data directory, tables, jobs,

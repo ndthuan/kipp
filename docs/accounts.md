@@ -223,15 +223,24 @@ it at all.
 
 ## Sudo mode
 
-A change to logins, tokens, secrets, runners, engines, GitHub Apps or the
-cache in the browser needs the user's password given in the last 10
-minutes, as GitHub asks for it: a session cookie someone took is not
-enough to make a token, add a user or set a secret. The page asks for the
-password, says what was being done, and leads back to the page the change
-came from, where it is sent again; a wrong password there counts as a
-wrong login does. Changing one's own password needs the current one
-instead, and ending one's other sessions or reloading the job files needs
-neither. An API token never makes these changes. Approving an app on the
+A change to logins, tokens, grants, secrets, GitHub Apps or jobs in the
+browser needs the user's password given in the last 2 hours, as GitHub
+asks for it: a session cookie someone took is not enough to make a token,
+add a user, set a secret or make a job read one. So does adding an engine
+(it takes an ssh key) and adding a standing runner or giving it a new
+token (each shows a token). The 2 hours count from the moment the
+password was given, not from the last change: a session left open is not
+a key for longer by being used. The page asks for the password, says what
+was being done, and leads back to the page the change came from, where it
+is sent again; a wrong password there counts as a wrong login does.
+
+Changing an engine or a standing runner (labels, limit, weight, enabling
+or disabling it), removing one, setting the built-in runner's limit and
+removing cache entries make and show no credential: an admin does them in
+their own browser session without the password. Changing one's own
+password needs the current one instead, and ending one's other sessions or
+reloading the job files needs neither. An API token never makes these
+changes. Approving an app on the
 consent page ([Connect Claude](mcp.md#connect-claude-claudeai-the-apps-claude-code))
 asks for it too, and a login that leads straight to that page counts as
 having given it.

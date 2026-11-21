@@ -934,7 +934,7 @@ An admin sees three tabs on the page of a job of the server's own:
 Builds, Edit and History. Every viewer sees where the job comes from
 (`file`, `store` or `store over file`) beside its name. Nobody else sees
 the tabs or the YAML. Every change asks for the password once more, as a
-secret does; then for 10 minutes it does not, and a job's text sent
+secret does; then for 2 hours it does not, and a job's text sent
 without it comes back in the editor, to be sent again.
 
 - Edit holds the job's YAML in a plain text box. Save sends it with the

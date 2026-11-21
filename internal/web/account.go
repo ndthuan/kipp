@@ -60,9 +60,6 @@ var sudoActions = map[string]sudoAction{
 	"POST /admin/secrets/{name}/scopes":           {"change a secret's scopes", at("/admin/secrets")},
 	"POST /admin/runners/engines":                 {"add an engine", at("/admin/runners")},
 	"POST /admin/runners/runners":                 {"add a standing runner", at("/admin/runners")},
-	editEngineRoute:                               {"change an engine", at("/admin/runners")},
-	editRunnerRoute:                               {"change a standing runner", at("/admin/runners")},
-	builtInRoute:                                  {"change the built-in runner's limit", at("/admin/runners")},
 	createJobRoute:                                {"create a job", at("/admin/jobs/new")},
 	saveJobRoute:                                  {"change a job", editPage},
 	"POST /jobs/{name}/delete":                    {"delete a job", samePath},
@@ -93,11 +90,17 @@ var sudoCarries = map[string]formCarry{
 	"POST /admin/secrets/{name}/scopes": {form: "scopes", fields: []string{"scopes"}, row: true},
 	"POST /admin/runners/engines":       {form: "engine", fields: []string{"name", "url", "labels", "max", "ssh_key"}},
 	"POST /admin/runners/runners":       {form: "runner", fields: []string{"name", "labels", "executors"}},
-	editEngineRoute:                     {form: "engine-edit", fields: []string{"labels", "max"}, row: true},
-	editRunnerRoute:                     {form: "runner-edit", fields: []string{"labels", "executors", "weight"}, row: true},
-	builtInRoute:                        {form: "builtin", fields: []string{"executors"}},
 	createJobRoute:                      {form: "job", fields: []string{"yaml"}},
 	saveJobRoute:                        {form: "job", fields: []string{"yaml", "version"}},
+}
+
+// refusedCarries are the forms whose change needs no password step and
+// that come back filled only when it is refused: the Runners page's row
+// edits.
+var refusedCarries = map[string]formCarry{
+	editEngineRoute: {form: "engine-edit", fields: []string{"labels", "max"}, row: true},
+	editRunnerRoute: {form: "runner-edit", fields: []string{"labels", "executors", "weight"}, row: true},
+	builtInRoute:    {form: "builtin", fields: []string{"executors"}},
 }
 
 // carryPrefix keeps a carried field apart from the password form's own
@@ -219,6 +222,9 @@ func (f filled) RowRefusal(form, of string) string {
 // filledAs is the form of route filled from values.
 func filledAs(route string, values url.Values, of string) filled {
 	c, ok := sudoCarries[route]
+	if !ok {
+		c, ok = refusedCarries[route]
+	}
 	if !ok {
 		return filled{}
 	}

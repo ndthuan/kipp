@@ -24,6 +24,16 @@ func administers(u *store.User, sess *store.Session) error {
 	return credentials(u, sess)
 }
 
+// administersHere is nil when u may make a change that makes and shows no
+// credential, such as a runner's limit or a cache entry's removal: an
+// admin, in their own browser session, in sudo mode or not.
+func administersHere(u *store.User, sess *store.Session) error {
+	if !u.Admin || sess == nil || sess.UserID != u.ID {
+		return ErrForbidden
+	}
+	return nil
+}
+
 // someone is the user called name, or ErrNotFound.
 func (s *Service) someone(ctx context.Context, name string) (*store.User, error) {
 	who, err := s.deps.Store.UserByName(ctx, name)

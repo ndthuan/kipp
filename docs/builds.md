@@ -472,7 +472,8 @@ sets `cache_writes_default: true` and writes `default`.
 - An admin sees and clears the caches on the Cache page (`/admin/cache`,
   in the menu under their name): the entries by scope with their size,
   when each was saved and last restored, and a button that removes one or
-  a whole scope after a confirmation, in [sudo mode](accounts.md#sudo-mode).
+  a whole scope after a confirmation; it does not ask for the password
+  again ([Sudo mode](accounts.md#sudo-mode)).
   `GET /api/v1/admin/cache` lists them for an admin's token, and
   `kipp cache ls` and `kipp cache rm` do the same on the server's machine
   ([Commands](cli.md#kipp-cache)). Each removal is a row of the audit.

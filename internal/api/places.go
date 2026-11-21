@@ -173,7 +173,7 @@ type EngineEdit struct {
 // enabled, in effect at once: a disabled one takes no new container, and
 // what runs past a lowered limit finishes.
 func (s *Service) SetEngine(ctx context.Context, u *store.User, sess *store.Session, name string, ed EngineEdit) error {
-	if err := administers(u, sess); err != nil {
+	if err := administersHere(u, sess); err != nil {
 		return err
 	}
 	e, err := s.deps.Store.Engine(ctx, name)
@@ -207,7 +207,7 @@ func (s *Service) SetEngineEnabled(ctx context.Context, u *store.User, sess *sto
 
 // DeleteEngine removes an engine; the containers it runs finish.
 func (s *Service) DeleteEngine(ctx context.Context, u *store.User, sess *store.Session, name string) error {
-	if err := administers(u, sess); err != nil {
+	if err := administersHere(u, sess); err != nil {
 		return err
 	}
 	if err := s.deps.Store.DeleteEngine(ctx, name); err != nil {
@@ -282,7 +282,7 @@ func EditRunner(ctx context.Context, st *store.Store, name string, ed RunnerEdit
 // SetRunner changes a standing runner, in effect at once: a disabled one
 // takes nothing new, and what runs past a lowered limit finishes.
 func (s *Service) SetRunner(ctx context.Context, u *store.User, sess *store.Session, name string, ed RunnerEdit) error {
-	if err := administers(u, sess); err != nil {
+	if err := administersHere(u, sess); err != nil {
 		return err
 	}
 	a, err := EditRunner(ctx, s.deps.Store, name, ed)
@@ -313,7 +313,7 @@ func SetBuiltIn(ctx context.Context, st *store.Store, executors int) error {
 // once and kept across restarts. A server that runs no stage of its own
 // (--executors 0) has none to change: that is how it was started.
 func (s *Service) SetBuiltInExecutors(ctx context.Context, u *store.User, sess *store.Session, executors int) error {
-	if err := administers(u, sess); err != nil {
+	if err := administersHere(u, sess); err != nil {
 		return err
 	}
 	if s.deps.Dispatch.Executors() == 0 {
@@ -355,7 +355,7 @@ func (s *Service) NewRunnerToken(ctx context.Context, u *store.User, sess *store
 // DeleteRunner removes a standing runner: what it runs fails, and its token
 // is refused.
 func (s *Service) DeleteRunner(ctx context.Context, u *store.User, sess *store.Session, name string) error {
-	if err := administers(u, sess); err != nil {
+	if err := administersHere(u, sess); err != nil {
 		return err
 	}
 	if err := s.deps.Store.DeleteRunner(ctx, name); err != nil {

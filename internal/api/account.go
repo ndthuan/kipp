@@ -16,9 +16,10 @@ import (
 )
 
 // SudoFor is how long a session may change credentials and secrets after
-// its user gave their password again: long enough for one sitting, short
-// enough that a session left open is not a key to everything.
-const SudoFor = 10 * time.Minute
+// its user gave their password again, counted from that moment and not
+// from the last use: long enough for one sitting, short enough that a
+// session left open is not a key to everything.
+const SudoFor = 2 * time.Hour
 
 // MaxTokens bounds one user's tokens, so that a session in sudo mode
 // cannot fill the table.

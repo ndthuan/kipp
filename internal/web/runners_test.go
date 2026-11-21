@@ -67,20 +67,34 @@ func TestTheRunnersPageAddsAnEngineAndAnRunnerWhoseTokenIsShownOnce(t *testing.T
 	contains(t, e.audit(t), "admin engine.add mac", "admin runner.add box")
 }
 
-func TestAnEngineAndAnRunnerAreDisabledAndRemovedAfterAPageThatAsks(t *testing.T) {
+// Disabling, enabling and removing an engine or a runner shows no
+// credential, so an admin does it without the password step; a new token
+// for a runner shows one, so it still asks.
+func TestAnEngineAndAnRunnerAreDisabledAndRemovedWithoutSudoAfterAPageThatAsks(t *testing.T) {
 	e := site(t)
 	admin := e.login(t, "admin")
-	e.sudo(t, admin)
 	ctx := context.Background()
 	must(t, e.st.PutEngine(ctx, store.Engine{Name: "mac", Kind: "docker", URL: "unix:///d.sock", Labels: []string{"linux"}, Max: 1, Enabled: true}))
 	must(t, e.st.PutRunner(ctx, store.Runner{Name: "box", Labels: []string{"linux"}, Executors: 1, Enabled: true, TokenHash: "old"}))
-	for _, path := range []string{"/admin/runners/engines/mac/disable", "/admin/runners/runners/box/disable"} {
-		res, _ := e.form(t, admin, path, nil)
+	for _, path := range []string{"/admin/runners/engines/mac/disable", "/admin/runners/runners/box/disable", "/admin/runners/engines/mac/enable", "/admin/runners/runners/box/enable"} {
+		res, page := e.form(t, admin, path, nil)
 		eq(t, path, res.StatusCode, http.StatusSeeOther)
+		lacks(t, page, "Confirm your password")
 	}
 	en, err := e.st.Engine(ctx, "mac")
 	must(t, err)
 	ag, err := e.st.Runner(ctx, "box")
+	must(t, err)
+	if !en.Enabled || !ag.Enabled {
+		t.Fatal("not enabled again")
+	}
+	for _, path := range []string{"/admin/runners/engines/mac/disable", "/admin/runners/runners/box/disable"} {
+		res, _ := e.form(t, admin, path, nil)
+		eq(t, path, res.StatusCode, http.StatusSeeOther)
+	}
+	en, err = e.st.Engine(ctx, "mac")
+	must(t, err)
+	ag, err = e.st.Runner(ctx, "box")
 	must(t, err)
 	if en.Enabled || ag.Enabled {
 		t.Fatal("not disabled")
@@ -92,17 +106,23 @@ func TestAnEngineAndAnRunnerAreDisabledAndRemovedAfterAPageThatAsks(t *testing.T
 	eq(t, "confirm a new token", code, http.StatusOK)
 	contains(t, page, "A new token for the runner box?")
 	res, page := e.form(t, admin, "/admin/runners/runners/box/token", nil)
+	eq(t, "a new token without sudo", res.StatusCode, http.StatusForbidden)
+	contains(t, page, "Confirm your password")
+	e.sudo(t, admin)
+	res, page = e.form(t, admin, "/admin/runners/runners/box/token", nil)
 	eq(t, "a new token", res.StatusCode, http.StatusOK)
 	if _, err := e.st.RunnerByTokenHash(ctx, auth.HashToken(onceValue(t, page))); err != nil {
 		t.Fatal(err)
 	}
 
+	another := e.login(t, "admin")
 	for _, which := range []string{"engines/mac", "runners/box"} {
-		code, page := get(t, admin, e.srv.URL+"/admin/runners/"+which+"/delete")
+		code, page := get(t, another, e.srv.URL+"/admin/runners/"+which+"/delete")
 		eq(t, "confirm "+which, code, http.StatusOK)
 		contains(t, page, "Remove the")
-		res, _ := e.form(t, admin, "/admin/runners/"+which+"/delete", nil)
-		eq(t, "remove "+which, res.StatusCode, http.StatusSeeOther)
+		res, page := e.form(t, another, "/admin/runners/"+which+"/delete", nil)
+		eq(t, "remove "+which+" without sudo", res.StatusCode, http.StatusSeeOther)
+		lacks(t, page, "Confirm your password")
 	}
 	if _, err := e.st.Engine(ctx, "mac"); err == nil {
 		t.Fatal("the engine is still there")
@@ -311,8 +331,8 @@ func TestTheRunnersPageListsTheBuiltInRunnerWithItsLimitAndWhatItRuns(t *testing
 }
 
 // Each runner's limit and labels are changed on its row: a standing
-// runner's, an engine's and the built-in runner's, after the password
-// step, with the form's usual error for a value that is not one.
+// runner's, an engine's and the built-in runner's, with no password step,
+// and with the form's usual error for a value that is not one.
 func TestTheRunnersPageChangesEachRunnersLimitOnItsRow(t *testing.T) {
 	e := site(t)
 	admin := e.login(t, "admin")
@@ -322,16 +342,14 @@ func TestTheRunnersPageChangesEachRunnersLimitOnItsRow(t *testing.T) {
 	_, page := get(t, admin, e.srv.URL+"/admin/runners")
 	contains(t, page, `action="/admin/runners/built-in"`, `action="/admin/runners/engines/mac"`, `action="/admin/runners/runners/box"`)
 
-	res, _ := e.form(t, admin, "/admin/runners/runners/box", url.Values{"labels": {"linux,arm64"}, "executors": {"3"}})
-	eq(t, "without sudo", res.StatusCode, http.StatusForbidden)
-	e.sudo(t, admin)
 	for path, fields := range map[string]url.Values{
 		"/admin/runners/runners/box": {"labels": {"linux,arm64"}, "executors": {"0"}, "weight": {"10"}},
 		"/admin/runners/engines/mac": {"labels": {"linux,amd64"}, "max": {"3"}},
 		"/admin/runners/built-in":    {"executors": {"6"}},
 	} {
-		res, _ := e.form(t, admin, path, fields)
-		eq(t, path, res.StatusCode, http.StatusSeeOther)
+		res, page := e.form(t, admin, path, fields)
+		eq(t, path+" without sudo", res.StatusCode, http.StatusSeeOther)
+		lacks(t, page, "Confirm your password")
 	}
 	a, err := e.st.Runner(ctx, "box")
 	must(t, err)
@@ -344,7 +362,7 @@ func TestTheRunnersPageChangesEachRunnersLimitOnItsRow(t *testing.T) {
 	contains(t, page, "0 of no limit", "0 of 6", "The built-in runner&#39;s limit is changed")
 	contains(t, e.audit(t), "admin runner.set box labels linux,arm64, executors 0, enabled, weight 10", "admin engine.set mac", "admin runner.set built-in executors 6")
 
-	res, page = e.form(t, admin, "/admin/runners/runners/box", url.Values{"labels": {"linux"}, "executors": {"many"}})
+	res, page := e.form(t, admin, "/admin/runners/runners/box", url.Values{"labels": {"linux"}, "executors": {"many"}})
 	eq(t, "executors that are no number", res.StatusCode, http.StatusBadRequest)
 	contains(t, page, "executors: a whole number", `role="alert"`, `value="many"`)
 	res, page = e.form(t, admin, "/admin/runners/runners/box", url.Values{"labels": {"linux"}, "executors": {"1"}, "weight": {"heavy"}})

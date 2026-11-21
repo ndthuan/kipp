@@ -46,6 +46,29 @@ func TestNoFieldASecretGoesByIsEverCarriedThroughThePasswordStep(t *testing.T) {
 	}
 }
 
+// A runner's, an engine's and the built-in runner's row edits make and
+// show no credential: they never ask for the password, and their forms
+// come back filled only when refused.
+func TestTheRunnersRowEditsAreNoChangeThePasswordStepKnows(t *testing.T) {
+	for _, route := range []string{editEngineRoute, editRunnerRoute, builtInRoute} {
+		if _, ok := sudoActions[route]; ok {
+			t.Errorf("%s asks for the password", route)
+		}
+		if _, ok := sudoCarries[route]; ok {
+			t.Errorf("%s carries fields through the password step", route)
+		}
+		c, ok := refusedCarries[route]
+		if !ok || c.form == "" || len(c.fields) == 0 {
+			t.Errorf("%s does not come back filled when refused: %+v", route, c)
+		}
+	}
+	for route := range refusedCarries {
+		if _, ok := sudoCarries[route]; ok {
+			t.Errorf("%s is in both lists", route)
+		}
+	}
+}
+
 var hiddenRe = regexp.MustCompile(`<input type="hidden" name="([^"]*)" value="([^"]*)">`)
 
 // hiddenOf is what the hidden fields of page send, as a browser would.

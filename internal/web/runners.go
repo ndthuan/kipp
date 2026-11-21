@@ -58,7 +58,7 @@ func (runnersData) OSArch(a api.RunnerInfo) string {
 }
 
 func (s *Site) runners(w http.ResponseWriter, r *http.Request, u *store.User) {
-	s.runnersPage(w, r, u, http.StatusOK, fillOf(r, addEngineRoute, addRunnerRoute, editEngineRoute, editRunnerRoute, builtInRoute))
+	s.runnersPage(w, r, u, http.StatusOK, fillOf(r, addEngineRoute, addRunnerRoute))
 }
 
 // runnersPage is the runners page with fill's form open and filled.
