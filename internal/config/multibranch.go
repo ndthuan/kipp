@@ -332,6 +332,23 @@ func (j *Job) OnDefaultBranch() bool {
 	return j.Origin != nil && j.Origin.Kind == KindBranch && j.DefaultBranch != "" && j.Origin.Branch == j.DefaultBranch
 }
 
+// IsSideChild reports whether the job is a pull request or a branch known
+// not to be the repo's default: the work in progress of whoever owns it. A
+// branch whose default branch is not known yet, a tag child and a job of a
+// file are not.
+func (j *Job) IsSideChild() bool {
+	if j.Origin == nil {
+		return false
+	}
+	switch {
+	case IsPR(j.Origin.Kind):
+		return true
+	case j.Origin.Kind == KindBranch:
+		return j.DefaultBranch != "" && !j.OnDefaultBranch()
+	}
+	return false
+}
+
 // DefaultChild is the child of the parent's default branch in the
 // snapshot, nil when there is none yet.
 func (s *Snapshot) DefaultChild(parent string) *Job {

@@ -18,9 +18,9 @@
 {{$o := .Data.Overview}}{{$w := .Data.Range}}{{$why := .Data.Why}}
 <h1 class="sr-only">Overview</h1>
 <div id="overview" class="stack" hx-get="{{.Data.Self}}" hx-select="#overview" hx-target="this" hx-swap="outerHTML" hx-trigger="kipp-changed from:body, every 60s">
-{{$f := len $o.Failing}}{{$u := len $o.Unstable}}<p class="health" role="status">{{if $f}}<a class="link health-bad" href="#failing">{{$f}} failing</a>{{else}}<span class="health-ok">Nothing failing</span>{{end}}{{if $u}} <a class="link health-warn" href="#unstable">{{$u}} unstable</a>{{end}}</p>
+{{$f := len $o.Failing}}{{$u := len $o.Unstable}}{{$h := $o.Hidden}}<p class="health" role="status">{{if $f}}<a class="link health-bad" href="#failing">{{$f}} failing</a>{{else}}<span class="health-ok">Nothing failing</span>{{end}}{{if $u}} <a class="link health-warn" href="#unstable">{{$u}} unstable</a>{{end}}</p>
 <div class="columns">
-<section class="sec sec-failing{{if not $f}} sec-quiet{{end}}" id="failing">
+<section class="sec sec-failing{{if not (or $f $h.Failing)}} sec-quiet{{end}}" id="failing">
 <h2>Failing now</h2>
 {{with $o.Failing}}<div class="scroll">
 <table class="rows stacked two-line">
@@ -36,9 +36,10 @@
 </table>
 </div>
 {{else}}<p class="sub">Nothing is failing.</p>
+{{end}}{{if $h.Failing}}<p class="sub side-count"><a class="link" href="/jobs?status=failing">{{sideCount $h.Failing "red"}}</a></p>
 {{end}}</section>
 <div class="sec sec-now">{{template "queue" .Data.Queue}}</div>
-<section class="sec sec-unstable{{if not $u}} sec-quiet{{end}}" id="unstable">
+<section class="sec sec-unstable{{if not (or $u $h.Unstable)}} sec-quiet{{end}}" id="unstable">
 <h2 class="attn-unstable">Unstable now</h2>
 {{with $o.Unstable}}<div class="scroll">
 <table class="rows stacked two-line">
@@ -54,6 +55,7 @@
 </table>
 </div>
 {{else}}<p class="sub">Nothing is unstable.</p>
+{{end}}{{if $h.Unstable}}<p class="sub side-count"><a class="link" href="/jobs?status=unstable">{{sideCount $h.Unstable "unstable"}}</a></p>
 {{end}}</section>
 <section class="sec sec-flaky">
 <h2>Flaky</h2>
@@ -71,6 +73,7 @@
 </table>
 </div>
 {{else}}<p class="sub">Nothing is flaky.</p>
+{{end}}{{if $h.Flaky}}<p class="sub side-count"><a class="link" href="/jobs">{{sideCount $h.Flaky "flaky"}}</a></p>
 {{end}}</section>
 </div>
 <section class="charts stack" aria-labelledby="charts-heading">

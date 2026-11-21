@@ -2,6 +2,7 @@ package overview
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -263,6 +264,61 @@ func TestAJobWhoseNewestBuildsAreAllGreenIsNotFlaky(t *testing.T) {
 	}
 }
 
+func TestOnlyTrunkJobsAreListedAndSideJobsAreCountedHiddenInTheSameSection(t *testing.T) {
+	side := func(name, shape string) Job {
+		j := job(name, shape)
+		j.Child, j.Side = true, true
+		return j
+	}
+	trunk := func(name, shape string) Job {
+		j := job(name, shape)
+		j.Child = true
+		return j
+	}
+	flakyShape := "ssssfssssfsssssfsssf"
+	for _, c := range []struct {
+		name                                       string
+		jobs                                       []Job
+		failing, unstable, flaky                   string
+		hiddenFailing, hiddenUnstable, hiddenFlaky int
+	}{
+		{name: "a red pull request, a red side branch and a red default branch",
+			jobs:    []Job{side("pr", "f"), side("feature", "f"), trunk("main", "f")},
+			failing: "main", hiddenFailing: 2},
+		{name: "a red tag child or default-branch-unknown child or file job is trunk",
+			jobs:    []Job{trunk("tag", "f"), trunk("unknown", "f"), job("file", "f")},
+			failing: "file,tag,unknown"},
+		{name: "unstable",
+			jobs:     []Job{side("pr", "u"), side("feature", "u"), trunk("main", "u")},
+			unstable: "main", hiddenUnstable: 2},
+		{name: "flaky",
+			jobs:  []Job{side("pr", flakyShape), trunk("main", flakyShape), job("file", flakyShape)},
+			flaky: "file,main", hiddenFlaky: 1},
+		{name: "a green quiet side job counts nowhere",
+			jobs: []Job{side("pr", "ssss")}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			o := compute(c.jobs, DefaultFlips, now)
+			sorted := func(s string) string {
+				parts := strings.Split(s, ",")
+				if s == "" {
+					return ""
+				}
+				slices.Sort(parts)
+				return strings.Join(parts, ",")
+			}
+			unstable := names(o.Unstable, func(f Failing) string { return f.Job })
+			if sorted(failing(o)) != c.failing || sorted(unstable) != c.unstable || sorted(flaky(o)) != c.flaky {
+				t.Fatalf("failing %q unstable %q flaky %q", failing(o), unstable, flaky(o))
+			}
+			want := Hidden{c.hiddenFailing, c.hiddenUnstable, c.hiddenFlaky}
+			if o.Hidden != want {
+				t.Fatalf("hidden %+v, want %+v", o.Hidden, want)
+			}
+		})
+	}
+}
+
 func TestTheFlakyTagOfAnUnstableRowFollowsTheQuietRule(t *testing.T) {
 	shape := "uuuuu" + "fsfsfsfsfsfsfsf"
 	for quiet, want := range map[int]bool{0: true, 5: false} {
@@ -272,5 +328,14 @@ func TestTheFlakyTagOfAnUnstableRowFollowsTheQuietRule(t *testing.T) {
 		if len(o.Unstable) != 1 || o.Unstable[0].Flaky != want {
 			t.Fatalf("quiet %d: %+v", quiet, o.Unstable)
 		}
+	}
+}
+
+func TestASideJobStaysInItsGroupCounts(t *testing.T) {
+	j := job("pr", "f")
+	j.Child, j.Side, j.Group = true, true, "web"
+	o := compute([]Job{j}, DefaultFlips, now)
+	if len(o.Groups) != 1 || o.Groups[0].Red != 1 {
+		t.Fatalf("%+v", o.Groups)
 	}
 }

@@ -134,7 +134,8 @@ comes with its numbers as text for a screen reader:
 
 The columns follow, the left one with:
 
-- **Failing now**: every job whose newest finished build is red, with how
+- **Failing now**: every job whose newest finished build is red (see the
+  note on pull requests and side branches below), with how
   long it has been red, the run of its recent builds as dots, and a `flaky`
   tag when it also flips as often as a flaky job does. The job that has
   been red for the shortest time is first.
@@ -154,6 +155,17 @@ The columns follow, the left one with:
 
 and the right one with **Now**: the queue, as below, with the 10 newest ended builds under it. A job's
 next run is on its own page and in the job list.
+
+Failing now, Unstable now and Flaky list the jobs that are the trunk: a job of
+a file, the child of a multibranch job that builds the repo's default branch
+and the child that builds its tags. A pull request (`pr` or `pr-head`) and a
+branch other than the default one are somebody's work in progress, so they are
+left out of the three lists, and each section says how many it left out in a
+quiet line ("3 pull requests and branches red") that links to the job list
+filtered to what is failing or unstable (Flaky links to the whole list). A
+child of a repo whose default branch kipp does not know yet is listed. The
+groups, the graphs and every job's own page count all of them, and there is
+no setting to list them.
 
 **Groups** comes last across the full width: one line per group, linking to
 its list, with how many jobs are green, red, never built, running and

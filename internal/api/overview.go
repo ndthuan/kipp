@@ -52,7 +52,7 @@ func (s *Service) Overview(ctx context.Context, u *store.User, rg overview.Range
 	for _, n := range names {
 		j := snap.Jobs[n]
 		running := last[n] != nil && !last[n].Status.Terminal()
-		jobs = append(jobs, overview.Job{Name: n, Group: j.Group, Disabled: j.Disabled, Gone: j.Gone, Child: j.Parent != "",
+		jobs = append(jobs, overview.Job{Name: n, Group: j.Group, Disabled: j.Disabled, Gone: j.Gone, Child: j.Parent != "", Side: j.IsSideChild(),
 			Running: running, History: history[n],
 			Builds: byJob[n], Before: before[n]})
 	}
@@ -90,6 +90,13 @@ type overviewV1 struct {
 	Flaky    []flakyV1   `json:"flaky"`
 	Groups   []groupV1   `json:"groups"`
 	Charts   chartsV1    `json:"charts"`
+	Hidden   hiddenV1    `json:"hidden"`
+}
+
+type hiddenV1 struct {
+	Failing  int `json:"failing"`
+	Unstable int `json:"unstable"`
+	Flaky    int `json:"flaky"`
 }
 
 type chartsV1 struct {
@@ -197,5 +204,6 @@ func toOverviewV1(v *overview.Overview) overviewV1 {
 		out.Groups = append(out.Groups, groupV1{g.Name, g.Green, g.Red, g.NeverBuilt, g.Running, g.Disabled})
 	}
 	out.Charts = toChartsV1(v.Charts)
+	out.Hidden = hiddenV1(v.Hidden)
 	return out
 }

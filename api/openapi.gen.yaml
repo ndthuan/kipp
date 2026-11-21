@@ -4255,6 +4255,8 @@ components:
           items:
             $ref: "#/components/schemas/OverviewGroup"
           type: array
+        hidden:
+          $ref: "#/components/schemas/OverviewHidden"
         unstable:
           description: |
             Jobs whose newest red-or-green build is `unstable`, in the shape of
@@ -4271,6 +4273,7 @@ components:
         - flaky
         - groups
         - charts
+        - hidden
       type: object
     OverviewBucket:
       additionalProperties: false
@@ -4471,6 +4474,29 @@ components:
         - now
         - before
         - change
+      type: object
+    OverviewHidden:
+      additionalProperties: false
+      description: |
+        How many jobs `failing`, `unstable` and `flaky` leave out. Those lists hold
+        the jobs of a file, the child of a repo's default branch and a repo's tag
+        child; a pull request and a branch that is not the default one are counted
+        here instead. A child whose repo's default branch is not known yet is not
+        left out.
+      properties:
+        failing:
+          description: Pull requests and side branches whose newest red-or-green build is red.
+          type: integer
+        flaky:
+          description: Pull requests and side branches that are green now and flaky, or unstable now and flaky.
+          type: integer
+        unstable:
+          description: Pull requests and side branches whose newest red-or-green build is `unstable`.
+          type: integer
+      required:
+        - failing
+        - unstable
+        - flaky
       type: object
     OverviewTally:
       additionalProperties: false

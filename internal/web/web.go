@@ -113,7 +113,7 @@ func parsePages(assets map[string]asset, zone *time.Location) map[string]*templa
 		return "/static/" + name + "?v=" + a.version(), nil
 	}
 	funcs := template.FuncMap{"static": static, "dag": dagOf, "ago": ago, "clock": clockIn(zone), "when": whenIn(zone, time.Now), "zoned": zoned, "elapsed": elapsedIn(zone, time.Now), "since": sinceIn(zone, time.Now), "past": pastIn(zone, time.Now), "join": join, "localStages": localStages, "placeLines": placeLines, "loadText": loadText, "nowOf": nowOf, "endedAt": endedAt, "placeWait": placeWait, "cancelOf": cancelOf, "exitText": exitText, "took": took, "millis": millis, "lines": lines, "buildPath": buildPath, "whyRow": whyRow, "commitShort": commitShort, "crumb": crumb,
-		"userPath": userPath, "secretPath": secretPath, "lasts": lasts, "expired": expired, "tokenList": tokenList, "appList": appList, "appScopes": appScopes, "tokenForm": tokenForm, "secretName": webhook.SecretName, "placePath": placePath, "bytes": byteSize, "scopePath": scopePath, "scopeField": scopeField, "metricsPath": metricsPath, "plural": plural, "percent": percent, "nameRule": nameRuleOf,
+		"userPath": userPath, "secretPath": secretPath, "lasts": lasts, "expired": expired, "tokenList": tokenList, "appList": appList, "appScopes": appScopes, "tokenForm": tokenForm, "secretName": webhook.SecretName, "placePath": placePath, "bytes": byteSize, "scopePath": scopePath, "scopeField": scopeField, "metricsPath": metricsPath, "plural": plural, "sideCount": sideCount, "percent": percent, "nameRule": nameRuleOf,
 		"removePath": removePath, "partLabel": partLabel, "compactTook": compactTook, "rows": rowsText, "lineNo": lineNo}
 	layout := template.Must(template.New("layout.html").Funcs(funcs).ParseFS(templateFS, "templates/layout.html"))
 	files, err := fs.Glob(templateFS, "templates/*.html")
@@ -627,4 +627,13 @@ func (s *Site) logout(w http.ResponseWriter, r *http.Request, _ *store.User) {
 		http.SetCookie(w, c)
 	}
 	redirect(w, r, "/login", http.StatusSeeOther)
+}
+
+// sideCount is the quiet line under a section of the overview that leaves
+// out pull requests and side branches: "3 pull requests and branches red".
+func sideCount(n int, what string) string {
+	if n == 1 {
+		return "1 pull request or branch " + what
+	}
+	return strconv.Itoa(n) + " pull requests and branches " + what
 }

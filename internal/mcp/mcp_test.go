@@ -896,3 +896,33 @@ func (e *env) mustUser(t *testing.T, name string) *store.User {
 	}
 	return u
 }
+
+func TestTheOverviewToolCountsRedPullRequestsAndSideBranchesAsHiddenNotListed(t *testing.T) {
+	e := newEnv(t, nil)
+	parent, err := config.ParseJob("site.yml", []byte("name: site\ngroup: web\nmultibranch: {repo: acme/site}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	child := func(key, kind, branch string) *config.Job {
+		j := parent.Child(config.ChildRecord{Parent: "site", Key: key, Kind: kind, Branch: branch, State: config.ChildLive})
+		j.DefaultBranch = "main"
+		return j
+	}
+	main, pr, feature := child("main", config.KindBranch, "main"), child("pr-4", config.KindPR, "x"), child("feature", config.KindBranch, "feature")
+	e.d.SetSnapshot(e.d.Snapshot().WithJobs(parent, main, pr, feature))
+	ctx := context.Background()
+	for _, j := range []*config.Job{main, pr, feature} {
+		b := &store.Build{Job: j.Name, Status: store.Running, Trigger: "cli", QueuedAt: time.Now().Add(-time.Hour)}
+		if err := e.st.CreateBuild(ctx, b); err != nil {
+			t.Fatal(err)
+		}
+		if err := e.st.SetBuildStatus(ctx, b.ID, store.Failed, time.Now().Add(-10*time.Minute)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var ov overviewOut
+	ok(t, e.session(t, e.admin), "overview", nil, &ov)
+	if len(ov.Failing) != 1 || ov.Failing[0].Job != "site.main" || ov.Hidden != (hiddenOut{Failing: 2}) {
+		t.Fatalf("failing %+v, hidden %+v", ov.Failing, ov.Hidden)
+	}
+}

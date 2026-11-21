@@ -60,7 +60,7 @@ func TestTheOverviewAnswersEverySectionAsTheSpecDescribesItForATokenUser(t *test
 	e.ended(t, "slow", "ssssfssssfsssssfsssf")
 	e.ended(t, "once", "ffffssffssf")
 	o := e.object(t, http.StatusOK, e.admin, "GET", "/api/v1/overview", "")
-	eqKeys(t, "keys", o, "charts,failing,flaky,groups,unstable")
+	eqKeys(t, "keys", o, "charts,failing,flaky,groups,hidden,unstable")
 
 	failing := rowsOf(t, o, "failing")
 	// The job red for the shortest time first.
@@ -258,7 +258,7 @@ func TestTheOverviewOfAServerWithNoJobAndNoBuildIsEveryListEmptyAndTheChartsAllZ
 	e.api.deps.Dispatch.SetSnapshot(snap)
 	for window, columns := range map[string]int{"24h": 25, "7d": 29} {
 		o := e.object(t, http.StatusOK, e.admin, "GET", "/api/v1/overview?window="+window, "")
-		eqKeys(t, "keys", o, "charts,failing,flaky,groups,unstable")
+		eqKeys(t, "keys", o, "charts,failing,flaky,groups,hidden,unstable")
 		for _, k := range []string{"failing", "unstable", "flaky", "groups"} {
 			eq(t, window+" "+k, len(rowsOf(t, o, k)), 0)
 		}
@@ -273,4 +273,23 @@ func TestTheOverviewOfAServerWithNoJobAndNoBuildIsEveryListEmptyAndTheChartsAllZ
 			}
 		}
 	}
+}
+
+func TestTheOverviewListsTrunkJobsAndCountsRedPullRequestsAndSideBranchesAsHidden(t *testing.T) {
+	e := newEnv(t)
+	now := time.Now()
+	live := func(key, kind, branch string, pr int) store.Child {
+		return store.Child{Parent: "site", Key: key, Kind: kind, Branch: branch, PR: pr, State: "live", LastSeenAt: now}
+	}
+	e.withSite(t, live("main", "branch", "main", 0), live("feature", "branch", "feature", 0), live("pr-12", "pr", "feature", 12), live("pr-12-head", "pr-head", "feature", 12))
+	for _, n := range []string{"site.main", "site.feature", "site.pr-12", "site.pr-12-head"} {
+		e.ended(t, n, "fs")
+	}
+	o := e.object(t, http.StatusOK, e.admin, "GET", "/api/v1/overview", "")
+	eq(t, "failing", jobsOf(rowsOf(t, o, "failing"), "job"), "site.main")
+	hidden := o["hidden"].(map[string]any)
+	eqKeys(t, "hidden", hidden, "failing,flaky,unstable")
+	eq(t, "hidden failing", hidden["failing"], any(float64(3)))
+	eq(t, "hidden unstable", hidden["unstable"], any(float64(0)))
+	eq(t, "hidden flaky", hidden["flaky"], any(float64(0)))
 }

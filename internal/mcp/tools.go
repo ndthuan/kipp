@@ -115,7 +115,7 @@ func (s *Server) newServer(k kind) *sdk.Server {
 		Instructions: "kipp is a CI server. Start with overview to see what is red; read_log with a build's number shows why. " +
 			"What you can see and do is what the token's user may.",
 	})
-	add(s, srv, "overview", "What needs attention now: failing, unstable and flaky jobs, recent failures, what runs next, how each group stands, a summary of the graphs, and the queue. window is 24h (default) or 7d.", reads(), s.overview)
+	add(s, srv, "overview", "What needs attention now: failing, unstable and flaky jobs (not pull requests or side branches, which hidden counts), recent failures, what runs next, how each group stands, a summary of the graphs, and the queue. window is 24h (default) or 7d.", reads(), s.overview)
 	add(s, srv, "list_jobs", "List the jobs you may see, with each one's last build and schedule. Optionally only one group.", reads(), s.listJobs)
 	add(s, srv, "get_job", "One job: its parameters (names, defaults, choices) to pass to run_build, its stages, schedule, concurrency, recent builds and, for a multibranch job, its branches and pull requests.", reads(), s.getJob)
 	add(s, srv, "list_builds", "A job's builds, newest first. Pass next_cursor back as cursor for older ones.", reads(), s.listBuilds)
@@ -226,6 +226,15 @@ type overviewOut struct {
 	Groups   []groupOut    `json:"groups"`
 	Charts   chartsOut     `json:"charts"`
 	Queue    queueOut      `json:"queue"`
+	// Hidden counts the pull requests and side branches that are failing,
+	// unstable or flaky and so not in those lists.
+	Hidden hiddenOut `json:"hidden"`
+}
+
+type hiddenOut struct {
+	Failing  int `json:"failing"`
+	Unstable int `json:"unstable"`
+	Flaky    int `json:"flaky"`
 }
 
 // chartsOut is each graph in a line or two: what ended in the window, how
@@ -342,6 +351,7 @@ func (s *Server) overview(ctx context.Context, c *Caller, in overviewIn) (overvi
 		out.Groups = append(out.Groups, groupOut{g.Name, g.Green, g.Red, g.NeverBuilt, g.Running, g.Disabled})
 	}
 	out.Charts = chartsSummary(v.Charts)
+	out.Hidden = hiddenOut(v.Hidden)
 	out.Queue, err = s.queueOf(ctx, c)
 	return out, err
 }

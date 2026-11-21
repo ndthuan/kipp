@@ -538,3 +538,26 @@ func phoneRules(t *testing.T, css string) string {
 	}
 	return out.String()
 }
+
+func TestTheOverviewLeavesOutRedPullRequestsAndSideBranchesAndLinksTheirCount(t *testing.T) {
+	e := site(t)
+	e.add(t, map[string]string{"site.yml": "name: site\ngroup: web\nmultibranch: {repo: acme/site, clone: /nonexistent/site.git}\n"})
+	parent := e.d.Snapshot().Jobs["site"]
+	var kids []*config.Job
+	for _, c := range []config.ChildRecord{
+		{Key: "main", Kind: config.KindBranch, Branch: "main"},
+		{Key: "feature", Kind: config.KindBranch, Branch: "feature"},
+		{Key: "pr-12", Kind: config.KindPR, Branch: "feature", PR: 12},
+	} {
+		c.Parent, c.State = "site", config.ChildLive
+		k := parent.Child(c)
+		k.DefaultBranch = "main"
+		kids = append(kids, k)
+		e.finished(t, k.Name, "fs")
+	}
+	e.d.SetSnapshot(e.d.Snapshot().WithJobs(kids...))
+	page := e.overviewPage(t, "admin")
+	failing, _, _ := strings.Cut(page, "<h2>Flaky</h2>")
+	contains(t, failing, `href="/jobs/site.main"`, `<a class="link" href="/jobs?status=failing">2 pull requests and branches red</a>`)
+	lacks(t, failing, `href="/jobs/site.feature"`, `href="/jobs/site.pr-12"`)
+}

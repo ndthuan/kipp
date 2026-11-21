@@ -215,3 +215,32 @@ func TestOnlyAJobThatBuildsItselfIsALeaf(t *testing.T) {
 		}
 	}
 }
+
+func TestOnlyAPullRequestOrABranchKnownNotToBeDefaultIsASideChild(t *testing.T) {
+	parent, err := ParseJob("site.yml", []byte("name: site\nmultibranch: {repo: acme/site}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	child := func(kind, branch, def string) *Job {
+		j := parent.Child(ChildRecord{Parent: "site", Key: "k", Kind: kind, Branch: branch, State: ChildLive})
+		j.DefaultBranch = def
+		return j
+	}
+	for name, c := range map[string]struct {
+		job  *Job
+		want bool
+	}{
+		"a pull request":                  {child(KindPR, "", "main"), true},
+		"a pull request head":             {child(KindPRHead, "", "main"), true},
+		"a pull request, default unknown": {child(KindPR, "", ""), true},
+		"a side branch":                   {child(KindBranch, "feature", "main"), true},
+		"the default branch":              {child(KindBranch, "main", "main"), false},
+		"a branch, default unknown":       {child(KindBranch, "feature", ""), false},
+		"the tag child":                   {child(KindTag, "", "main"), false},
+		"a job of a file":                 {parent, false},
+	} {
+		if got := c.job.IsSideChild(); got != c.want {
+			t.Errorf("%s: %v", name, got)
+		}
+	}
+}

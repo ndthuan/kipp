@@ -37,6 +37,9 @@ type Job struct {
 	Disabled, Gone bool
 	// Child is a branch or pull request of a multibranch job.
 	Child bool
+	// Side is a pull request or a branch that is not the default one: it is
+	// counted in the Hidden counts instead of listed in a section.
+	Side bool
 	// Running: the job's newest build is queued or running.
 	Running bool
 	// History is the job's newest builds that ended green or red, newest
@@ -60,6 +63,15 @@ type Overview struct {
 	Flaky    []FlakyJob
 	Groups   []Group
 	Charts   *Charts
+	// Hidden is how many pull requests and side branches are red, unstable
+	// or flaky and so left out of Failing, Unstable and Flaky.
+	Hidden Hidden
+}
+
+// Hidden counts the jobs a section leaves out because they are pull
+// requests or side branches.
+type Hidden struct {
+	Failing, Unstable, Flaky int
 }
 
 // Failing is a job whose newest finished build is red. Build is that build,
@@ -116,7 +128,8 @@ func Compute(jobs []Job, cfg Config, now time.Time) *Overview {
 }
 
 // addStanding puts a job into Failing, Unstable or Flaky, by its newest
-// build; a job that is unstable now and flaky is in both of the last two.
+// build; a job that is unstable now and flaky is in both of the last two. A
+// side job is counted in Hidden in place of the section.
 func (o *Overview) addStanding(j Job, h []*store.Build, cfg Config) {
 	if len(h) == 0 {
 		return
@@ -125,11 +138,20 @@ func (o *Overview) addStanding(j Job, h []*store.Build, cfg Config) {
 	flaky := cfg.Flips > 0 && len(h) >= MinFinished && n >= cfg.Flips && !quietFor(h, cfg.Quiet)
 	dots := h[:min(len(h), Dots)]
 	switch {
+	case h[0].Status.Red() && j.Side:
+		o.Hidden.Failing++
+		return
 	case h[0].Status.Red():
 		o.Failing = append(o.Failing, Failing{Job: j.Name, Build: h[0], Since: streakStart(h, store.Status.Red), Flaky: flaky, Dots: dots})
 		return
+	case h[0].Status == store.Unstable && j.Side:
+		o.Hidden.Unstable++
 	case h[0].Status == store.Unstable:
 		o.Unstable = append(o.Unstable, Failing{Job: j.Name, Build: h[0], Since: streakStart(h, isUnstable), Flaky: flaky, Dots: dots})
+	}
+	if flaky && j.Side {
+		o.Hidden.Flaky++
+		return
 	}
 	if flaky {
 		o.Flaky = append(o.Flaky, FlakyJob{Job: j.Name, Failed: redCount(h), Finished: len(h), Flips: n, Dots: dots})
