@@ -43,7 +43,7 @@
 {{define "parts"}}<section id="parts" class="stack">
 <h2>Data directory</h2>
 {{if .Err}}<p class="notice notice-error" role="alert">{{.Err}}</p>
-{{else}}<div class="scroll">
+{{else}}<div class="scroll tall">
 <table>
 <thead><tr><th>Part</th><th>On disk</th><th>Size</th></tr></thead>
 <tbody>
@@ -62,7 +62,7 @@
 <h2>Database</h2>
 {{if .Err}}<p class="notice notice-error" role="alert">{{.Err}}</p>
 {{else}}{{$r := .R}}<p class="sub">{{if $r.Database.Measuring}}The tables are being measured now. {{end}}{{if not $r.Database.MeasuredAt.IsZero}}Measured at {{clock $r.Database.MeasuredAt}}{{if not $r.Database.Exact}}, an estimate by each table's rows: this SQLite has no dbstat, so indexes are counted in their tables{{else}}, page by page{{end}}; taken again after an hour, after the daily sweep and after a compact.{{else if not $r.Database.Measuring}}The tables are not measured yet.{{end}}{{with $r.Database.MeasureError}} The last measure failed: {{.}}.{{end}}</p>
-{{if $r.Database.Objects}}<div class="scroll">
+{{if $r.Database.Objects}}<div class="scroll tall">
 <table>
 <thead><tr><th>Name</th><th>Kind</th><th>Size</th></tr></thead>
 <tbody>
@@ -80,7 +80,7 @@
 {{define "jobs"}}<section id="jobs" class="stack">
 <h2>Jobs</h2>
 {{if .Err}}<p class="notice notice-error" role="alert">{{.Err}}</p>
-{{else if .Jobs}}<div class="scroll">
+{{else if .Jobs}}<div class="scroll tall">
 <table>
 <thead><tr><th>Job</th><th>Size</th><th>Builds</th><th>Keep</th><th>Test rows</th><th>Metric rows</th><th>Logs</th><th>Artifacts</th></tr></thead>
 <tbody>
@@ -102,7 +102,7 @@
 {{end}}</section>
 {{end}}
 
-{{define "self-check"}}<section id="self-check" class="stack">
+{{define "self-check"}}<section id="self-check" class="panel stack">
 <h2>Self-check</h2>
 {{if .Err}}<p class="notice notice-error" role="alert">{{.Err}}</p>
 {{else}}{{with .R.Check}}{{if .OK}}<p>The database passed its self-check (<code>PRAGMA quick_check</code>) at {{clock .At}}.</p>

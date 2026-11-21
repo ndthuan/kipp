@@ -4,11 +4,23 @@
 {{with .Notice}}<p class="notice" role="status">{{.}}</p>{{end}}
 {{with $.Error}}<p class="notice notice-error" role="alert">{{.}}</p>{{end}}
 <p class="lead">What the data directory holds, what to change, and the compact of the database. kipp shows a file it did not make and never removes it, and never edits a job file: a recommendation says what to change.</p>
-{{range .Sections}}{{if .Heading}}<section id="{{.Name}}" class="stack" aria-busy="true" hx-get="/admin/housekeeping/sections/{{.Name}}" hx-trigger="load" hx-swap="outerHTML">
+{{template "hk-load" (.Section "facts")}}
+<div class="pair">
+{{template "hk-load" (.Section "compact")}}{{template "hk-load" (.Section "self-check")}}</div>
+{{template "hk-load" (.Section "heal")}}
+<div id="tabs" class="stack">
+<div class="seg tabs" role="tablist" aria-label="Tables" hidden>
+{{range $i, $t := .Tabs}}<button type="button" role="tab" id="tab-btn-{{$t.Name}}" aria-controls="tab-{{$t.Name}}" data-tab="{{$t.Name}}" aria-selected="{{if eq $i 0}}true{{else}}false{{end}}"{{if ne $i 0}} tabindex="-1"{{end}}>{{$t.Heading}}</button>
+{{end}}</div>
+{{range .Tabs}}<div role="tabpanel" id="tab-{{.Name}}" aria-labelledby="tab-btn-{{.Name}}">
+{{template "hk-load" .}}</div>
+{{end}}</div>
+{{end}}
+{{end}}
+{{define "scripts"}}<script src="{{static "housekeeping.js"}}" defer></script>{{end}}
+{{define "hk-load"}}{{if .Heading}}<section id="{{.Name}}" class="{{if .Panel}}panel {{end}}stack" aria-busy="true" hx-get="/admin/housekeeping/sections/{{.Name}}" hx-trigger="load" hx-swap="outerHTML">
 <h2>{{.Heading}}</h2>
 <p class="sub">Loading...</p>
 </section>
 {{else}}<p id="{{.Name}}" class="sub" aria-busy="true" hx-get="/admin/housekeeping/sections/{{.Name}}" hx-trigger="load" hx-swap="outerHTML">Loading...</p>
 {{end}}{{end}}
-{{end}}
-{{end}}

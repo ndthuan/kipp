@@ -81,7 +81,7 @@ func TestTheHousekeepingPageLoadsEverySectionByItselfAndReadsNothingToDoIt(t *te
 	eq(t, "busy", strings.Count(page, `aria-busy="true"`), 8)
 	eq(t, "loading", strings.Count(page, "Loading..."), 8)
 	last := -1
-	for _, name := range []string{"facts", "compact", "recommendations", "parts", "database", "jobs", "self-check", "heal"} {
+	for _, name := range []string{"facts", "compact", "self-check", "heal", "recommendations", "parts", "database", "jobs"} {
 		at := strings.Index(page, `id="`+name+`" `)
 		if at <= last {
 			t.Fatalf("section %s is out of order", name)
@@ -218,4 +218,64 @@ func TestAFailedSelfCheckIsABannerOnEveryAdminPageAndOnNoOneElses(t *testing.T) 
 	}
 	_, page := get(t, e.login(t, "bob"), e.srv.URL+"/jobs/smoke")
 	lacks(t, page, "self-check failed")
+}
+
+func TestTheHousekeepingTablesAreTabsThatShowEverySectionWithoutScript(t *testing.T) {
+	e := site(t, withStorage)
+	_, page := get(t, e.login(t, "admin"), e.srv.URL+"/admin/housekeeping")
+	order := func(names ...string) {
+		t.Helper()
+		last := -1
+		for _, name := range names {
+			at := strings.Index(page, `id="`+name+`" `)
+			if at <= last {
+				t.Fatalf("%s is out of order", name)
+			}
+			last = at
+		}
+	}
+	order("facts", "compact", "self-check", "heal", "tab-btn-recommendations", "tab-recommendations", "recommendations")
+	contains(t, page, `role="tablist"`)
+	_, list, _ := strings.Cut(page, `role="tablist"`)
+	list, _, _ = strings.Cut(list, "</div>")
+	contains(t, list, "hidden")
+	lacks(t, page, `role="tabpanel" id="tab-recommendations" aria-labelledby="tab-btn-recommendations" hidden`)
+	last := -1
+	for _, tab := range []struct{ name, label string }{{"recommendations", "Recommendations"}, {"parts", "Data directory"}, {"database", "Database"}, {"jobs", "Jobs"}} {
+		button := `role="tab" id="tab-btn-` + tab.name + `" aria-controls="tab-` + tab.name + `" data-tab="` + tab.name + `"`
+		contains(t, page, button, `<div role="tabpanel" id="tab-`+tab.name+`" aria-labelledby="tab-btn-`+tab.name+`">`+"\n"+`<section id="`+tab.name+`" `)
+		at := strings.Index(page, button)
+		if at <= last {
+			t.Fatalf("tab %s is out of order", tab.name)
+		}
+		last = at
+		contains(t, page[at:], ">"+tab.label+"</button>")
+	}
+	contains(t, page, `<div class="pair">`+"\n"+`<section id="compact" `)
+	_, pair, _ := strings.Cut(page, `<div class="pair">`)
+	pair, _, _ = strings.Cut(pair, "</div>")
+	contains(t, pair, `id="self-check" `)
+	lacks(t, pair, `role="tabpanel"`, `id="heal"`)
+	contains(t, page, `<script src="/static/housekeeping.js`)
+	_, other := get(t, e.login(t, "admin"), e.srv.URL+"/jobs/smoke")
+	lacks(t, other, "housekeeping.js")
+}
+
+func TestTheHousekeepingTablesScrollInsideTheirOwnBoxAndTheirTextStaysOutside(t *testing.T) {
+	e := site(t, withStorage)
+	gone(t, e, "old-job")
+	admin := e.login(t, "admin")
+	for _, name := range []string{"recommendations", "parts", "database", "jobs"} {
+		_, frag := get(t, admin, e.srv.URL+"/admin/housekeeping/sections/"+name)
+		contains(t, frag, `<div class="scroll tall">`)
+	}
+	for name, text := range map[string]string{"database": "Measured at", "jobs": "Size is the job's logs"} {
+		_, frag := get(t, admin, e.srv.URL+"/admin/housekeeping/sections/"+name)
+		_, box, _ := strings.Cut(frag, `<div class="scroll tall">`)
+		box, _, _ = strings.Cut(box, "</div>")
+		lacks(t, box, text)
+		contains(t, frag, text)
+	}
+	_, frag := get(t, admin, e.srv.URL+"/admin/housekeeping/sections/self-check")
+	contains(t, frag, `<section id="self-check" class="panel stack">`)
 }

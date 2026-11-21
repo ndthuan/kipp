@@ -211,7 +211,7 @@
   .pager { display: flex; gap: calc(var(--space) * 4); }
   .narrow { width: 100%; max-width: calc(var(--space) * 104); }
   /* A heading kept for readers that go by headings, out of everyone's way. */
-  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .sr-only, .tabbed > [role="tabpanel"] > section > h2 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
   /* A page's heading is where it is, the page itself last, with what can be
      done to it at the other end of the row. */
@@ -309,6 +309,15 @@
   .charts-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: calc(var(--space) * 2) calc(var(--space) * 4); }
   .charts-head h2 { margin: 0; }
   .seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: var(--radius-m); overflow: hidden; font-size: var(--size-sm); }
+  .seg[hidden] { display: none; }
+  .seg button { padding: calc(var(--space) * 1.5) calc(var(--space) * 3); color: var(--fg-muted); background: none; border: 0; font: inherit; cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--line-strong); }
+  .seg button:hover { background-color: var(--bg-sunken); color: var(--fg); }
+  .seg button[aria-selected="true"] { background-color: var(--accent-soft); color: var(--on-accent-soft); font-weight: var(--weight-medium); }
+  .pair { display: grid; gap: calc(var(--space) * 4); grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 48rem) {
+    .pair { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
   .seg a { padding: calc(var(--space) * 1.5) calc(var(--space) * 3); color: var(--fg-muted); text-decoration: none; }
   .jobs-bar { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--space) * 3); }
   .jobs-bar .entry { flex: 1 1 calc(var(--space) * 50); min-width: 0; }

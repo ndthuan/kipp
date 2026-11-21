@@ -52,8 +52,11 @@ Changed:
   old address leads to it. It opens at once and each section (disk and
   database, compact, recommendations, data directory, tables, jobs,
   self-check, disk floor) loads by itself, so that the walk of a big data
-  directory holds back only what needs it. The Recommendations sit in a box
-  that scrolls under its header. The API is unchanged.
+  directory holds back only what needs it. Recommendations, Data
+  directory, Database and Jobs are tabs, each table in a box that scrolls
+  under its header, and the page remembers the last tab in the browser (a
+  link such as `#jobs` opens that one); Compact and Self-check sit side by
+  side, one per line on a narrow screen. The API is unchanged.
 - In the user menu the name leads to the Account page, and the "Account"
   item and the "Admin" label are gone. Admins find a new Deleted jobs item
   there: the Deleted jobs page now also lists the jobs whose file is gone

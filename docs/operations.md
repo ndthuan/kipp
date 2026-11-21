@@ -246,6 +246,14 @@ loads by itself, so that the slow ones, which walk the data directory or read
 every job, hold none of the others back; the Recommendations need all of it
 and come last. The API keeps its path and answers the whole report.
 
+Compact and Self-check sit side by side under the disk line (one per line
+on a narrow screen). Recommendations, Data directory, Database and Jobs are
+tabs, each table in a box that scrolls under its header. All four load at
+once, so a switch never waits. The page remembers the last tab in the
+browser (local storage, not on the server), and a link ending in `#jobs`,
+`#database`, `#parts` or `#recommendations` opens that tab and keeps it.
+Without JavaScript the four sections stack.
+
 - **Disk**: the free and total room of the data directory's disk, and its
   floor (below).
 - **Data directory**: the size of each part: the database and its

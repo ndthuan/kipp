@@ -46,19 +46,44 @@ type housekeepingSection struct {
 	// Heading is the section's title while it loads; a section with none
 	// may turn out empty.
 	Heading string
+	// Panel boxes the section as a panel of its own.
+	Panel bool
 }
 
 // housekeepingSections are the blocks of the page in order. Each is its own
 // request, so that the slow ones hold none of the others back.
 var housekeepingSections = []housekeepingSection{
-	{Name: "facts"}, {Name: "compact", Heading: "Compact"}, {Name: "recommendations", Heading: "Recommendations"},
+	{Name: "facts"}, {Name: "compact", Heading: "Compact", Panel: true}, {Name: "recommendations", Heading: "Recommendations"},
 	{Name: "parts", Heading: "Data directory"}, {Name: "database", Heading: "Database"}, {Name: "jobs", Heading: "Jobs"},
-	{Name: "self-check", Heading: "Self-check"}, {Name: "heal"},
+	{Name: "self-check", Heading: "Self-check", Panel: true}, {Name: "heal"},
 }
+
+// housekeepingTabs are the sections the page shows as tabs, in order.
+var housekeepingTabs = []string{"recommendations", "parts", "database", "jobs"}
 
 type housekeepingData struct {
 	Sections []housekeepingSection
 	Notice   string
+}
+
+// Section is the block of that name, for the template to place where the
+// layout wants it.
+func (d housekeepingData) Section(name string) housekeepingSection {
+	for _, s := range d.Sections {
+		if s.Name == name {
+			return s
+		}
+	}
+	return housekeepingSection{Name: name}
+}
+
+// Tabs are the sections that sit in the tab panels.
+func (d housekeepingData) Tabs() []housekeepingSection {
+	tabs := make([]housekeepingSection, len(housekeepingTabs))
+	for i, name := range housekeepingTabs {
+		tabs[i] = d.Section(name)
+	}
+	return tabs
 }
 
 // sectionData is what a section is made of; Err is why it could not be read.
