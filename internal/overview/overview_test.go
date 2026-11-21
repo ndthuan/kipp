@@ -43,7 +43,7 @@ func flaky(o *Overview) string   { return names(o.Flaky, func(f FlakyJob) string
 func TestMeasuredShapesLandInTheirSections(t *testing.T) {
 	o := compute([]Job{
 		job("units", "ssssfssssfsssssfsssf"),
-		job("pensor", "ffffssffssf"),
+		job("deploy", "ffffssffssf"),
 		job("docs", "ssssssfffff"),
 		job("short", "ssfs"),
 	}, DefaultFlips, now)
@@ -55,7 +55,7 @@ func TestMeasuredShapesLandInTheirSections(t *testing.T) {
 		t.Fatalf("%+v", f)
 	}
 	// docs-mirror, newest first, is green with one flip: in neither section.
-	if failing(o) != "pensor" || !o.Failing[0].Flaky {
+	if failing(o) != "deploy" || !o.Failing[0].Flaky {
 		t.Fatalf("failing: %v %+v", failing(o), o.Failing)
 	}
 }
