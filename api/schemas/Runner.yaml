@@ -1,7 +1,7 @@
 type: object
 additionalProperties: false
 description: A standing runner, its record and, once it has connected, what the server sees of it now. Never its token.
-required: [name, labels, executors, busy, enabled, online, since, version, os, arch, stages, last_seen_at]
+required: [name, labels, executors, weight, busy, enabled, online, since, version, os, arch, stages, last_seen_at]
 properties:
   name:
     type: string
@@ -12,6 +12,9 @@ properties:
   executors:
     type: integer
     description: 0 for as many at once as it is given.
+  weight:
+    type: integer
+    description: Its rank in placement, 0 until set. Among the runners that match a stage and have a free executor, the higher weight takes it first; equal weights go to the one idle longest.
   busy:
     type: integer
     description: How many stages it runs or has been given now.

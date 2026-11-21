@@ -27,7 +27,7 @@ func TestTheEnginesAndRunnersAreReadWithWhatTheServerSeesOfThem(t *testing.T) {
 	ctx := context.Background()
 	must(t, e.st.PutEngine(ctx, store.Engine{Name: "mac", Kind: "docker", URL: "ssh://me@host", Labels: []string{"linux"}, Max: 2, Enabled: true}))
 	must(t, e.st.PutEngine(ctx, store.Engine{Name: "new", Kind: "docker", URL: "unix:///d.sock", Labels: []string{"linux"}, Max: 1}))
-	must(t, e.st.PutRunner(ctx, store.Runner{Name: "box", Labels: []string{"linux"}, Executors: 2, Enabled: true, TokenHash: "h1"}))
+	must(t, e.st.PutRunner(ctx, store.Runner{Name: "box", Labels: []string{"linux"}, Executors: 2, Weight: 10, Enabled: true, TokenHash: "h1"}))
 	must(t, e.st.PutRunner(ctx, store.Runner{Name: "idle", Labels: []string{"arm64"}, Executors: 1, TokenHash: "h2"}))
 	var engines []map[string]any
 	text := e.decode(t, "/api/v1/admin/engines", &engines)
@@ -38,7 +38,7 @@ func TestTheEnginesAndRunnersAreReadWithWhatTheServerSeesOfThem(t *testing.T) {
 	}
 	var runners []map[string]any
 	text = e.decode(t, "/api/v1/admin/runners", &runners)
-	if len(runners) != 2 || runners[0]["name"] != "box" || runners[0]["online"] != true || runners[0]["version"] != "test" || runners[0]["os"] != "linux" ||
+	if len(runners) != 2 || runners[0]["name"] != "box" || runners[0]["online"] != true || runners[0]["version"] != "test" || runners[0]["os"] != "linux" || runners[0]["weight"] != 10.0 || runners[1]["weight"] != 0.0 ||
 		runners[1]["online"] != false || runners[1]["enabled"] != false || runners[1]["since"] != nil {
 		t.Fatalf("%s", text)
 	}
@@ -204,12 +204,15 @@ func TestAnAdminChangesEachRunnersLimitAndLabels(t *testing.T) {
 	e.sudo(t, admin)
 	must(t, e.api.svc.SetRunner(ctx, admin.u, admin.sess, "box", RunnerEdit{Executors: &three, Labels: []string{"linux", "arm64"}}))
 	must(t, e.api.svc.SetRunner(ctx, admin.u, admin.sess, "box", RunnerEdit{Executors: &none}))
+	ten := 10
+	must(t, e.api.svc.SetRunner(ctx, admin.u, admin.sess, "box", RunnerEdit{Weight: &ten}))
+	must(t, e.api.svc.SetRunner(ctx, admin.u, admin.sess, "box", RunnerEdit{Weight: new(int)}))
 	is(t, "executors below zero", e.api.svc.SetRunner(ctx, admin.u, admin.sess, "box", RunnerEdit{Executors: &minus}), ErrBadInput)
 	is(t, "no label", e.api.svc.SetRunner(ctx, admin.u, admin.sess, "box", RunnerEdit{Labels: []string{}}), ErrBadInput)
 	is(t, "a runner that is not there", e.api.svc.SetRunner(ctx, admin.u, admin.sess, "gone", RunnerEdit{Executors: &three}), ErrNotFound)
 	a, err := e.st.Runner(ctx, "box")
 	must(t, err)
-	if a.Executors != 0 || strings.Join(a.Labels, ",") != "linux,arm64" || !a.Enabled {
+	if a.Executors != 0 || a.Weight != 0 || strings.Join(a.Labels, ",") != "linux,arm64" || !a.Enabled {
 		t.Fatalf("kept %+v", a)
 	}
 	must(t, e.api.svc.SetEngine(ctx, admin.u, admin.sess, "mac", EngineEdit{Max: &three, Labels: []string{"linux", "amd64"}}))
@@ -231,11 +234,13 @@ func TestAnAdminChangesEachRunnersLimitAndLabels(t *testing.T) {
 	want := []string{
 		"boss runner.set box: labels linux,arm64, executors 3, enabled",
 		"boss runner.set box: labels linux,arm64, executors 0, enabled",
+		"boss runner.set box: labels linux,arm64, executors 0, enabled, weight 10",
+		"boss runner.set box: labels linux,arm64, executors 0, enabled",
 		"boss engine.set mac: unix:///var/run/docker.sock, labels linux,amd64, max 3, enabled",
 		"boss runner.set built-in: executors 6",
 	}
 	eq(t, "the audit", strings.Join(got, "\n"), strings.Join(want, "\n"))
-	if changed.Load() != 3 {
+	if changed.Load() != 5 {
 		t.Fatalf("the server was told of %d changes", changed.Load())
 	}
 }

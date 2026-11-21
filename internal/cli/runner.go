@@ -17,8 +17,8 @@ import (
 )
 
 const runnerUsage = `runner --url <server> --workdir <dir> [--token <token> | --token -] [--shell sh]
-       kipp runner add <name> --labels <a,b> [--executors N] --data <dir>
-       kipp runner set <name> [--labels <a,b>] [--executors N] [--disable | --enable] --data <dir>
+       kipp runner add <name> --labels <a,b> [--executors N] [--weight N] --data <dir>
+       kipp runner set <name> [--labels <a,b>] [--executors N] [--weight N] [--disable | --enable] --data <dir>
        kipp runner token <name> --data <dir>
        kipp runner rm <name> --data <dir>
        kipp runner ls --data <dir>
@@ -27,7 +27,8 @@ kipp runner with --url runs a standing runner on this machine: it dials the serv
 its name and labels, and runs the stages placed on it. The token is --token, - to read it from
 stdin, or KIPP_RUNNER_TOKEN. It runs the server's own version. The others register runners on
 the server's data directory; a running server takes a change at its next reload. --disable
-drains a runner: it takes nothing new, and what it runs finishes. kipp runner set built-in
+drains a runner: it takes nothing new, and what it runs finishes. --weight N ranks a runner: of the
+runners that match a stage and have a free executor, the highest weight takes it (default 0). kipp runner set built-in
 --executors N sets the server's own limit, which it keeps over --executors from its next reload.`
 
 // The words that make kipp runner a change on the data directory rather
@@ -46,13 +47,14 @@ func cmdRunner(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	data := fs.String("data", "", "the server's data `directory` (required)")
 	labels := fs.String("labels", "", "`labels`, comma-separated, a stage's runs_on chooses the runner by")
 	executors := fs.Int("executors", 1, "how many stages it runs at once, 0 for no limit; of the runner built-in, the server's own limit, at least 1")
+	weight := fs.Int("weight", 0, "its rank in placement: of the runners that match a stage and are free, the highest takes it; equal weights go to the one idle longest")
 	disable := fs.Bool("disable", false, "take nothing new; what runs finishes")
 	enable := fs.Bool("enable", false, "take stages again")
 	positional, err := parseArgs(fs, args)
 	if err != nil {
 		return exitFor(err)
 	}
-	af := runnerFlags{labels: *labels, executors: *executors, disable: *disable, enable: *enable, given: given(fs)}
+	af := runnerFlags{labels: *labels, executors: *executors, weight: *weight, disable: *disable, enable: *enable, given: given(fs)}
 	return onStore("runner", *data, fs.Usage, stderr, runnerAction(positional, af, stdout))
 }
 
@@ -65,6 +67,7 @@ func isRunnerAdmin(args []string) bool {
 type runnerFlags struct {
 	labels          string
 	executors       int
+	weight          int
 	disable, enable bool
 	given           map[string]bool
 }
@@ -133,7 +136,7 @@ func runnerSet(ctx context.Context, st *store.Store, name string, af runnerFlags
 // builtInSet keeps the built-in runner's limit, which a running server
 // takes at its next reload and every start after instead of --executors.
 func builtInSet(ctx context.Context, st *store.Store, af runnerFlags) error {
-	if af.given["labels"] || af.disable || af.enable || !af.given["executors"] {
+	if af.given["labels"] || af.given["weight"] || af.disable || af.enable || !af.given["executors"] {
 		return refused("the built-in runner takes --executors alone: stages that name no runs_on run on it")
 	}
 	if err := api.SetBuiltIn(ctx, st, af.executors); err != nil {
@@ -158,6 +161,9 @@ func (af runnerFlags) edit() (api.RunnerEdit, error) {
 	if af.given["executors"] {
 		ed.Executors = &af.executors
 	}
+	if af.given["weight"] {
+		ed.Weight = &af.weight
+	}
 	if af.disable || af.enable {
 		on := af.enable
 		ed.Enabled = &on
@@ -176,6 +182,9 @@ func (af runnerFlags) apply(a *store.Runner) error {
 	}
 	if ed.Executors != nil {
 		a.Executors = *ed.Executors
+	}
+	if ed.Weight != nil {
+		a.Weight = *ed.Weight
 	}
 	if ed.Enabled != nil {
 		a.Enabled = *ed.Enabled
@@ -232,7 +241,7 @@ func runnerLs(ctx context.Context, st *store.Store, stdout io.Writer) error {
 		if a.Executors == 0 {
 			limit = "no limit"
 		}
-		say(stdout, "%s\t%s\t%s\t%s\t%s", a.Name, strings.Join(a.Labels, ","), limit, state, seen)
+		say(stdout, "%s\t%s\t%s\tweight %d\t%s\t%s", a.Name, strings.Join(a.Labels, ","), limit, a.Weight, state, seen)
 	}
 	return nil
 }

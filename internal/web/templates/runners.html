@@ -122,7 +122,7 @@
 <h2>Standing runners</h2>
 {{if .Runners}}<div class="scroll">
 <table>
-<thead><tr><th>Runner</th><th>Labels</th><th>Stages</th><th>State</th><th>Version</th><th><span class="sr-only">Actions</span></th></tr></thead>
+<thead><tr><th>Runner</th><th>Labels</th><th>Stages</th><th>Weight</th><th>State</th><th>Version</th><th><span class="sr-only">Actions</span></th></tr></thead>
 <tbody>
 {{range $runner := .Runners}}<tr>
 <td>{{.Name}}{{if not .Enabled}} <span class="tag">disabled</span>{{end}}</td>
@@ -137,8 +137,12 @@
 <label class="entry-label" for="runner-executors-{{.Name}}">Stages at once</label>
 <p class="entry-help" id="runner-executors-help-{{.Name}}">0 for no limit. A lower one takes effect at once; what runs past it finishes.</p>
 <input class="entry" id="runner-executors-{{.Name}}" name="executors" type="number" min="0" value="{{if $open}}{{$.Fill.Value "runner-edit" "executors"}}{{else}}{{.Executors}}{{end}}" aria-describedby="runner-executors-help-{{.Name}}" required>
+<label class="entry-label" for="runner-weight-{{.Name}}">Weight</label>
+<p class="entry-help" id="runner-weight-help-{{.Name}}">Of the runners that match a stage and are free, the highest weight takes it; equal weights go to the one idle longest. 0 unless set.</p>
+<input class="entry" id="runner-weight-{{.Name}}" name="weight" type="number" value="{{if $open}}{{$.Fill.Value "runner-edit" "weight"}}{{else}}{{.Weight}}{{end}}" aria-describedby="runner-weight-help-{{.Name}}" required>
 <div><button class="action action-main">Change {{.Name}}</button></div>
 </form></details></td>
+<td>{{.Weight}}</td>
 <td>{{if .Online}}<span class="status success">online</span> <span class="sub">since {{template "when" (when .Since)}}</span>{{else}}<span class="status">offline</span>{{with .LastSeenAt}} <span class="sub">last seen {{template "when" (when .)}}</span>{{else}} <span class="sub">never seen</span>{{end}}{{end}}</td>
 <td>{{with .Version}}{{.}}{{if ne . $.Data.ServerVersion}} <span class="status failed">not the server's</span>{{end}} <span class="sub">{{$.Data.OSArch $runner}}</span>{{else}}<span class="sub">unknown</span>{{end}}</td>
 <td><form method="post" action="{{placePath "runners" .Name}}/{{if .Enabled}}disable{{else}}enable{{end}}"><input type="hidden" name="csrf" value="{{$.CSRF}}"><button class="action action-quiet action-small">{{if .Enabled}}Disable{{else}}Enable{{end}}</button></form>

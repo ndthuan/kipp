@@ -1,7 +1,7 @@
 type: object
 additionalProperties: false
 description: How busy one place that runs stages is.
-required: [name, kind, busy, limit, state, prepares_only]
+required: [name, kind, busy, limit, state, prepares_only, weight]
 properties:
   name:
     type: string
@@ -24,3 +24,6 @@ properties:
   prepares_only:
     type: boolean
     description: The built-in runner of a server that runs no stage itself (`--executors 0`), whose limit is for prepares.
+  weight:
+    type: integer
+    description: A standing runner's rank in placement (see Runner); 0 for the built-in runner and an engine.

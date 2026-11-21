@@ -21,6 +21,7 @@ type RunnerInfo struct {
 	Name      string
 	Labels    []string
 	Executors int
+	Weight    int
 	Enabled   bool
 	Online    bool
 	Since     time.Time // online or offline since; zero when never seen by this server
@@ -116,7 +117,7 @@ func (s *Service) Runners(ctx context.Context, u *store.User) ([]RunnerInfo, err
 	}
 	out := make([]RunnerInfo, 0, len(rows))
 	for _, a := range rows {
-		info := RunnerInfo{Name: a.Name, Labels: a.Labels, Executors: a.Executors, Enabled: a.Enabled,
+		info := RunnerInfo{Name: a.Name, Labels: a.Labels, Executors: a.Executors, Weight: a.Weight, Enabled: a.Enabled,
 			Version: a.Version, OS: a.OS, Arch: a.Arch, LastSeenAt: a.LastSeenAt, Stages: []string{}}
 		if l, ok := live[a.Name]; ok {
 			info.Online, info.Since, info.Stages = l.Online, l.Since, append(info.Stages, l.Stages...)
@@ -249,6 +250,7 @@ func (s *Service) AddRunner(ctx context.Context, u *store.User, sess *store.Sess
 type RunnerEdit struct {
 	Labels    []string
 	Executors *int // 0 is no limit
+	Weight    *int
 	Enabled   *bool
 }
 
@@ -264,6 +266,9 @@ func EditRunner(ctx context.Context, st *store.Store, name string, ed RunnerEdit
 	}
 	if ed.Executors != nil {
 		a.Executors = *ed.Executors
+	}
+	if ed.Weight != nil {
+		a.Weight = *ed.Weight
 	}
 	if ed.Enabled != nil {
 		a.Enabled = *ed.Enabled
@@ -369,7 +374,11 @@ func EngineDetail(e *store.Engine) string {
 
 // RunnerDetail is what the audit says of a runner: never its token.
 func RunnerDetail(a *store.Runner) string {
-	return fmt.Sprintf("labels %s, executors %d, %s", strings.Join(a.Labels, ","), a.Executors, enabled(a.Enabled))
+	detail := fmt.Sprintf("labels %s, executors %d, %s", strings.Join(a.Labels, ","), a.Executors, enabled(a.Enabled))
+	if a.Weight != 0 {
+		detail += fmt.Sprintf(", weight %d", a.Weight)
+	}
+	return detail
 }
 
 func enabled(on bool) string {

@@ -129,12 +129,21 @@ func (s *Site) editRunner(w http.ResponseWriter, r *http.Request, u *store.User)
 		s.refusedForm(w, r, u, editRunnerRoute, err)
 		return
 	}
+	var weight *int
+	if r.PostForm.Has("weight") {
+		n, err := wholeNumber(r, "weight")
+		if err != nil {
+			s.refusedForm(w, r, u, editRunnerRoute, err)
+			return
+		}
+		weight = &n
+	}
 	labels, err := api.ParseLabels(r.PostFormValue("labels"))
 	if err != nil {
 		s.refusedForm(w, r, u, editRunnerRoute, err)
 		return
 	}
-	if err := s.api.Service().SetRunner(r.Context(), u, api.SessionFrom(r.Context()), r.PathValue("name"), api.RunnerEdit{Labels: labels, Executors: &executors}); err != nil {
+	if err := s.api.Service().SetRunner(r.Context(), u, api.SessionFrom(r.Context()), r.PathValue("name"), api.RunnerEdit{Labels: labels, Executors: &executors, Weight: weight}); err != nil {
 		s.refusedForm(w, r, u, editRunnerRoute, err)
 		return
 	}

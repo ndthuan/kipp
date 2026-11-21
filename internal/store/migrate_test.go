@@ -31,6 +31,7 @@ var migrationSums = []string{
 	"6fe081671cac21c333772347d74f7d6b879cfb9a74a51ef731571cecdda22485",
 	"73e7ca1f28137ea93c0046dffd77ef43b906d2947ae3aefcae885c0879d62cb7",
 	"a454f8dd315ccbaff5cf54abc8a50759b4b714815d26c6ebb7f7f06eb24b80ec",
+	"57745c69e0e8fe9a6c7de5fe2c99644c9690ed6a029c426fb7e4e828c6d14a5c",
 }
 
 func TestMigrationsAreAppendOnly(t *testing.T) {
@@ -399,5 +400,30 @@ func TestAnAfterBuildOfAnEarlierSchemaHasNoUpstreamTag(t *testing.T) {
 	must(t, err)
 	if b.UpstreamCommit != "abc" || b.UpstreamTag != "" {
 		t.Fatalf("an old after build reads upstream commit %q, tag %q", b.UpstreamCommit, b.UpstreamTag)
+	}
+}
+
+func TestARunnerOfAnEarlierSchemaHasWeightZeroAfterTheUpgrade(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "db.sqlite")
+	withMigrations(t, migrations[:len(migrations)-1], func() {
+		s, err := Open(path)
+		must(t, err)
+		_, err = s.db.ExecContext(ctx, `INSERT INTO runners (name, labels, executors, enabled, token_hash, created_at) VALUES ('box', '["linux"]', 2, 1, 'hash-of-box', ?)`, ts(time.Now()))
+		must(t, err)
+		must(t, s.Close())
+	})
+
+	s, err := Open(path)
+	must(t, err)
+	defer func() { must(t, s.Close()) }()
+	r, err := s.Runner(ctx, "box")
+	must(t, err)
+	if r.Weight != 0 {
+		t.Fatalf("an old runner reads weight %d", r.Weight)
+	}
+	r.Weight = 10
+	must(t, s.PutRunner(ctx, *r))
+	if r, err = s.Runner(ctx, "box"); err != nil || r.Weight != 10 {
+		t.Fatalf("a runner given weight 10 reads %+v, %v", r, err)
 	}
 }

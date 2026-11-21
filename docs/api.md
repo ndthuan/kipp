@@ -213,7 +213,7 @@ and none answers a password, a token, a hash or a secret's value.
   no credentials in it), `labels`, `executors`, `enabled`, `reachable`,
   `since`, `version`, `last_error` and `running`, the stages that run on it as `job#number/stage`.
 - `GET /api/v1/admin/runners`: each standing runner's `name`, `labels`,
-  `executors`, `busy`, `enabled`, `online`, `since`, `version`, `os`,
+  `executors`, `weight` (its rank in placement), `busy`, `enabled`, `online`, `since`, `version`, `os`,
   `arch`, the `stages` it runs and `last_seen_at`.
 - `GET /api/v1/admin/cache`: the cache entries, paged: `id`, `scope`,
   `namespace`, `key`, `size`, `saved_at`, `saved_by` and

@@ -181,6 +181,20 @@ func TestAnRunnerThatConnectsIsOnlineWithWhatItSaysOfItself(t *testing.T) {
 	}
 }
 
+func TestARunnersWeightIsItsCandidatesAndItsStatus(t *testing.T) {
+	f := newFixture(t)
+	f.known[auth.HashToken(boxToken)].Weight = 10
+	f.runRunner(t.TempDir())
+	f.online()
+	cs := f.hub.Candidates()
+	if len(cs) != 1 || cs[0].Name != "box" || cs[0].Weight != 10 {
+		t.Fatalf("candidates %+v", cs)
+	}
+	if got := f.hub.Runners(); len(got) != 1 || got[0].Weight != 10 {
+		t.Fatalf("status %+v", got)
+	}
+}
+
 func TestAStageOnAnRunnerStreamsItsOutputBeforeItEnds(t *testing.T) {
 	f := newFixture(t)
 	dir := t.TempDir()

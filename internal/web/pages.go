@@ -446,6 +446,13 @@ func endedAt(b *store.Build) time.Time {
 // loadText is one runner's load as the queue's heading says it: what it
 // runs of its limit, or why it takes nothing.
 func loadText(l api.RunnerLoad) string {
+	if l.Weight != 0 {
+		return loadWithoutWeight(l) + fmt.Sprintf(" weight %d", l.Weight)
+	}
+	return loadWithoutWeight(l)
+}
+
+func loadWithoutWeight(l api.RunnerLoad) string {
 	switch {
 	case l.State != api.StateOnline:
 		return l.Name + " " + l.State

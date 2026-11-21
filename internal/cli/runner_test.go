@@ -59,11 +59,11 @@ func TestAnRunnerIsDrainedChangedAndRemovedOnTheDataDirectory(t *testing.T) {
 	data := newData(t)
 	ok(t, "", "runner", "add", "a", "--labels", "linux", "--data", data)
 	ok(t, "", "runner", "set", "a", "--disable", "--executors", "3", "--data", data)
-	contains(t, ok(t, "", "runner", "ls", "--data", data), "a\tlinux\texecutors 3\tdisabled\tnever seen")
+	contains(t, ok(t, "", "runner", "ls", "--data", data), "a\tlinux\texecutors 3\tweight 0\tdisabled\tnever seen")
 	ok(t, "", "runner", "set", "a", "--enable", "--labels", "linux,arm64", "--data", data)
-	contains(t, ok(t, "", "runner", "ls", "--data", data), "a\tlinux,arm64\texecutors 3\tenabled")
+	contains(t, ok(t, "", "runner", "ls", "--data", data), "a\tlinux,arm64\texecutors 3\tweight 0\tenabled")
 	ok(t, "", "runner", "set", "a", "--executors", "0", "--data", data)
-	contains(t, ok(t, "", "runner", "ls", "--data", data), "a\tlinux,arm64\tno limit\tenabled")
+	contains(t, ok(t, "", "runner", "ls", "--data", data), "a\tlinux,arm64\tno limit\tweight 0\tenabled")
 	ok(t, "", "runner", "rm", "a", "--data", data)
 	eq(t, "ls", ok(t, "", "runner", "ls", "--data", data), "")
 	code, _, errOut := kipp("", "runner", "rm", "a", "--data", data)
@@ -82,6 +82,20 @@ func TestAnRunnerIsDrainedChangedAndRemovedOnTheDataDirectory(t *testing.T) {
 		eq(t, args, code, 2)
 		contains(t, errOut, want)
 	}
+}
+
+func TestARunnerHasAWeightSetWithTheFlagAndListed(t *testing.T) {
+	data := newData(t)
+	ok(t, "", "runner", "add", "a", "--labels", "ci", "--weight", "10", "--data", data)
+	ok(t, "", "runner", "add", "b", "--labels", "ci", "--data", data)
+	contains(t, ok(t, "", "runner", "ls", "--data", data), "a\tci\texecutors 1\tweight 10\tenabled", "b\tci\texecutors 1\tweight 0\tenabled")
+	ok(t, "", "runner", "set", "a", "--executors", "2", "--data", data)
+	contains(t, ok(t, "", "runner", "ls", "--data", data), "a\tci\texecutors 2\tweight 10\tenabled")
+	ok(t, "", "runner", "set", "a", "--weight", "0", "--data", data)
+	contains(t, ok(t, "", "runner", "ls", "--data", data), "a\tci\texecutors 2\tweight 0\tenabled")
+	code, _, errOut := kipp("", "runner", "set", "built-in", "--weight", "1", "--data", data)
+	eq(t, "the built-in runner has no weight", code, 2)
+	contains(t, errOut, "the built-in runner takes --executors alone")
 }
 
 func TestAnEngineIsOneKippCanDialAndChooseByLabel(t *testing.T) {

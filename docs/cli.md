@@ -403,8 +403,8 @@ takes no new container; what runs finishes. See
 
 ```
 kipp runner --url <server> --workdir <dir> [--token <token> | --token -] [--shell sh]
-kipp runner add <name> --labels <a,b> [--executors N] --data <dir>
-kipp runner set <name> [--labels <a,b>] [--executors N] [--disable | --enable] --data <dir>
+kipp runner add <name> --labels <a,b> [--executors N] [--weight N] --data <dir>
+kipp runner set <name> [--labels <a,b>] [--executors N] [--weight N] [--disable | --enable] --data <dir>
 kipp runner token <name> --data <dir>
 kipp runner rm <name> --data <dir>
 kipp runner ls --data <dir>
@@ -417,7 +417,7 @@ The token is `--token`, `-` to read it from stdin, or
 when the server is another kipp version.
 
 `add` registers a runner and prints its token once; `--executors` is how
-many stages it runs at once (default 1, 0 for no limit). `set --disable`
+many stages it runs at once (default 1, 0 for no limit) and `--weight` its rank in [placement](runners.md#placement): of the runners that match a stage and are free, the highest weight takes it (default 0). `set --disable`
 drains it: it takes nothing new, and what it runs finishes.
 `set built-in --executors N` sets the server's own limit, which a running
 server takes at its next reload and keeps over `kipp serve --executors`. `token` gives it a new

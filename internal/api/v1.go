@@ -332,6 +332,7 @@ type runnerLoadV1 struct {
 	Limit        int    `json:"limit"`
 	State        string `json:"state"`
 	PreparesOnly bool   `json:"prepares_only"`
+	Weight       int    `json:"weight"`
 }
 
 type runningV1 struct {
@@ -435,6 +436,7 @@ type runnerV1 struct {
 	Name       string          `json:"name"`
 	Labels     []string        `json:"labels"`
 	Executors  int             `json:"executors"`
+	Weight     int             `json:"weight"`
 	Busy       int             `json:"busy"`
 	Enabled    bool            `json:"enabled"`
 	Online     bool            `json:"online"`
@@ -449,7 +451,7 @@ type runnerV1 struct {
 // toRunnerV1 is a runner with its stages' builds as they stand: builds says
 // how each ended, if it has.
 func toRunnerV1(a RunnerInfo, builds map[int64]*store.Build) runnerV1 {
-	out := runnerV1{Name: a.Name, Labels: nonNil(slices.Clone(a.Labels)), Executors: a.Executors, Busy: a.Busy, Enabled: a.Enabled, Online: a.Online,
+	out := runnerV1{Name: a.Name, Labels: nonNil(slices.Clone(a.Labels)), Executors: a.Executors, Weight: a.Weight, Busy: a.Busy, Enabled: a.Enabled, Online: a.Online,
 		Since: stampSince(a.Since), Version: a.Version, OS: a.OS, Arch: a.Arch, Stages: []runnerStageV1{}, LastSeenAt: stampPtr(a.LastSeenAt)}
 	for _, s := range a.Running {
 		ref := buildRefV1{ID: s.BuildID, Job: s.Job, Number: s.Number}

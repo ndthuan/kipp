@@ -202,6 +202,8 @@ CREATE TABLE pending_afters (
   PRIMARY KEY (build_id, job));
 `, `
 CREATE TABLE pending_crons (job TEXT PRIMARY KEY);
+`, `
+ALTER TABLE runners ADD COLUMN weight INTEGER NOT NULL DEFAULT 0;
 `}
 
 // Upgrade is what Open did to the schema of the database it opened.

@@ -10,6 +10,9 @@ func TestPickFollowsTheRulesOfPlacement(t *testing.T) {
 	runner := func(name string, free, online bool, idle time.Time, labels ...string) Candidate {
 		return Candidate{Name: name, Kind: KindRunner, Labels: labels, Free: free, Reachable: online, Idle: idle}
 	}
+	weighted := func(name string, weight int, free, online bool, idle time.Time) Candidate {
+		return Candidate{Name: name, Kind: KindRunner, Labels: []string{"linux"}, Free: free, Reachable: online, Idle: idle, Weight: weight}
+	}
 	engine := func(name string, room int, reachable bool, labels ...string) Candidate {
 		return Candidate{Name: name, Kind: KindEngine, Labels: labels, Free: room > 0, Room: room, Reachable: reachable, Why: "unreachable since 14:02: dial tcp: refused"}
 	}
@@ -35,6 +38,12 @@ func TestPickFollowsTheRulesOfPlacement(t *testing.T) {
 		{"the engine with the most room", image, []Candidate{engine("small", 1, true, "linux"), engine("big", 3, true, "linux")}, "big", Picked, ""},
 		{"the engine already running the build's container", image, []Candidate{engine("big", 3, true, "linux"), {Name: "mine", Kind: KindEngine, Labels: []string{"linux"}, Reachable: true, Reuse: true}}, "mine", Picked, ""},
 		{"a free runner beside a busy one", linux, []Candidate{runner("busy", false, true, t0, "linux"), runner("free", true, true, t0.Add(time.Hour), "linux")}, "free", Picked, ""},
+		{"a higher weight beats idle longest", linux, []Candidate{weighted("old", 0, true, true, t0), weighted("heavy", 10, true, true, t0.Add(time.Hour))}, "heavy", Picked, ""},
+		{"an equal weight keeps idle longest", linux, []Candidate{weighted("new", 10, true, true, t0.Add(time.Hour)), weighted("old", 10, true, true, t0)}, "old", Picked, ""},
+		{"a busy heavier runner does not block a free lighter one", linux, []Candidate{weighted("heavy", 10, false, true, t0), weighted("light", 0, true, true, t0)}, "light", Picked, ""},
+		{"an offline heavier runner does not block a free lighter one", linux, []Candidate{weighted("heavy", 10, true, false, t0), weighted("light", 0, true, true, t0)}, "light", Picked, ""},
+		{"a negative weight comes after the default", linux, []Candidate{weighted("slow", -1, true, true, t0), weighted("plain", 0, true, true, t0.Add(time.Hour))}, "plain", Picked, ""},
+		{"the build's own container comes before a higher weight", linux, []Candidate{weighted("heavy", 10, true, true, t0), {Name: "mine", Kind: KindRunner, Labels: []string{"linux"}, Reachable: true, Reuse: true}}, "mine", Picked, ""},
 	}
 	for _, c := range cases {
 		got, why, line := Pick(c.want, c.cs)

@@ -56,6 +56,8 @@ type RunnerLoad struct {
 	// PreparesOnly is the built-in runner of a server that runs no stage
 	// itself: its limit is for prepares.
 	PreparesOnly bool
+	// Weight is a standing runner's rank in placement; 0 for any other.
+	Weight int
 }
 
 // WaitStart is why a build waits, to anyone but an admin, when it waits
@@ -150,7 +152,7 @@ func (s *Service) loads(q *dispatch.Queue) []RunnerLoad {
 	if s.deps.Runners != nil {
 		for _, r := range s.deps.Runners() {
 			if r.Build == 0 { // a container's runner is its engine's
-				out = append(out, RunnerLoad{Name: r.Name, Kind: KindRunner, Busy: r.Busy, Limit: r.Executors, State: placeState(r.Enabled, r.Online)})
+				out = append(out, RunnerLoad{Name: r.Name, Kind: KindRunner, Busy: r.Busy, Limit: r.Executors, State: placeState(r.Enabled, r.Online), Weight: r.Weight})
 			}
 		}
 	}
@@ -268,7 +270,7 @@ func (s *Service) queuePerms(ctx context.Context, u *store.User, q *dispatch.Que
 func (v *QueueView) signature() string {
 	var b strings.Builder
 	for _, l := range v.Runners {
-		fmt.Fprintf(&b, "p%s:%d/%d:%s;", l.Name, l.Busy, l.Limit, l.State)
+		fmt.Fprintf(&b, "p%s:%d/%d:%s:%d;", l.Name, l.Busy, l.Limit, l.State, l.Weight)
 	}
 	for _, r := range v.Running {
 		fmt.Fprintf(&b, "r%d:%s:%v;", r.Build.ID, strings.Join(r.Stages, ","), r.Waiting)

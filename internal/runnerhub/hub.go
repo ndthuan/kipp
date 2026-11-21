@@ -42,7 +42,9 @@ type Identity struct {
 	Name      string
 	Labels    []string
 	Executors int // 0: no limit
-	Enabled   bool
+	// Weight ranks the runners that match a stage: the higher is placed on first.
+	Weight  int
+	Enabled bool
 	// Build is the build an on-demand runner's token is for; 0 for a
 	// standing runner.
 	Build int64
@@ -266,7 +268,7 @@ func (h *Hub) Candidates() []placement.Candidate {
 		}
 		out = append(out, placement.Candidate{
 			Name: who.Name, Kind: placement.KindRunner, Labels: slices.Clone(c.id.Labels),
-			Free: c.free(), Reachable: c.online, Idle: c.idle,
+			Free: c.free(), Reachable: c.online, Idle: c.idle, Weight: c.id.Weight,
 		})
 	}
 	return out
@@ -316,6 +318,7 @@ type Status struct {
 	Name              string
 	Labels            []string
 	Executors, Busy   int
+	Weight            int
 	Enabled, Online   bool
 	Since, Seen       time.Time
 	OS, Arch, Version string
@@ -341,7 +344,7 @@ func (h *Hub) Runners() []Status {
 	for _, who := range slices.SortedFunc(maps.Keys(h.conns), byNameAndBuild) {
 		c := h.conns[who]
 		st := Status{
-			Name: who.Name, Labels: slices.Clone(c.id.Labels), Executors: c.id.Executors, Busy: c.busy(),
+			Name: who.Name, Labels: slices.Clone(c.id.Labels), Executors: c.id.Executors, Weight: c.id.Weight, Busy: c.busy(),
 			Enabled: c.id.Enabled, Online: c.online, Since: c.since, Seen: c.seen,
 			OS: c.os, Arch: c.arch, Version: c.version, Build: c.id.Build,
 		}

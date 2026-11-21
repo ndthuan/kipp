@@ -4936,10 +4936,14 @@ components:
           type: array
         version:
           type: string
+        weight:
+          description: Its rank in placement, 0 until set. Among the runners that match a stage and have a free executor, the higher weight takes it first; equal weights go to the one idle longest.
+          type: integer
       required:
         - name
         - labels
         - executors
+        - weight
         - busy
         - enabled
         - online
@@ -5061,6 +5065,9 @@ components:
             - offline
             - disabled
           type: string
+        weight:
+          description: A standing runner's rank in placement (see Runner); 0 for the built-in runner and an engine.
+          type: integer
       required:
         - name
         - kind
@@ -5068,6 +5075,7 @@ components:
         - limit
         - state
         - prepares_only
+        - weight
       type: object
     RunnerStage:
       additionalProperties: false

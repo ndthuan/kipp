@@ -95,17 +95,17 @@ change at its next reload:
 | `kipp engine add <name> --docker <url> --labels <a,b> [--max N] ...` | Registers an engine (`--max` default 1). |
 | `kipp engine set <name> [--docker ...] [--labels ...] [--max N] [--disable \| --enable]` | Changes one. A disabled engine takes no new container; what runs finishes. |
 | `kipp engine rm <name>` / `kipp engine ls` | Removes one / lists them. |
-| `kipp runner add <name> --labels <a,b> [--executors N]` | Registers a standing runner and prints its token once. |
-| `kipp runner set <name> [--labels ...] [--executors N] [--disable \| --enable]` | Changes one; `--executors 0` is no limit. `--disable` drains it: it takes nothing new, and what it runs finishes. `kipp runner set built-in --executors N` sets the [built-in runner's](#each-runner-has-its-own-limit) limit. |
+| `kipp runner add <name> --labels <a,b> [--executors N] [--weight N]` | Registers a standing runner and prints its token once. |
+| `kipp runner set <name> [--labels ...] [--executors N] [--weight N] [--disable \| --enable]` | Changes one; `--executors 0` is no limit; `--weight` is its [rank in placement](#placement). `--disable` drains it: it takes nothing new, and what it runs finishes. `kipp runner set built-in --executors N` sets the [built-in runner's](#each-runner-has-its-own-limit) limit. |
 | `kipp runner token <name>` | Gives it a new token and ends the old one. |
-| `kipp runner rm <name>` / `kipp runner ls` | Removes one / lists them. |
+| `kipp runner rm <name>` / `kipp runner ls` | Removes one / lists them, each with its executors and weight. |
 
 An admin does the same on the **Runners** page (`/admin/runners`, in the
 menu under their name), in [sudo mode](accounts.md#sudo-mode), and a
 change made there takes effect at once. The page shows each engine and
 runner with its labels, whether it is online or reachable, its version
 and what it runs now. Each row's Change form sets a standing runner's
-labels and executors (0 for no limit), with the same checks as
+labels, executors (0 for no limit) and weight, with the same checks as
 `kipp runner set`, or an engine's labels and containers at once. A
 runner busy past a lowered limit finishes what it runs and takes nothing
 new until it is under. `GET /api/v1/admin/engines` and
@@ -119,8 +119,19 @@ Containers take the server's own runner at their next start.
 ## Placement
 
 A stage runs where every label it names is carried: an engine for a
-stage with `image`, a standing runner for one without. Among those, the
-runner idle longest, or the engine with the most room.
+stage with `image`, a standing runner for one without. Among those that
+have a free executor, a container of the build's own first, then:
+
+- for runners, the highest **weight** (an integer, default 0, negative
+  allowed), and among equal weights the one idle longest. Set it with
+  `kipp runner add --weight N`, `kipp runner set <name> --weight N` or the
+  Runners page's Change form; the Runners page, the queue's heading and
+  `kipp runner ls` show it. A runner that is busy, offline or disabled is
+  not a candidate, so a weight never makes a stage wait: when every runner
+  of a higher weight is busy, one of a lower weight takes the stage. To
+  keep a stage off a machine, give it labels the stage does not name; a
+  weight only orders the runners that carry them all.
+- for engines, the most room. An engine has no weight.
 
 - When nothing registered carries the labels, the stage fails at once
   with `no runner or engine carries labels [...]`.

@@ -190,6 +190,14 @@ func TestTheQueueHeadingCountsBuildsFirstAndEachRunnersLoadOnlyForAnAdmin(t *tes
 	lacks(t, body, "built-in", "slots", "<h2>Waiting")
 }
 
+func TestTheQueueHeadingSaysAStandingRunnersWeightWhenItIsSet(t *testing.T) {
+	e := site(t)
+	l := append(loads(1, 4), api.RunnerLoad{Name: "pc", Kind: api.KindRunner, Busy: 0, Limit: 2, State: api.StateOnline, Weight: 10},
+		api.RunnerLoad{Name: "off", Kind: api.KindRunner, State: api.StateOffline, Weight: 5})
+	contains(t, renderQueue(t, e, &api.QueueView{Running: runningBuilds(1), Executors: 4, Busy: 1, Runners: l}),
+		`built-in 1/4 &middot; pc 0/2 weight 10 &middot; off offline weight 5</span>`)
+}
+
 func TestTheQueueHeadingSaysTheBuiltInRunnerOfAServerOfNoExecutorsOnlyPrepares(t *testing.T) {
 	e := site(t)
 	l := loads(1, 4)
@@ -318,7 +326,7 @@ func TestTheRunnersPageChangesEachRunnersLimitOnItsRow(t *testing.T) {
 	eq(t, "without sudo", res.StatusCode, http.StatusForbidden)
 	e.sudo(t, admin)
 	for path, fields := range map[string]url.Values{
-		"/admin/runners/runners/box": {"labels": {"linux,arm64"}, "executors": {"0"}},
+		"/admin/runners/runners/box": {"labels": {"linux,arm64"}, "executors": {"0"}, "weight": {"10"}},
 		"/admin/runners/engines/mac": {"labels": {"linux,amd64"}, "max": {"3"}},
 		"/admin/runners/built-in":    {"executors": {"6"}},
 	} {
@@ -329,16 +337,21 @@ func TestTheRunnersPageChangesEachRunnersLimitOnItsRow(t *testing.T) {
 	must(t, err)
 	en, err := e.st.Engine(ctx, "mac")
 	must(t, err)
-	if a.Executors != 0 || len(a.Labels) != 2 || en.Max != 3 || len(en.Labels) != 2 {
+	if a.Executors != 0 || a.Weight != 10 || len(a.Labels) != 2 || en.Max != 3 || len(en.Labels) != 2 {
 		t.Fatalf("runner %+v, engine %+v", a, en)
 	}
 	_, page = get(t, admin, e.srv.URL+"/admin/runners?done=builtin-set")
 	contains(t, page, "0 of no limit", "0 of 6", "The built-in runner&#39;s limit is changed")
-	contains(t, e.audit(t), "admin runner.set box labels linux,arm64, executors 0, enabled", "admin engine.set mac", "admin runner.set built-in executors 6")
+	contains(t, e.audit(t), "admin runner.set box labels linux,arm64, executors 0, enabled, weight 10", "admin engine.set mac", "admin runner.set built-in executors 6")
 
 	res, page = e.form(t, admin, "/admin/runners/runners/box", url.Values{"labels": {"linux"}, "executors": {"many"}})
 	eq(t, "executors that are no number", res.StatusCode, http.StatusBadRequest)
 	contains(t, page, "executors: a whole number", `role="alert"`, `value="many"`)
+	res, page = e.form(t, admin, "/admin/runners/runners/box", url.Values{"labels": {"linux"}, "executors": {"1"}, "weight": {"heavy"}})
+	eq(t, "a weight that is no number", res.StatusCode, http.StatusBadRequest)
+	contains(t, page, "weight: a whole number", `value="heavy"`)
+	_, page = get(t, admin, e.srv.URL+"/admin/runners")
+	contains(t, page, "<th>Weight</th>", `name="weight" type="number" value="10"`)
 	res, page = e.form(t, admin, "/admin/runners/built-in", url.Values{"executors": {"0"}})
 	eq(t, "a built-in runner of no executor", res.StatusCode, http.StatusBadRequest)
 	contains(t, page, "the built-in runner&#39;s executors is at least 1", `role="alert"`)

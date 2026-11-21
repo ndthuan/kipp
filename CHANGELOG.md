@@ -10,6 +10,14 @@ lines and the data directory are the public surface.
 
 Added:
 
+- A standing runner has a weight, an integer that is 0 until set: of the
+  runners that match a stage and have a free executor, the highest weight
+  takes it, and equal weights keep the runner idle longest first. A stage
+  still never waits for a heavier runner that is busy or offline. Set it
+  with `kipp runner add --weight N`, `kipp runner set <name> --weight N` or
+  the Runners page's Change form; `kipp runner ls`, the Runners page, the
+  queue's heading and `GET /api/v1/admin/runners` (`weight`) and
+  `GET /api/v1/queue` (`runners[].weight`) show it.
 - A job whose newest 5 finished builds are all green is no longer listed as
   flaky on the overview, however often its colour changed before: a fixed
   job leaves the Flaky section as soon as it has been green five times in a

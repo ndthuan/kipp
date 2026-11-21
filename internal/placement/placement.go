@@ -4,6 +4,7 @@
 package placement
 
 import (
+	"cmp"
 	"fmt"
 	"slices"
 	"strings"
@@ -30,6 +31,9 @@ type Candidate struct {
 	Why       string
 	// Idle is since when a runner has had nothing to run.
 	Idle time.Time
+	// Weight ranks the runners that match: the higher takes a stage first.
+	// An engine has none, and its Room orders it.
+	Weight int
 	// Room is how many more containers an engine may start; Reuse is an
 	// engine that already runs a container of this build and image, which
 	// takes the stage whatever its room.
@@ -87,7 +91,8 @@ func Pick(w Want, cs []Candidate) (Candidate, Why, string) {
 }
 
 // better orders the places that may take a stage: a container of the build
-// first, then the runner idle longest, or the engine with the most room.
+// first, then the runner of the highest weight and among equals the one
+// idle longest, or the engine with the most room.
 func better(a, b Candidate) int {
 	switch {
 	case a.Reuse != b.Reuse:
@@ -96,7 +101,7 @@ func better(a, b Candidate) int {
 		}
 		return 1
 	case a.Kind == KindRunner:
-		return a.Idle.Compare(b.Idle)
+		return cmp.Or(cmp.Compare(b.Weight, a.Weight), a.Idle.Compare(b.Idle))
 	}
 	return b.Room - a.Room
 }

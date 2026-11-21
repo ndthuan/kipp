@@ -10,9 +10,12 @@ import (
 // Runner is a standing runner: registered by an admin with its labels and a
 // token, run by whoever runs its machine. Only the token's hash is kept.
 type Runner struct {
-	Name       string
-	Labels     []string
-	Executors  int
+	Name      string
+	Labels    []string
+	Executors int
+	// Weight ranks the runners that match a stage: the higher is placed on
+	// first. It is 0 until an admin sets one.
+	Weight     int
 	Enabled    bool
 	TokenHash  string
 	CreatedAt  time.Time
@@ -21,7 +24,7 @@ type Runner struct {
 	OS, Arch, Version string
 }
 
-const runnerCols = `name, labels, executors, enabled, token_hash, created_at, last_seen_at, os, arch, version`
+const runnerCols = `name, labels, executors, weight, enabled, token_hash, created_at, last_seen_at, os, arch, version`
 
 // PutRunner adds the runner, or replaces the one of that name and keeps
 // when it was added and what was seen of it.
@@ -30,10 +33,10 @@ func (s *Store) PutRunner(ctx context.Context, a Runner) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.db.ExecContext(ctx, `INSERT INTO runners (name, labels, executors, enabled, token_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)
-		ON CONFLICT(name) DO UPDATE SET labels = excluded.labels, executors = excluded.executors, enabled = excluded.enabled,
+	_, err = s.db.ExecContext(ctx, `INSERT INTO runners (name, labels, executors, weight, enabled, token_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(name) DO UPDATE SET labels = excluded.labels, executors = excluded.executors, weight = excluded.weight, enabled = excluded.enabled,
 		token_hash = excluded.token_hash`,
-		a.Name, labels, a.Executors, a.Enabled, a.TokenHash, ts(time.Now()))
+		a.Name, labels, a.Executors, a.Weight, a.Enabled, a.TokenHash, ts(time.Now()))
 	return err
 }
 
@@ -70,7 +73,7 @@ func scanRunner(row scanner) (*Runner, error) {
 	var a Runner
 	var labels, created string
 	var seen sql.NullString
-	if err := row.Scan(&a.Name, &labels, &a.Executors, &a.Enabled, &a.TokenHash, &created, &seen, &a.OS, &a.Arch, &a.Version); err != nil {
+	if err := row.Scan(&a.Name, &labels, &a.Executors, &a.Weight, &a.Enabled, &a.TokenHash, &created, &seen, &a.OS, &a.Arch, &a.Version); err != nil {
 		return nil, err
 	}
 	var err error

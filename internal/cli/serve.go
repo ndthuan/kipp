@@ -774,7 +774,7 @@ func (s *server) places() {
 }
 
 func identityOf(a *store.Runner) runnerhub.Identity {
-	return runnerhub.Identity{Name: a.Name, Labels: a.Labels, Executors: a.Executors, Enabled: a.Enabled}
+	return runnerhub.Identity{Name: a.Name, Labels: a.Labels, Executors: a.Executors, Weight: a.Weight, Enabled: a.Enabled}
 }
 
 // loadPlaces gives the pool the engines and the hub the standing runners

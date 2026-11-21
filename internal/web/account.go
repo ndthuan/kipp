@@ -94,7 +94,7 @@ var sudoCarries = map[string]formCarry{
 	"POST /admin/runners/engines":       {form: "engine", fields: []string{"name", "url", "labels", "max", "ssh_key"}},
 	"POST /admin/runners/runners":       {form: "runner", fields: []string{"name", "labels", "executors"}},
 	editEngineRoute:                     {form: "engine-edit", fields: []string{"labels", "max"}, row: true},
-	editRunnerRoute:                     {form: "runner-edit", fields: []string{"labels", "executors"}, row: true},
+	editRunnerRoute:                     {form: "runner-edit", fields: []string{"labels", "executors", "weight"}, row: true},
 	builtInRoute:                        {form: "builtin", fields: []string{"executors"}},
 	createJobRoute:                      {form: "job", fields: []string{"yaml"}},
 	saveJobRoute:                        {form: "job", fields: []string{"yaml", "version"}},
