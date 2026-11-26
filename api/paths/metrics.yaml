@@ -1,0 +1,16 @@
+get:
+  operationId: listMetricStores
+  tags: [metrics]
+  summary: The metric stores the caller may see
+  x-kipp-package: api
+  responses:
+    "200":
+      description: Each store with the jobs that report into it and the metrics it remembers.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/MetricStoreList.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

@@ -1,0 +1,26 @@
+get:
+  operationId: getJobVersion
+  tags: [jobs]
+  summary: One version of a job, with its YAML
+  description: For an admin.
+  x-kipp-package: api
+  parameters:
+    - $ref: ../parameters/JobName.yaml
+    - $ref: ../parameters/VersionId.yaml
+  responses:
+    "200":
+      description: The version.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/JobVersionDetail.yaml
+    "400":
+      $ref: ../responses/BadRequest.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "403":
+      $ref: ../responses/Forbidden.yaml
+    "404":
+      $ref: ../responses/NotFound.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

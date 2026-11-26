@@ -1,0 +1,17 @@
+type: object
+additionalProperties: false
+description: One declared cache of a stage, its keys already expanded.
+required: [Key, Paths, Scope]
+properties:
+  Key:
+    type: string
+  RestoreKeys:
+    type: array
+    items:
+      type: string
+  Paths:
+    type: [array, "null"]
+    items:
+      type: string
+  Scope:
+    type: string

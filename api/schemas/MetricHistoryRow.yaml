@@ -1,0 +1,15 @@
+type: object
+additionalProperties: false
+description: One value a build reported, newest first in a list.
+required: [build, stage, value, unit, at]
+properties:
+  build:
+    $ref: BuildRef.yaml
+  stage:
+    type: string
+  value:
+    type: number
+  unit:
+    type: string
+  at:
+    $ref: Timestamp.yaml

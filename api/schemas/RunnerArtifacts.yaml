@@ -1,0 +1,13 @@
+type: object
+additionalProperties: false
+description: A stage's artifacts key.
+required: [Paths, Max]
+properties:
+  Paths:
+    type: [array, "null"]
+    items:
+      type: string
+  Max:
+    type: integer
+    format: int64
+    description: The most the matches may come to, in bytes.

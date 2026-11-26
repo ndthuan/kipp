@@ -1,0 +1,26 @@
+post:
+  operationId: runnerSendLog
+  tags: [internal]
+  summary: A runner sends a stage's output
+  description: The body is the stage's output as a chunked stream, copied into its log as it arrives. Once per stage.
+  x-kipp-package: runnerhub
+  security:
+    - runnerToken: []
+  parameters:
+    - $ref: ../parameters/AssignmentId.yaml
+  requestBody:
+    required: true
+    content:
+      application/octet-stream:
+        schema:
+          type: string
+          format: binary
+  responses:
+    "204":
+      description: The output ended and was kept.
+    "401":
+      $ref: ../responses/RunnerRefusal.yaml
+    "409":
+      $ref: ../responses/RunnerRefusal.yaml
+    "410":
+      $ref: ../responses/RunnerRefusal.yaml

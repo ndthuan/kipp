@@ -1,0 +1,17 @@
+get:
+  operationId: getQueue
+  tags: [queue]
+  summary: What runs and what waits
+  description: Only the builds of jobs the caller may see.
+  x-kipp-package: api
+  responses:
+    "200":
+      description: The queue.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/Queue.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

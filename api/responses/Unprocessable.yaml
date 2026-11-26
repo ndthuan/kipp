@@ -1,0 +1,5 @@
+description: The job files were refused; the message says why.
+content:
+  application/problem+json:
+    schema:
+      $ref: ../schemas/Problem.yaml

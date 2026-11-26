@@ -1,0 +1,26 @@
+type: object
+additionalProperties: false
+description: A change worth making.
+required: [kind, target, reason, saving_bytes, change, until]
+properties:
+  kind:
+    type: string
+    enum: [keep, remove, compact, stray]
+    description: |
+      `keep`: a job whose rows pass 10% of the database's bytes in use; the
+      change is the line of YAML for its job file. `remove`: the data of a
+      job whose file is gone; `until` says when the retention removes it by
+      itself. `compact`: free pages over 10% of the file. `stray`: a file in
+      the data directory kipp did not make.
+  target:
+    type: string
+    description: The job or the file; empty for the database.
+  reason:
+    type: string
+  saving_bytes:
+    type: integer
+    description: An estimate.
+  change:
+    type: string
+  until:
+    $ref: NullableTimestamp.yaml

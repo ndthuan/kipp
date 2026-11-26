@@ -1,0 +1,7 @@
+# A job the clock builds: once an hour, at a minute kipp picks for it.
+name: hello-schedule
+description: Says the time once an hour, to show a build on a schedule.
+triggers:
+  cron: "H * * * *"
+stages:
+  tell: {run: 'echo "the time here is $(date)"'}

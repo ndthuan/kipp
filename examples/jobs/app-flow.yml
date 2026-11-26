@@ -1,0 +1,19 @@
+# One job is the CI of every branch and the deploy of the default one, as a
+# workflow with conditions: a push to any branch runs the checks; deploy
+# runs only on the repo's default branch (GitHub names it in the push), and
+# a build by hand or by cron counts as on it. A branch other than the
+# default gets a preview instead. A stage whose `when` does not hold is
+# skipped with what needs it, and fails nothing.
+name: app-flow
+group: ci
+description: Checks every pushed branch; deploys the default branch.
+triggers:
+  webhook: {repo: example/app}
+concurrency: queue
+timeout: 30m
+stages:
+  checkout: {run: 'git clone --quiet git@github.com:example/app.git src && git -C src checkout --quiet --detach "${KIPP_COMMIT:-origin/main}"'}
+  test: {needs: [checkout], workdir: src, run: make test, junit: "reports/*.xml"}
+  preview: {needs: [test], workdir: src, when: {default_branch: false}, run: './deploy.sh preview "$KIPP_BRANCH"'}
+  deploy: {needs: [test], workdir: src, when: {default_branch: true}, run: ./deploy.sh production}
+  smoke: {needs: [deploy], workdir: src, run: ./smoke.sh production}

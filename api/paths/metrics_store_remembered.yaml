@@ -1,0 +1,25 @@
+get:
+  operationId: listRememberedValues
+  tags: [metrics]
+  summary: What a store remembers
+  x-kipp-package: api
+  parameters:
+    - $ref: ../parameters/StoreName.yaml
+    - name: metric
+      in: query
+      description: Only this metric's values.
+      schema:
+        type: string
+  responses:
+    "200":
+      description: The remembered value of each item, with the build that set it.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/RememberedValueList.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "404":
+      $ref: ../responses/NotFound.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

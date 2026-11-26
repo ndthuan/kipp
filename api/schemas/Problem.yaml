@@ -1,0 +1,26 @@
+type: object
+additionalProperties: false
+description: |
+  What every 4xx and 5xx under `/api/v1` is, a problem document as RFC 9457
+  defines one. A client decides by `code` (the codes, with their status and
+  meaning, are in `api/problems.md`) or by the status when it knows none.
+  `detail` is for a person and may change.
+required: [type, title, status, detail, code]
+properties:
+  type:
+    type: string
+    description: A link to the code's entry in `api/problems.md`.
+    examples: ["https://github.com/ndthuan/kipp/blob/main/api/problems.md#not_found"]
+  title:
+    type: string
+    description: The code's fixed one-line summary.
+  status:
+    type: integer
+    description: The HTTP status, as in the response line.
+  detail:
+    type: string
+    description: Why, for a person.
+  code:
+    type: string
+    description: The stable name of the kind of problem, in snake_case.
+    examples: [not_found]

@@ -1,0 +1,90 @@
+{{define "chart"}}<figure class="chart chart-{{.Key}}">
+<figcaption>{{.Heading}}</figcaption>
+<svg class="plot" viewBox="0 0 {{.W}} {{.H}}" role="img" aria-labelledby="chart-{{.Key}}-title chart-{{.Key}}-desc">
+<title id="chart-{{.Key}}-title">{{.Title}}</title>
+<desc id="chart-{{.Key}}-desc">{{.Desc}}</desc>
+{{range .Lines}}<line class="{{.Class}}" x1="{{.X1}}" y1="{{.Y1}}" x2="{{.X2}}" y2="{{.Y2}}"/>{{end}}
+{{range .Rects}}<rect class="{{.Class}}" x="{{.X}}" y="{{.Y}}" width="{{.W}}" height="{{.H}}">{{with .Title}}<title>{{.}}</title>{{end}}</rect>{{end}}
+{{range .Labels}}{{if .Href}}<a href="{{.Href}}">{{end}}<text class="{{.Class}}" x="{{.X}}" y="{{.Y}}" text-anchor="{{.Anchor}}">{{.Text}}{{with .Title}}<title>{{.}}</title>{{end}}</text>{{if .Href}}</a>{{end}}{{end}}
+</svg>
+<ul class="legend">{{range .Legend}}<li><span class="swatch swatch-{{.Class}}" aria-hidden="true"></span>{{.Text}}</li>{{end}}</ul>
+<div class="sr-only"><table>
+<caption>{{.Title}}</caption>
+<thead><tr>{{range .Head}}<th>{{.}}</th>{{end}}</tr></thead>
+<tbody>{{range .Rows}}<tr>{{range .}}<td>{{.}}</td>{{end}}</tr>{{end}}</tbody>
+</table></div>
+</figure>{{end}}
+{{define "content"}}
+{{$d := .Data}}
+<h1 class="sr-only">Overview</h1>
+<div id="overview" class="stack" hx-get="/" hx-select="#overview" hx-target="this" hx-swap="outerHTML" hx-trigger="kipp-changed from:body, every 60s">
+<section class="sec stack" id="attention" aria-label="Now, failing, unstable and flaky">
+<div class="seg tabs" role="tablist" aria-label="What to look at">
+{{range $d.Tabs}}<button type="button" role="tab" id="tab-btn-{{.Name}}" aria-controls="overview-panel" data-tab="{{.Name}}" aria-selected="{{.Current}}"{{if not .Current}} tabindex="-1"{{end}} hx-get="/overview/tabs/{{.Name}}" hx-target="#overview-panel" hx-swap="outerHTML" hx-select="unset">{{.Label}} <span class="tab-count{{if and .Count .Tone}} tab-{{.Tone}}{{end}}">{{.Count}}</span></button>
+{{end}}</div>
+{{template "overview-panel" $d}}
+</section>
+{{template "overview-charts" $d}}
+</div>
+{{end}}
+{{define "overview-panel"}}<div id="overview-panel" class="stack" role="tabpanel" aria-labelledby="tab-btn-{{.Tab}}" data-tab="{{.Tab}}">
+{{if eq .Tab "now"}}{{template "queue" .Queue}}
+{{else if eq .Tab "failing"}}{{template "overview-failing" .}}
+{{else if eq .Tab "unstable"}}{{template "overview-unstable" .}}
+{{else}}{{template "overview-flaky" .}}
+{{end}}</div>{{end}}
+{{define "overview-failing"}}{{$o := .Overview}}{{$why := .Why}}{{with $o.Failing}}<div class="scroll">
+<table class="rows stacked two-line">
+<thead><tr><th>Job</th><th>Build</th><th>Red since</th><th>Recent</th></tr></thead>
+<tbody>
+{{range .}}<tr>
+<td class="lead" data-label="Job"><a class="link" href="/jobs/{{.Job}}">{{.Job}}</a>{{if .Flaky}} <span class="tag">flaky</span>{{end}}</td>
+<td class="lead" data-label="Build"><a class="link" href="{{buildPath .Build}}">#{{.Build.Number}}</a> <span class="status {{.Build.Status}}">{{.Build.Status}}</span>{{template "why" (whyRow .Build (index $why .Build.ID))}}</td>
+<td class="lead" data-label="Red since">{{template "since" (since .Since "red")}}</td>
+<td data-label="Recent">{{template "dots" .Dots}}</td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>
+{{else}}<p class="sub">Nothing is failing.</p>
+{{end}}{{end}}
+{{define "overview-unstable"}}{{$o := .Overview}}{{with $o.Unstable}}<div class="scroll">
+<table class="rows stacked two-line">
+<thead><tr><th>Job</th><th>Build</th><th>Unstable since</th><th>Recent</th></tr></thead>
+<tbody>
+{{range .}}<tr>
+<td class="lead" data-label="Job"><a class="link" href="/jobs/{{.Job}}">{{.Job}}</a>{{if .Flaky}} <span class="tag">flaky</span>{{end}}</td>
+<td class="lead" data-label="Build"><a class="link" href="{{buildPath .Build}}">#{{.Build.Number}}</a> <span class="status {{.Build.Status}}">{{.Build.Status}}</span></td>
+<td class="lead" data-label="Unstable since">{{template "since" (since .Since "unstable")}}</td>
+<td data-label="Recent">{{template "dots" .Dots}}</td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>
+{{else}}<p class="sub">Nothing is unstable.</p>
+{{end}}{{end}}
+{{define "overview-flaky"}}{{$o := .Overview}}{{with $o.Flaky}}<div class="scroll">
+<table class="rows stacked">
+<thead><tr><th>Job</th><th>Failed</th><th>Flips</th><th>Recent</th></tr></thead>
+<tbody>
+{{range .}}<tr>
+<td class="lead" data-label="Job"><a class="link" href="/jobs/{{.Job}}">{{.Job}}</a></td>
+<td class="lead" data-label="Failed">{{percent .}} failed <span class="sub">({{.Failed}}/{{.Finished}})</span></td>
+<td data-label="Flips">{{plural .Flips "flip"}}</td>
+<td data-label="Recent">{{template "dots" .Dots}}</td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>
+{{else}}<p class="sub">Nothing is flaky.</p>
+{{end}}{{end}}
+{{define "overview-charts"}}<section id="charts" class="charts stack" aria-labelledby="charts-heading">
+<div class="charts-head">
+<h2 id="charts-heading">The last {{.Range.Label}}</h2>
+<nav class="seg" aria-label="How far back the graphs look">{{range .Ranges}}<a href="{{.Href}}" data-range="{{.Name}}" hx-get="/overview/charts?window={{.Name}}" hx-target="#charts" hx-swap="outerHTML" hx-select="unset"{{if .Current}} aria-current="true"{{end}}>{{.Label}}</a>{{end}}</nav>
+</div>
+<div class="charts-strip">
+{{range .Charts}}{{template "chart" .}}
+{{end}}</div>
+</section>{{end}}
+{{define "scripts"}}<script src="{{static "overview.js"}}" defer></script>{{end}}

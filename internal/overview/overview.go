@@ -1,0 +1,247 @@
+// Package overview works out what the front page and GET /api/v1/overview
+// show: what is red, what flaps, how each group stands and the graphs. It is given the jobs a user may view, with their
+// finished builds, and decides nothing about who may view what.
+package overview
+
+import (
+	"cmp"
+	"slices"
+	"time"
+
+	"github.com/ndthuan/kipp/internal/store"
+)
+
+// The numbers of the sections, written once.
+const (
+	// Window is how many of a job's newest finished builds the sections
+	// look at, and MinFinished how many of them a job needs to be flaky.
+	Window      = 20
+	MinFinished = 5
+	// DefaultFlips is how many times the colour must change inside the
+	// window for a job to be flaky; 0 switches the section off.
+	DefaultFlips = 4
+	// DefaultQuiet is how many green builds in a row, newest first, end a
+	// job's flakiness; 0 switches the rule off.
+	DefaultQuiet = 5
+	// Dots is the run of dots beside a job.
+	Dots = 5
+)
+
+// Job is one leaf job the viewer may see: a job that builds itself, so
+// neither a multibranch job, an owner job nor a repo's node.
+type Job struct {
+	Name, Group    string
+	Disabled, Gone bool
+	Child          bool
+	Side           bool
+	Running        bool
+	History        []*store.Build
+	Builds         []*store.Build
+	Before         store.Tally
+}
+
+// Overview is every section but the queue.
+type Overview struct {
+	Failing  []Failing
+	Unstable []Failing
+	Flaky    []FlakyJob
+	Groups   []Group
+	Charts   *Charts
+	Hidden   Hidden
+}
+
+// Hidden counts the jobs a section leaves out because they are pull
+// requests or side branches.
+type Hidden struct {
+	Failing, Unstable, Flaky int
+}
+
+// Failing is a job whose newest finished build is red. Build is that build,
+// Since the end of the first red build of the streak it ends (the oldest
+// the window shows, if all of it is red), Flaky that the job would be
+// flaky if it were green, and Dots its newest builds.
+type Failing struct {
+	Job   string
+	Build *store.Build
+	Since time.Time
+	Flaky bool
+	Dots  []*store.Build
+}
+
+// FlakyJob is a job that is green now and has flipped colour often: Failed
+// of Finished builds in its window are red, in Flips changes of colour.
+type FlakyJob struct {
+	Job              string
+	Failed, Finished int
+	Flips            int
+	Dots             []*store.Build
+}
+
+// Percent is the share of the window that is red, in whole percent.
+func (f FlakyJob) Percent() int { return (f.Failed*100 + f.Finished/2) / f.Finished }
+
+// Group is how the jobs of a group stand, Name "" being the jobs with no
+// group. A running job is also counted by its colour, so the counts of one
+// group do not add up to its jobs; a disabled job is only disabled. A gone
+// job is in no count. NeverBuiltChildren and DisabledChildren are how many
+// of NeverBuilt and Disabled are branches and pull requests.
+type Group struct {
+	Name                                      string
+	Green, Red, NeverBuilt, Running, Disabled int
+	NeverBuiltChildren, DisabledChildren      int
+}
+
+// Compute is the overview of jobs at now.
+func Compute(jobs []Job, cfg Config, now time.Time) *Overview {
+	o := &Overview{Groups: groups(jobs), Charts: chartsOf(jobs, cfg, now)}
+	o.Charts.addCounts(o.Groups)
+	for _, j := range jobs {
+		if j.Disabled || j.Gone {
+			continue
+		}
+		h := j.History
+		if len(h) > Window {
+			h = h[:Window]
+		}
+		o.addStanding(j, h, cfg)
+	}
+	o.sort()
+	return o
+}
+
+func (o *Overview) addStanding(j Job, h []*store.Build, cfg Config) {
+	if len(h) == 0 {
+		return
+	}
+	n := flipsOf(h)
+	flaky := cfg.Flips > 0 && len(h) >= MinFinished && n >= cfg.Flips && !quietFor(h, cfg.Quiet)
+	dots := h[:min(len(h), Dots)]
+	switch {
+	case h[0].Status.Red() && j.Side:
+		o.Hidden.Failing++
+		return
+	case h[0].Status.Red():
+		o.Failing = append(o.Failing, Failing{Job: j.Name, Build: h[0], Since: streakStart(h, store.Status.Red), Flaky: flaky, Dots: dots})
+		return
+	case h[0].Status == store.Unstable && j.Side:
+		o.Hidden.Unstable++
+	case h[0].Status == store.Unstable:
+		o.Unstable = append(o.Unstable, Failing{Job: j.Name, Build: h[0], Since: streakStart(h, isUnstable), Flaky: flaky, Dots: dots})
+	}
+	if flaky && j.Side {
+		o.Hidden.Flaky++
+		return
+	}
+	if flaky {
+		o.Flaky = append(o.Flaky, FlakyJob{Job: j.Name, Failed: redCount(h), Finished: len(h), Flips: n, Dots: dots})
+	}
+}
+
+func (o *Overview) sort() {
+	byRecency := func(a, b Failing) int { return cmp.Or(b.Since.Compare(a.Since), cmp.Compare(a.Job, b.Job)) }
+	slices.SortFunc(o.Failing, byRecency)
+	slices.SortFunc(o.Unstable, byRecency)
+	slices.SortFunc(o.Flaky, func(a, b FlakyJob) int {
+		return cmp.Or(cmp.Compare(b.Flips, a.Flips), cmp.Compare(b.Failed*a.Finished, a.Failed*b.Finished), cmp.Compare(a.Job, b.Job))
+	})
+}
+
+func endOf(b *store.Build) time.Time {
+	if b.FinishedAt != nil {
+		return *b.FinishedAt
+	}
+	return b.QueuedAt
+}
+
+func isUnstable(s store.Status) bool { return s == store.Unstable }
+
+func streakStart(h []*store.Build, in func(store.Status) bool) time.Time {
+	i := 0
+	for i+1 < len(h) && in(h[i+1].Status) {
+		i++
+	}
+	return endOf(h[i])
+}
+
+func quietFor(h []*store.Build, quiet int) bool {
+	if quiet <= 0 || len(h) < quiet {
+		return false
+	}
+	for _, b := range h[:quiet] {
+		if b.Status.Red() {
+			return false
+		}
+	}
+	return true
+}
+
+func flipsOf(h []*store.Build) int {
+	n := 0
+	for i := 1; i < len(h); i++ {
+		if h[i].Status.Red() != h[i-1].Status.Red() {
+			n++
+		}
+	}
+	return n
+}
+
+func redCount(h []*store.Build) int {
+	n := 0
+	for _, b := range h {
+		if b.Status.Red() {
+			n++
+		}
+	}
+	return n
+}
+
+func groups(jobs []Job) []Group {
+	byName := map[string]*Group{}
+	var out []*Group
+	for _, j := range jobs {
+		g := byName[j.Group]
+		if g == nil {
+			g = &Group{Name: j.Group}
+			byName[j.Group] = g
+			out = append(out, g)
+		}
+		g.count(j)
+	}
+	slices.SortFunc(out, func(a, b *Group) int {
+		return cmp.Or(cmp.Compare(btoi(a.Name == ""), btoi(b.Name == "")), cmp.Compare(a.Name, b.Name))
+	})
+	flat := make([]Group, len(out))
+	for i, g := range out {
+		flat[i] = *g
+	}
+	return flat
+}
+
+func (g *Group) count(j Job) {
+	switch {
+	case j.Gone:
+		return
+	case j.Disabled:
+		g.Disabled++
+		g.DisabledChildren += btoi(j.Child)
+		return
+	case j.Running:
+		g.Running++
+	}
+	switch {
+	case len(j.History) > 0 && j.History[0].Status.Red():
+		g.Red++
+	case len(j.History) > 0:
+		g.Green++
+	case !j.Running:
+		g.NeverBuilt++
+		g.NeverBuiltChildren += btoi(j.Child)
+	}
+}
+
+func btoi(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}

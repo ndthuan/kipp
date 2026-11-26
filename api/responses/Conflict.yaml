@@ -1,0 +1,5 @@
+description: The request conflicts with the state of the server, for example a delivery received before or a job that drops builds while one runs.
+content:
+  application/problem+json:
+    schema:
+      $ref: ../schemas/Problem.yaml

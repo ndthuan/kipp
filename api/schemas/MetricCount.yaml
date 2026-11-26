@@ -1,0 +1,9 @@
+type: object
+additionalProperties: false
+required: [name, items]
+properties:
+  name:
+    type: string
+  items:
+    type: integer
+    description: How many items the store remembers for the metric.

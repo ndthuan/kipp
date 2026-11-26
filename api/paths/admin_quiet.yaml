@@ -1,0 +1,66 @@
+get:
+  operationId: getQuiet
+  tags: [admin]
+  summary: Whether the server is quiet
+  description: |
+    In quiet mode the server takes no new builds (triggers answer 503) and
+    lets the ones that run finish, so that it can be restarted. For an
+    admin.
+  x-kipp-package: api
+  responses:
+    "200":
+      description: The quiet mode and what still runs or waits.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/Quiet.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "403":
+      $ref: ../responses/Forbidden.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml
+post:
+  operationId: setQuiet
+  tags: [admin]
+  summary: Make the server quiet
+  x-kipp-package: api
+  security:
+    - bearerToken: []
+    - sessionCookie: []
+      csrfToken: []
+  responses:
+    "200":
+      description: The quiet mode, now on.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/Quiet.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "403":
+      $ref: ../responses/Forbidden.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml
+delete:
+  operationId: clearQuiet
+  tags: [admin]
+  summary: End the server's quiet mode
+  x-kipp-package: api
+  security:
+    - bearerToken: []
+    - sessionCookie: []
+      csrfToken: []
+  responses:
+    "200":
+      description: The quiet mode, now off.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/Quiet.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "403":
+      $ref: ../responses/Forbidden.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

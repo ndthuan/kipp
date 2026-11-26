@@ -1,0 +1,11 @@
+type: object
+additionalProperties: false
+description: The edits that wait, by job name. Not paged; `next_cursor` is always null.
+required: [items, next_cursor]
+properties:
+  items:
+    type: array
+    items:
+      $ref: JobConflict.yaml
+  next_cursor:
+    $ref: NextCursor.yaml

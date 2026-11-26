@@ -1,0 +1,16 @@
+{{define "scripts"}}<script src="{{static "copy.js"}}" defer></script>{{end}}
+{{define "content"}}
+{{with .Data}}
+<div class="stack narrow">
+<h1>{{.Heading}}</h1>
+<p>{{.Lead}}</p>
+<p class="notice notice-warn">This is the only time it is shown. Copy it now: kipp keeps only a hash of it and cannot show it again.</p>
+<div class="once">
+<code id="once-value">{{.Value}}</code>
+<button class="action action-small" type="button" data-copy="once-value" data-copy-status="once-copied" hidden>Copy</button>
+<span class="sub" id="once-copied" role="status"></span>
+</div>
+<p><a class="link" href="{{.Back}}">{{.BackLabel}}</a></p>
+</div>
+{{end}}
+{{end}}

@@ -1,0 +1,16 @@
+type: object
+additionalProperties: false
+description: Why the launcher went back to the version before, as it recorded it.
+required: [version, from, reason, log_tail, at]
+properties:
+  version:
+    type: string
+  from:
+    type: string
+  reason:
+    type: string
+  log_tail:
+    type: string
+    description: The end of what the version that failed printed.
+  at:
+    $ref: Timestamp.yaml

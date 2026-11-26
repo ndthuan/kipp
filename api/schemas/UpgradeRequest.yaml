@@ -1,0 +1,22 @@
+type: object
+additionalProperties: false
+description: |
+  The body of an upgrade or a rollback. No body at all is a safe restart with
+  the default wait.
+properties:
+  safe_restart:
+    type: boolean
+    default: true
+    description: |
+      Wait, in quiet mode, until no build runs or waits, and restart then.
+      Without it the builds that run end as `lost`, and `confirm_lost` is needed.
+  confirm_lost:
+    type: boolean
+    default: false
+    description: Says the running builds may end as lost, when `safe_restart` is false.
+  version:
+    type: string
+    description: The release to upgrade to; it must be the latest one. Not for a rollback.
+  wait_timeout:
+    type: string
+    description: A Go duration, such as `90m`. How long to wait for the builds, 2 hours when absent.

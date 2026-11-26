@@ -1,0 +1,20 @@
+type: object
+additionalProperties: false
+description: |
+  How a multibranch or owner job's scanning stands. No token is no scan,
+  and no statuses on the commits.
+required: [token, every_seconds, running, at, result, error]
+properties:
+  token:
+    type: boolean
+  every_seconds:
+    type: [integer, "null"]
+    description: How often it scans, in whole seconds; null when it does not scan on a clock.
+  running:
+    type: boolean
+  at:
+    $ref: NullableTimestamp.yaml
+  result:
+    type: [string, "null"]
+  error:
+    type: [string, "null"]

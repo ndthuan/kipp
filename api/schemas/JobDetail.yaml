@@ -1,0 +1,78 @@
+type: object
+additionalProperties: false
+description: |
+  One job with its latest builds and activity. A removed job holds its name,
+  its builds and its activity; what the job file said went with the file.
+required: [name, removed, disabled, group, description, params, cron, next, timezone, concurrency, locks, stage_locks, locked_stages, builds, activity, parent, multibranch, scan, folder, owner, source, edit_waits]
+properties:
+  name:
+    type: string
+  removed:
+    type: boolean
+  disabled:
+    type: boolean
+  group:
+    type: string
+  description:
+    type: string
+  params:
+    type: array
+    items:
+      $ref: Param.yaml
+  cron:
+    type: string
+  next:
+    $ref: NullableTimestamp.yaml
+  timezone:
+    type: string
+    description: The zone the cron is read in, the job's own, else the server's, else `Local`.
+  concurrency:
+    oneOf:
+      - $ref: Concurrency.yaml
+      - const: ""
+  locks:
+    type: array
+    items:
+      type: string
+    description: The locks a build holds from its start to the end of its hooks.
+  stage_locks:
+    type: array
+    items:
+      type: string
+    description: The locks a stage of the stages file in a repo may take.
+  locked_stages:
+    type: object
+    additionalProperties:
+      type: array
+      items:
+        type: string
+    description: By stage of the job file, the locks the stage takes while it runs; a stage that takes none is not listed.
+  builds:
+    $ref: BuildList.yaml
+  activity:
+    $ref: ActivityList.yaml
+  parent:
+    type: [string, "null"]
+    description: The multibranch job a child belongs to.
+  multibranch:
+    type: [string, "null"]
+    description: A multibranch job's repo.
+  scan:
+    oneOf:
+      - $ref: Scan.yaml
+      - type: "null"
+  folder:
+    type: [string, "null"]
+    description: The owner job a repo's job belongs to.
+  owner:
+    oneOf:
+      - $ref: Owner.yaml
+      - type: "null"
+  source:
+    oneOf:
+      - $ref: JobSource.yaml
+      - type: "null"
+    description: Where a job of the server's own comes from; null for a child and a removed job.
+  edit_waits:
+    type: boolean
+    description: An edit of the store waits in conflict for this job.

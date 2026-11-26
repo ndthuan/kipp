@@ -1,0 +1,19 @@
+type: object
+additionalProperties: false
+description: |
+  How many jobs `failing`, `unstable` and `flaky` leave out. Those lists hold
+  the jobs of a file, the child of a repo's default branch and a repo's tag
+  child; a pull request and a branch that is not the default one are counted
+  here instead. A child whose repo's default branch is not known yet is not
+  left out.
+required: [failing, unstable, flaky]
+properties:
+  failing:
+    type: integer
+    description: Pull requests and side branches whose newest red-or-green build is red.
+  unstable:
+    type: integer
+    description: Pull requests and side branches whose newest red-or-green build is `unstable`.
+  flaky:
+    type: integer
+    description: Pull requests and side branches that are green now and flaky, or unstable now and flaky.

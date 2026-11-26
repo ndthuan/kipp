@@ -1,0 +1,7 @@
+name: cursor
+in: query
+description: |
+  Where the page begins: the `next_cursor` of the page before it. Opaque. One
+  that this server did not give for this list is refused.
+schema:
+  type: string

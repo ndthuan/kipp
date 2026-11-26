@@ -1,0 +1,19 @@
+type: object
+additionalProperties: false
+description: A metric store, as the caller may see it.
+required: [store, jobs, orphaned, metrics]
+properties:
+  store:
+    type: string
+  jobs:
+    type: array
+    items:
+      type: string
+    description: The loaded jobs the caller may see that report into it.
+  orphaned:
+    type: boolean
+    description: True when no loaded job reports into it.
+  metrics:
+    type: array
+    items:
+      $ref: MetricCount.yaml

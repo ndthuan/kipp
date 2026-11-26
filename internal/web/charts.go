@@ -1,0 +1,327 @@
+package web
+
+import (
+	"fmt"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/ndthuan/kipp/internal/overview"
+)
+
+type px float64
+
+func (p px) String() string { return strconv.FormatFloat(float64(p), 'f', 1, 64) }
+
+type grect struct {
+	X, Y, W, H px
+	Class      string
+	Title      string
+}
+
+type gline struct {
+	X1, Y1, X2, Y2 px
+	Class          string
+}
+
+type glabel struct {
+	X, Y   px
+	Text   string
+	Anchor string
+	Class  string
+	Title  string
+	Href   string
+}
+
+type legendItem struct{ Class, Text string }
+
+type chart struct {
+	Key, Heading, Title, Desc string
+	W, H                      int
+	Rects                     []grect
+	Lines                     []gline
+	Labels                    []glabel
+	Legend                    []legendItem
+	Head                      []string
+	Rows                      [][]string
+}
+
+const (
+	chartW    = 400
+	chartLeft = 38
+	chartPad  = 6
+	labelGap  = 12
+)
+
+func chartsOf(c *overview.Charts, zone *time.Location) []*chart {
+	return []*chart{buildsChart(c, zone), slotsChart(c, zone), ratesChart(c)}
+}
+
+func clockLabel(t time.Time, zone *time.Location) string { return t.In(zone).Format("Mon 15:04") }
+
+func axisTicks(c *overview.Charts, zone *time.Location, x0, slot px, y px) []glabel {
+	var out []glabel
+	for i, b := range c.Buckets {
+		t := b.Start.In(zone)
+		text := ""
+		switch {
+		case c.Range.Bucket == time.Hour && t.Hour()%6 == 0:
+			text = t.Format("15:04")
+		case c.Range.Bucket > time.Hour && t.Hour() == 0:
+			text = t.Format("Mon 2")
+		}
+		if text != "" {
+			out = append(out, glabel{X: x0 + px(i)*slot, Y: y, Text: text, Anchor: "start"})
+		}
+	}
+	return out
+}
+
+func niceMax(v int) int {
+	for step := 1; ; step *= 10 {
+		for _, m := range []int{1, 2, 5} {
+			if m*step >= v {
+				return m * step
+			}
+		}
+	}
+}
+
+func niceWait(d time.Duration) time.Duration {
+	steps := []time.Duration{10 * time.Second, 30 * time.Second, time.Minute, 2 * time.Minute, 5 * time.Minute, 10 * time.Minute,
+		30 * time.Minute, time.Hour, 2 * time.Hour, 6 * time.Hour, 24 * time.Hour}
+	for _, s := range steps {
+		if s >= d {
+			return s
+		}
+	}
+	return d
+}
+
+func shortWait(d time.Duration) string {
+	d = d.Round(time.Second)
+	switch {
+	case d >= time.Hour && d%time.Hour == 0:
+		return strconv.Itoa(int(d/time.Hour)) + "h"
+	case d >= time.Hour:
+		return fmt.Sprintf("%dh%02dm", int(d/time.Hour), int(d%time.Hour/time.Minute))
+	case d >= time.Minute && d%time.Minute == 0:
+		return strconv.Itoa(int(d/time.Minute)) + "m"
+	case d >= time.Minute:
+		return fmt.Sprintf("%dm%02ds", int(d/time.Minute), int(d%time.Minute/time.Second))
+	}
+	return strconv.Itoa(int(d/time.Second)) + "s"
+}
+
+func (ch *chart) yTicks(top, h px, max int, text func(int) string) {
+	ticks := []int{0, max}
+	if max%2 == 0 && max > 2 {
+		ticks = []int{0, max / 2, max}
+	}
+	for _, v := range ticks {
+		y := top + h - px(v)*h/px(max)
+		ch.Lines = append(ch.Lines, gline{X1: chartLeft, Y1: y, X2: chartW - chartPad, Y2: y, Class: "grid"})
+		ch.Labels = append(ch.Labels, glabel{X: chartLeft - 4, Y: y + 4, Text: text(v), Anchor: "end"})
+	}
+}
+
+func buildsChart(c *overview.Charts, zone *time.Location) *chart {
+	var total [4]int
+	most := 0
+	for _, b := range c.Buckets {
+		total[0], total[1], total[2], total[3] = total[0]+b.Success, total[1]+b.Unstable, total[2]+b.Failed, total[3]+b.Cancelled
+		most = max(most, b.Finished())
+	}
+	ch := &chart{Key: "builds", Heading: "Builds over time", W: chartW, H: 176,
+		Title: "Builds over time: how the builds that ended in the last " + c.Range.Label + " ended",
+		Desc: fmt.Sprintf("In the last %s, %d builds ended success, %d unstable, %d failed and %d cancelled. Each column is %s.",
+			c.Range.Label, total[0], total[1], total[2], total[3], columnWidth(c)),
+		Head: []string{"From", "Success", "Unstable", "Failed", "Cancelled"}}
+	ch.Legend = []legendItem{{"success", fmt.Sprint("success ", total[0])}, {"unstable", fmt.Sprint("unstable ", total[1])},
+		{"failed", fmt.Sprint("failed ", total[2])}, {"cancelled", fmt.Sprint("cancelled ", total[3])}}
+	top, h := px(8), px(140)
+	top2 := niceMax(most)
+	ch.yTicks(top, h, top2, strconv.Itoa)
+	slot := px(chartW-chartLeft-chartPad) / px(len(c.Buckets))
+	for i, b := range c.Buckets {
+		name := clockLabel(b.Start, zone)
+		ch.Rows = append(ch.Rows, []string{name, strconv.Itoa(b.Success), strconv.Itoa(b.Unstable), strconv.Itoa(b.Failed), strconv.Itoa(b.Cancelled)})
+		tip := fmt.Sprintf("%s: %d success, %d unstable, %d failed, %d cancelled", name, b.Success, b.Unstable, b.Failed, b.Cancelled)
+		x, y := chartLeft+px(i)*slot+slot*0.14, top+h
+		for _, seg := range []struct {
+			n     int
+			class string
+		}{{b.Success, "success"}, {b.Unstable, "unstable"}, {b.Failed, "failed"}, {b.Cancelled, "cancelled"}} {
+			if seg.n == 0 {
+				continue
+			}
+			sh := px(seg.n) * h / px(top2)
+			y -= sh
+			ch.Rects = append(ch.Rects, grect{X: x, Y: y, W: slot * 0.72, H: sh, Class: "bar bar-" + seg.class, Title: tip})
+		}
+	}
+	ch.Labels = append(ch.Labels, axisTicks(c, zone, chartLeft, slot, top+h+labelGap+4)...)
+	return ch
+}
+
+func columnWidth(c *overview.Charts) string {
+	return strings.TrimSuffix(c.Range.Bucket.String(), "m0s")
+}
+
+func slotsChart(c *overview.Charts, zone *time.Location) *chart {
+	peak, longest := 0, time.Duration(0)
+	for _, b := range c.Buckets {
+		peak = max(peak, b.MaxRunning)
+		longest = max(longest, b.WaitMax)
+	}
+	ch := &chart{Key: "slots", Heading: "Running and queue", W: chartW, H: 214,
+		Title: "Running and queue: builds running at once, and how long builds waited, in the last " + c.Range.Label,
+		Desc: fmt.Sprintf("In the last %s at most %d builds ran at once (each runner has a limit of its own) and the longest a build waited to start was %s.",
+			c.Range.Label, peak, shortWait(longest)),
+		Head: []string{"From", "Most running", "Started", "Median wait", "Longest wait"}}
+	ch.Legend = []legendItem{{"running", "running at once, at most " + strconv.Itoa(peak)}}
+	ch.Legend = append(ch.Legend, legendItem{"wait", "median wait"}, legendItem{"waitmax", "longest wait " + shortWait(longest)})
+
+	slot := px(chartW-chartLeft-chartPad) / px(len(c.Buckets))
+	topA, hA := px(18), px(92)
+	runMax := niceMax(peak)
+	ch.Labels = append(ch.Labels, glabel{X: chartLeft, Y: 10, Text: "Builds running at once", Anchor: "start", Class: "caption"})
+	ch.yTicks(topA, hA, runMax, strconv.Itoa)
+	topB, hB := px(138), px(48)
+	waitMax := niceWait(longest)
+	ch.Labels = append(ch.Labels, glabel{X: chartLeft, Y: 130, Text: "Wait in the queue", Anchor: "start", Class: "caption"})
+	for _, v := range []time.Duration{0, waitMax} {
+		y := topB + hB - px(v)*hB/px(waitMax)
+		ch.Lines = append(ch.Lines, gline{X1: chartLeft, Y1: y, X2: chartW - chartPad, Y2: y, Class: "grid"})
+		ch.Labels = append(ch.Labels, glabel{X: chartLeft - 4, Y: y + 4, Text: shortWait(v), Anchor: "end"})
+	}
+	for i, b := range c.Buckets {
+		name := clockLabel(b.Start, zone)
+		ch.Rows = append(ch.Rows, []string{name, strconv.Itoa(b.MaxRunning), strconv.Itoa(b.Started), shortWait(b.WaitMedian), shortWait(b.WaitMax)})
+		tip := fmt.Sprintf("%s: at most %d running; %d started, waited %s (median) and %s (longest)", name, b.MaxRunning, b.Started, shortWait(b.WaitMedian), shortWait(b.WaitMax))
+		x := chartLeft + px(i)*slot + slot*0.14
+		if b.MaxRunning > 0 {
+			rh := px(b.MaxRunning) * hA / px(runMax)
+			ch.Rects = append(ch.Rects, grect{X: x, Y: topA + hA - rh, W: slot * 0.72, H: rh, Class: "bar bar-running", Title: tip})
+		}
+		if b.WaitMax > 0 {
+			mh := max(px(b.WaitMax)*hB/px(waitMax), 1)
+			ch.Rects = append(ch.Rects, grect{X: x, Y: topB + hB - mh, W: slot * 0.72, H: mh, Class: "bar bar-waitmax", Title: tip})
+			mh = max(px(b.WaitMedian)*hB/px(waitMax), 1)
+			ch.Rects = append(ch.Rects, grect{X: x, Y: topB + hB - mh, W: slot * 0.72, H: mh, Class: "bar bar-wait", Title: tip})
+		}
+	}
+	ch.Labels = append(ch.Labels, axisTicks(c, zone, chartLeft, slot, topB+hB+labelGap+4)...)
+	return ch
+}
+
+const (
+	rateRow    = 24
+	rateName   = 92
+	rateBar    = 150
+	rateNameN  = 14
+	rateCounts = 13
+)
+
+func ratesChart(c *overview.Charts) *chart {
+	ch := &chart{Key: "rates", Heading: "Pass rate by group", W: chartW,
+		Title: "Pass rate by group: how many of the builds that ended in the last " + c.Range.Label + " ended green",
+		Head:  []string{"Group", "Pass rate", "Builds", "Change", "Before", "Never built", "Disabled"}}
+	ch.Legend = []legendItem{{"success", "green"}, {"failed", "red"}}
+	var parts []string
+	top := 2
+	for _, g := range c.Groups {
+		name := groupName(g.Name)
+		y := px(top)
+		top += rateRow
+		text, change := rateText(g)
+		before := "no builds"
+		if g.Before.Total() > 0 {
+			before = fmt.Sprintf("%d%% of %d", g.Before.Percent(), g.Before.Total())
+		}
+		ch.Rows = append(ch.Rows, []string{name, rateWords(g), strconv.Itoa(g.Now.Total()), change, before,
+			strconv.Itoa(g.NeverBuilt), strconv.Itoa(g.Disabled)})
+		parts = append(parts, name+" "+rateWords(g))
+		short := name
+		if r := []rune(name); len(r) > rateNameN {
+			short = string(r[:rateNameN-1]) + "..."
+		}
+		ch.Labels = append(ch.Labels,
+			glabel{X: 0, Y: y + 15, Text: short, Anchor: "start", Title: name},
+			glabel{X: rateName + rateBar + 8, Y: y + 15, Text: text, Anchor: "start"})
+		if links := countLinks(g, y+rateRow+4); len(links) > 0 {
+			ch.Labels = append(ch.Labels, links...)
+			top += rateCounts
+		}
+		tip := name + ": " + rateWords(g)
+		ch.Rects = append(ch.Rects, grect{X: rateName, Y: y + 4, W: rateBar, H: 14, Class: "bar bar-track", Title: tip})
+		if t := g.Now.Total(); t > 0 {
+			gw := px(g.Now.Green) * rateBar / px(t)
+			ch.Rects = append(ch.Rects, grect{X: rateName, Y: y + 4, W: gw, H: 14, Class: "bar bar-success", Title: tip},
+				grect{X: rateName + gw, Y: y + 4, W: rateBar - gw, H: 14, Class: "bar bar-failed", Title: tip})
+		}
+	}
+	ch.H = top + 2
+	ch.Desc = "In the last " + c.Range.Label + ", " + strings.Join(parts, "; ") + "."
+	if len(parts) == 0 {
+		ch.Desc = "No build ended in the last " + c.Range.Label + " or in the " + c.Range.Label + " before."
+	}
+	return ch
+}
+
+func countLinks(g overview.GroupRate, y px) []glabel {
+	href := (&group{Name: g.Name}).href()
+	var out []glabel
+	x := px(rateName)
+	for _, c := range []struct {
+		n, nested int
+		what      string
+	}{{g.NeverBuilt, g.NeverBuiltChildren, "never built"}, {g.Disabled, g.DisabledChildren, "disabled"}} {
+		if c.n == 0 {
+			continue
+		}
+		text := fmt.Sprintf("%d %s", c.n, c.what)
+		title := text
+		if c.nested > 0 {
+			title += " (includes branches and pull requests)"
+		}
+		out = append(out, glabel{X: x, Y: y + 8, Text: text, Anchor: "start", Class: "count", Title: title, Href: href})
+		x += px(len([]rune(text))*6 + 14)
+	}
+	return out
+}
+
+func groupName(n string) string {
+	if n == "" {
+		return "No group"
+	}
+	return n
+}
+
+func rateText(g overview.GroupRate) (text, change string) {
+	d, ok := g.Delta()
+	change = "none"
+	if ok {
+		change = fmt.Sprintf("%+d", d)
+	}
+	switch {
+	case g.Now.Total() == 0 && g.Before.Total() == 0:
+		return "no builds", change
+	case g.Now.Total() == 0:
+		return fmt.Sprintf("none (was %d%%)", g.Before.Percent()), change
+	case ok:
+		return fmt.Sprintf("%d%% (%s) of %d", g.Now.Percent(), change, g.Now.Total()), change
+	}
+	return fmt.Sprintf("%d%% of %d", g.Now.Percent(), g.Now.Total()), change
+}
+
+func rateWords(g overview.GroupRate) string {
+	text, _ := rateText(g)
+	if g.NeverBuilt > 0 {
+		text += fmt.Sprintf(", %d never built", g.NeverBuilt)
+	}
+	if g.Disabled > 0 {
+		text += fmt.Sprintf(", %d disabled", g.Disabled)
+	}
+	return text
+}

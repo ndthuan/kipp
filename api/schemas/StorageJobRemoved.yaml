@@ -1,0 +1,10 @@
+type: object
+additionalProperties: false
+description: What "remove now" removed.
+required: [job, removed]
+properties:
+  job:
+    type: string
+  removed:
+    type: integer
+    description: The builds removed.

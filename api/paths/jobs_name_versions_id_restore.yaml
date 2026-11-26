@@ -1,0 +1,57 @@
+post:
+  operationId: restoreJobVersion
+  tags: [jobs]
+  summary: Make an older version of a job its newest
+  description: |
+    For an admin: an admin's API token, or an admin's browser session in
+    sudo mode. A build's token (`KIPP_TOKEN`) never may, whatever its
+    `permissions:`. On a server started with `--job-edits off` it is 409
+    `edits_off`; with `--job-edits files` the job file is written first,
+    and a file changed on disk since kipp read it is 409 `files_changed`
+    (reload first), one that cannot be written 500 `job_write_failed`. The
+    change is checked on the whole job set with it, as `kipp check` checks
+    a directory: 422 `job_refused` lists every error. A child of a
+    multibranch job, or a repo of an owner job, is 409. One row of the
+    audit.
+    The restore is a new version with the old one's YAML; it rewrites
+    nothing. Over a job that serves it is a change and needs `If-Match`; a
+    deleted job comes back without one. A deletion cannot be restored: 409.
+  x-kipp-package: api
+  security:
+    - bearerToken: []
+    - sessionCookie: []
+      csrfToken: []
+  parameters:
+    - $ref: ../parameters/JobName.yaml
+    - $ref: ../parameters/VersionId.yaml
+    - $ref: ../parameters/IfMatch.yaml
+  responses:
+    "200":
+      description: The job as it now serves.
+      headers:
+        ETag:
+          description: The job's decoded hash, in quotes.
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/JobDefinition.yaml
+    "400":
+      $ref: ../responses/BadRequest.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "403":
+      $ref: ../responses/Forbidden.yaml
+    "404":
+      $ref: ../responses/NotFound.yaml
+    "409":
+      $ref: ../responses/Conflict.yaml
+    "412":
+      $ref: ../responses/PreconditionFailed.yaml
+    "422":
+      $ref: ../responses/JobRefused.yaml
+    "428":
+      $ref: ../responses/PreconditionRequired.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

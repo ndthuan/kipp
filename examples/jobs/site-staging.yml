@@ -1,0 +1,29 @@
+# Deploys acme/site's main to staging on every push, after the gate. The
+# gate is the one acme's builds of the repo run (the stage `run` of its
+# .kipp.yml). A pull request is built as its head merged into main, and a
+# squash merge lands that same tree on main, so when the tree checked out
+# here was built green by acme.site or one of its children, with the same
+# tools (fingerprint, the same output as acme.yml's) on the same kind of
+# machine, the gate is not run again and its log says where it was green.
+# FULL_GATE runs it anyway.
+name: site-staging
+group: deploy
+description: Deploy acme/site's main to staging.
+triggers:
+  webhook: {repo: acme/site, branches: [main]}
+params:
+  FULL_GATE: {type: bool, description: Run the gate even when a green run of this tree exists.}
+fingerprint: ["go version", "node --version"]
+locks: [acme-staging]
+stages:
+  checkout: {run: 'rm -rf src && git clone --quiet https://github.com/acme/site.git src && git -C src checkout --quiet --detach "${KIPP_COMMIT:?a push names the commit}"'}
+  gate:
+    needs: [checkout]
+    workdir: src
+    run: deploy/gate.sh
+    reuse:
+      from: [acme.site]
+      stage: run
+      tree: $KIPP_WORKSPACE/src
+      force: FULL_GATE
+  ship: {needs: [gate], workdir: src, run: deploy/ship.sh staging}

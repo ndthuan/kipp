@@ -1,0 +1,40 @@
+post:
+  operationId: rerunAfterRestart
+  tags: [admin]
+  summary: Run running builds again after the restart
+  description: |
+    While quiet, has the restart stop the named running builds, as a cancel
+    does, and queue them again after the start with their params and cause,
+    as rerun_on_restart does, for this quiet only: turning quiet off forgets
+    it. Each is recorded in the audit, and builds not named are left as
+    they are. For an admin.
+  x-kipp-package: api
+  security:
+    - bearerToken: []
+    - sessionCookie: []
+      csrfToken: []
+  requestBody:
+    required: true
+    content:
+      application/json:
+        schema:
+          $ref: ../schemas/QuietRerun.yaml
+  responses:
+    "200":
+      description: The quiet mode, with the builds chosen counted in rerun.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/Quiet.yaml
+    "400":
+      $ref: ../responses/BadRequest.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "403":
+      $ref: ../responses/Forbidden.yaml
+    "404":
+      $ref: ../responses/NotFound.yaml
+    "409":
+      $ref: ../responses/Conflict.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

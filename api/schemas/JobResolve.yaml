@@ -1,0 +1,11 @@
+type: object
+additionalProperties: false
+description: |
+  Which side of a conflict serves: `file` retires the edit of the store and
+  the job file serves; `edit` makes the edit over the job file as it is now,
+  so that it serves (with `--job-edits files`, writes it to the file).
+required: [keep]
+properties:
+  keep:
+    type: string
+    enum: [file, edit]

@@ -1,0 +1,5 @@
+description: The job set would refuse the change (`job_refused`); `errors` lists every problem. Nothing changed.
+content:
+  application/problem+json:
+    schema:
+      $ref: ../schemas/ProblemWithErrors.yaml

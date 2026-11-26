@@ -1,0 +1,27 @@
+get:
+  operationId: listJobVersions
+  tags: [jobs]
+  summary: A job's versions, newest first
+  description: |
+    For an admin; works whatever `--job-edits` is, and for a job that is
+    deleted. Every version is kept.
+  x-kipp-package: api
+  parameters:
+    - $ref: ../parameters/JobName.yaml
+    - $ref: ../parameters/Limit.yaml
+    - $ref: ../parameters/Cursor.yaml
+  responses:
+    "200":
+      description: Up to `limit` versions, 50 by default, without their YAML.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/JobVersionList.yaml
+    "400":
+      $ref: ../responses/BadRequest.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "403":
+      $ref: ../responses/Forbidden.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

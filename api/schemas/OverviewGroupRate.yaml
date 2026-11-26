@@ -1,0 +1,18 @@
+type: object
+additionalProperties: false
+required: [name, now, before, change]
+properties:
+  name:
+    type: string
+    description: The group, empty for the jobs with no group.
+  now:
+    $ref: OverviewTally.yaml
+    description: The builds that ended in the last window.
+  before:
+    $ref: OverviewTally.yaml
+    description: The builds that ended in the window before that, of the same length.
+  change:
+    type: [integer, "null"]
+    description: |
+      `now.percent` minus `before.percent`, null when either window has no
+      build to compare.

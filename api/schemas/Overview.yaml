@@ -1,0 +1,39 @@
+type: object
+additionalProperties: false
+description: What the front page shows besides the queue.
+required: [failing, unstable, flaky, groups, charts, hidden]
+properties:
+  failing:
+    type: array
+    description: Jobs whose newest red-or-green build is red, the job that has been red for the shortest time first.
+    items:
+      $ref: OverviewFailing.yaml
+  unstable:
+    type: array
+    description: |
+      Jobs whose newest red-or-green build is `unstable`, in the shape of
+      `failing`: `since` is when the oldest build of the run of unstable ones
+      it ends ended (the oldest of the last 20, if all are unstable). An
+      unstable build counts as green everywhere else. The job that has been
+      unstable for the shortest time first.
+    items:
+      $ref: OverviewFailing.yaml
+  flaky:
+    type: array
+    description: |
+      Jobs that are green now and changed colour at least `--flaky-flips`
+      times in their last 20 builds, with at least 5 of them; empty when the
+      server has the section off, and without a job whose newest `--flaky-quiet`
+      builds (5) are all green. The most flips first, then the larger share
+      of red.
+    items:
+      $ref: OverviewFlaky.yaml
+  groups:
+    type: array
+    description: One entry per group, the groups by name and the jobs with no group (`name` empty) last.
+    items:
+      $ref: OverviewGroup.yaml
+  charts:
+    $ref: OverviewCharts.yaml
+  hidden:
+    $ref: OverviewHidden.yaml

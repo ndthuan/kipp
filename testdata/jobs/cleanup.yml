@@ -1,0 +1,8 @@
+name: cleanup
+group: ops
+description: Weekly removal of old temporary files.
+triggers:
+  cron: "H 4 * * 0"
+timeout: 30m
+stages:
+  sweep: {run: echo removing old temporary files}

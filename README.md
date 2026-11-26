@@ -1,0 +1,208 @@
+# kipp
+
+kipp is a job-first CI and scheduler in a single binary. Jobs are YAML
+files in a directory; builds run as shell commands on the server's
+machine, on runners that dial in, or in containers on Docker engines;
+everything else (builds, users, secrets) is kept in one SQLite file.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/home-dark.png">
+  <img alt="The overview: the builds running now on six of eight slots, with tabs for the failing, unstable and flaky jobs, and the builds that just ended" src="docs/screenshots/home.png">
+</picture>
+
+## Highlights
+
+- **It says what is red, and why.** The overview lists what fails now,
+  since when and in which stage, what is unstable or flaky, and what is
+  running. A failed build opens on the lines that
+  broke it, and its log walks from one problem to the next.
+- **Jobs are YAML, with a history.** Change a job through kipp (`kipp job
+  edit`, the API) and every version is kept, or keep `<name>.yml` files in
+  a directory, shared variables in `_vars.yml`, checked offline with `kipp
+  check` and read again on `kipp reload` or `SIGHUP`. A change the job set
+  would refuse is refused whole, and the server keeps the jobs it had.
+- **Pipelines, not only commands.** Stages form a DAG with `needs`,
+  conditions, retries, locks and timeouts, started by cron (Jenkins' `H`,
+  a time zone per job), a GitHub push or tag, another job, or by hand
+  with typed parameters.
+- **It follows your repos.** Every branch and pull request of a repo, or
+  every repo of a GitHub user or organization, built from a `.kipp.yml`
+  in the repo, with commit statuses, by token or as a GitHub App.
+- **It remembers what builds measure.** JUnit results, artifacts and a
+  keyed cache come with a build; metrics (coverage, a bundle's size) are
+  kept per item, and a guard fails the build whose number fell.
+- **It runs where the work is.** On the server's machine, on runners
+  that dial in, or in containers on Docker engines, chosen by label.
+- **A script can do all a browser can.** A JSON API described by OpenAPI,
+  a command line, and an MCP endpoint for Claude and other clients.
+- **Careful with access.** Users with per-job grants (view, build,
+  cancel), API tokens, secrets sealed in the database and masked in the
+  logs, an audit of every change, and an upgrade that backs up first and
+  rolls back by itself.
+
+![A failed build: the lines that broke it at the top, its stages as a graph with the failed one in red and what it stopped skipped, the failed test case with its message, and the stage's log with Previous problem and Next problem](docs/screenshots/build.png)
+
+## Install
+
+kipp has no release yet. Every commit on `main` that passes CI is
+published as `latest`: the archives on the
+[release latest](https://github.com/ndthuan/kipp/releases/tag/latest) and
+the image `ghcr.io/ndthuan/kipp:latest`.
+
+**`latest` is not recommended for production.** It is whatever `main`
+held at the last green push: it changes without notice, can change the
+database schema in a way an older build cannot read, and is never offered
+as an upgrade. Use it to try kipp, and pin a release once there is one.
+
+With Docker:
+
+```sh
+docker run -d --name kipp -p 8085:8085 -v kipp-data:/var/lib/kipp ghcr.io/ndthuan/kipp:latest
+```
+
+`/var/lib/kipp` is the data directory, jobs included; a directory of job
+files may be mounted at `/etc/kipp` as well
+([Docker](docs/install.md#docker)).
+
+The archives for Linux and macOS on amd64 and arm64, with `SHA256SUMS`,
+its signature `SHA256SUMS.sig` and a build provenance attestation, are on
+the [release latest](https://github.com/ndthuan/kipp/releases/tag/latest).
+To build from source, `make build` (Go 1.27.4 or newer) gives `bin/kipp`.
+The Homebrew formula comes back with the first release.
+
+[docs/install.md](docs/install.md) has every way in detail, with how to
+check an archive, how to upgrade and what the server needs.
+
+A running server asks GitHub for the latest release at start and about
+every 12 hours, one request that carries nothing about your jobs or your
+install beyond what any HTTP request does, and says on its Server page when a newer one exists. Turn it off with
+`kipp serve --no-update-check` or `KIPP_NO_UPDATE_CHECK=1`
+([details](docs/install.md#the-update-check)).
+
+## Quick start
+
+Start the server. `serve` stays in the foreground, so this is one terminal
+(a Homebrew service started above listens on the same port: stop it first
+with `brew services stop kipp`):
+
+```sh
+kipp serve --data ./data
+```
+
+It prints where it listens:
+
+```
+kipp v1.2.0 listening on http://127.0.0.1:8085, 2 jobs from the store, data in /home/alice/data
+```
+
+A new server starts with two example jobs: `hello`, built by hand, and
+`hello-schedule`, built once an hour. In a second terminal, in the same
+directory, make the first admin and a token, and run `hello`:
+
+```sh
+kipp user add admin --admin --data ./data
+kipp token create admin --label laptop --data ./data
+export KIPP_TOKEN=<the token>
+kipp run hello --wait
+```
+
+which print, in turn:
+
+```
+admin password: <a generated password, shown once>
+token for admin (laptop), shown once:
+kipp_<the token>
+hello #1 queued (build 1)
+[greet] hello, world
+hello #1: success
+```
+
+Then make it yours: `kipp job edit hello` opens the job in your editor and
+keeps what you save as its next version (`kipp job history hello` lists
+them). Log in at the address `serve` printed, as `admin` with that
+password, to see the build (Safari keeps the login only over HTTPS: start
+`serve` with `--tls-listen 127.0.0.1:8443` and use the `https://` address
+it prints too). `kipp <command> -h` prints a command's flags.
+
+Where a change of a job goes is `kipp serve --job-edits`: `store`, the
+default, keeps it in the database, and job files given with `--jobs <dir>`
+serve beside it; `files` writes it to the job file in `--jobs`, for jobs
+kept in git; `off` refuses it, and the job files are the whole truth.
+`kipp check <dir>` says what is wrong with a directory of job files
+without starting anything, and `kipp job import` moves one into the
+database ([Changing jobs through kipp](docs/jobs.md#changing-jobs-through-kipp)).
+
+## The first admin
+
+There is no default user and no default password. The first admin is
+made on the server's machine, on the data directory, after `kipp serve`
+has started once and made it:
+
+```sh
+kipp user add admin --admin --data <data-dir>
+```
+
+It prints a generated password, once. To choose the password instead,
+pipe it in with `--password-stdin`. With Homebrew the data directory is
+`$(brew --prefix)/var/kipp`; in the container it is `/var/lib/kipp`:
+
+```sh
+docker exec kipp kipp user add admin --admin --data /var/lib/kipp
+```
+
+Everyone else is added by an admin, on the Users page or with
+`kipp user add`.
+
+## Upgrading
+
+When a newer release exists, every page shows an admin a banner, and the
+Server page has an Upgrade card with the running version, where it was
+installed from, the new version's release notes and one button. By default
+it makes kipp quiet, waits for the running builds to end, backs up the data
+directory and restarts into the new version, which the launcher puts back if
+it does not come up; unticking the box restarts at once after asking again.
+`kipp upgrade` does the same from the command line, and `kipp upgrade
+--rollback` goes back. It works for Homebrew, Docker and a release archive
+alike, with no `brew` or `docker` to run, and the download is checked
+against a signed `SHA256SUMS` first.
+[Upgrading](docs/install.md#upgrading) has the steps, the same by hand,
+rollback and what a failed upgrade looks like; a release can be
+[checked by hand](docs/install.md#verifying-a-release-by-hand) too.
+
+## Documentation
+
+- [Install](docs/install.md): Homebrew, Docker, release archives, from
+  source, upgrading and rolling back, checking a release, and what the
+  server needs.
+- [Job files](docs/jobs.md): every key of a job file, triggers, stages,
+  conditions, variables and `_vars.yml`.
+- [Multibranch jobs](docs/multibranch.md): every branch and pull request
+  of a repo, from a `.kipp.yml` in it.
+- [Organization folders](docs/organization-folders.md): every repo of a
+  GitHub user or organization, with a token or a GitHub App.
+- [Builds](docs/builds.md): statuses, logs, the queue, test results,
+  artifacts and the cache.
+- [Metrics](docs/metrics.md): numbers builds report, what a store
+  remembers, and guards.
+- [Runners and engines](docs/runners.md): stages on other machines and in
+  containers.
+- [Accounts and security](docs/accounts.md): users, grants, tokens,
+  secrets, and how logins and secrets are protected.
+- [The API](docs/api.md): `/api/v1`, its errors, lists and routes.
+- [The MCP endpoint](docs/mcp.md): `--mcp`, for Claude and other MCP
+  clients, with the tools, how to connect and the OAuth sign-in for Claude custom connectors.
+- [Commands](docs/cli.md): every `kipp` command, its flags and exit
+  codes.
+- [Operations](docs/operations.md): running as a service, behind a proxy,
+  restarting without losing builds, the data directory, backups and what
+  an upgrade leaves in it.
+
+[`examples/`](examples) has sample jobs, notification hooks, service
+files for systemd and launchd, and proxy configurations.
+[CONTRIBUTING.md](CONTRIBUTING.md) says how to send a change and
+[SECURITY.md](SECURITY.md) how to report a vulnerability.
+
+## Licence
+
+MIT, see [LICENSE](LICENSE). What the binary embeds of other people's work
+is listed in [THIRD_PARTY.md](THIRD_PARTY.md).

@@ -1,0 +1,8 @@
+type: object
+additionalProperties: false
+description: The body of a trigger. No body at all is no params; anything else in it is refused.
+properties:
+  params:
+    type: object
+    additionalProperties:
+      type: string

@@ -1,0 +1,37 @@
+type: object
+additionalProperties: false
+description: What one job holds.
+required: [name, builds, kept, keep_builds, keep_days, test_rows, metric_rows, db_bytes, log_bytes, artifact_bytes, gone, parent, until]
+properties:
+  name:
+    type: string
+  builds:
+    type: integer
+  kept:
+    type: integer
+    description: The builds among them kept by hand.
+  keep_builds:
+    type: integer
+    description: Its keep rule, or for a job whose file is gone the one for removed jobs (100 builds, 90 days).
+  keep_days:
+    type: integer
+  test_rows:
+    type: integer
+  metric_rows:
+    type: integer
+  db_bytes:
+    type: integer
+    description: An estimate of what its rows take in the database, by each table's bytes per row; 0 until the tables are measured.
+  log_bytes:
+    type: integer
+  artifact_bytes:
+    type: integer
+  gone:
+    type: string
+    enum: ["", removed, closed]
+    description: "`removed` when its file is gone, `closed` for a branch or pull request of a multibranch job that is gone; empty while it has a file."
+  parent:
+    type: string
+    description: The multibranch job of a branch or pull request; empty otherwise.
+  until:
+    $ref: NullableTimestamp.yaml

@@ -1,0 +1,17 @@
+name: report
+group: ci
+description: Measures the example app and keeps the numbers in the store site.
+metrics:
+  store: site
+  remember:
+    - {metrics: [coverage], when: {default_branch: true, status: [success]}}
+    - {when: {status: [success, unstable, failed]}}
+stages:
+  measure:
+    run: ./measure.sh > metrics.json
+    metrics:
+      file: "metrics*.json"
+      guard:
+        - {metric: coverage, item: total, no_lower: true, tolerance: 0.01}
+        - {metric: covered_lines, item: "lib/*", no_lower: true, on_fall: unstable, required: false}
+  plan: {needs: [measure], run: ./plan.sh "$KIPP_METRICS", metrics: {}}

@@ -1,0 +1,15 @@
+type: object
+additionalProperties: false
+description: One file a stage kept.
+required: [path, size, sha256, url]
+properties:
+  path:
+    type: string
+  size:
+    type: integer
+    format: int64
+  sha256:
+    type: string
+  url:
+    type: string
+    description: Where to download it.

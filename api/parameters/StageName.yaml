@@ -1,0 +1,6 @@
+name: stage
+in: path
+required: true
+description: A stage's name.
+schema:
+  type: string

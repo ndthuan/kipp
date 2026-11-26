@@ -1,0 +1,25 @@
+type: object
+additionalProperties: false
+description: What an upgrade would meet, found without changing the server.
+required: [version, from, ok, running, queued, steps]
+properties:
+  version:
+    type: string
+    description: The release checked, empty when none was found.
+  from:
+    type: string
+    description: The version the server runs.
+  ok:
+    type: boolean
+    description: Every check passed.
+  running:
+    type: integer
+    description: The builds that run now, which a safe restart would wait for.
+  queued:
+    type: integer
+    description: The builds that wait now, which a safe restart would wait for too.
+  steps:
+    type: array
+    description: The checks in the order they are made.
+    items:
+      $ref: UpgradeDryRunStep.yaml

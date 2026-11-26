@@ -1,0 +1,25 @@
+get:
+  operationId: runnerGetInputs
+  tags: [internal]
+  summary: A runner fetches the files another stage kept
+  description: Only those of a stage the assignment is given the artifacts of; the runner puts them under the workspace before the command.
+  x-kipp-package: runnerhub
+  security:
+    - runnerToken: []
+  parameters:
+    - $ref: ../parameters/AssignmentId.yaml
+    - $ref: ../parameters/StageName.yaml
+  responses:
+    "200":
+      description: A tar of the files.
+      content:
+        application/x-tar:
+          schema:
+            type: string
+            format: binary
+    "401":
+      $ref: ../responses/RunnerRefusal.yaml
+    "404":
+      $ref: ../responses/RunnerRefusal.yaml
+    "410":
+      $ref: ../responses/RunnerRefusal.yaml

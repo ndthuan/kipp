@@ -1,0 +1,20 @@
+get:
+  operationId: getHealth
+  tags: [server]
+  summary: Whether the server answers
+  description: |
+    Answers even when the store does not. The version and uptime are told to
+    a caller who is signed in alone: a stranger would read in them what to
+    try.
+  x-kipp-package: api
+  security:
+    - {}
+    - bearerToken: []
+    - sessionCookie: []
+  responses:
+    "200":
+      description: The server answers.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/Health.yaml

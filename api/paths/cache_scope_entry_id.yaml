@@ -1,0 +1,32 @@
+get:
+  operationId: cacheGetEntry
+  tags: [internal]
+  summary: Download a cache entry
+  x-kipp-package: cachesrv
+  security:
+    - cacheToken: []
+  parameters:
+    - $ref: ../parameters/CacheScope.yaml
+    - name: id
+      in: path
+      required: true
+      description: The entry's id, from a lookup.
+      schema:
+        type: integer
+        format: int64
+  responses:
+    "200":
+      description: The entry's archive.
+      content:
+        application/zstd:
+          schema:
+            type: string
+            format: binary
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "403":
+      $ref: ../responses/Forbidden.yaml
+    "404":
+      $ref: ../responses/NotFound.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

@@ -1,0 +1,120 @@
+type: object
+additionalProperties: false
+description: What the server runs with.
+required:
+  - version
+  - go_version
+  - schema
+  - started_at
+  - listen
+  - base_url
+  - executors
+  - default_runs_on
+  - runner_env
+  - runner_url
+  - runner_listen
+  - shell
+  - session_ttl_seconds
+  - timezone
+  - data_dir
+  - jobs_dir
+  - free_disk_bytes
+  - db_size_bytes
+  - last_reload_at
+  - last_reload_error
+  - jobs
+  - job_edits
+  - job_conflicts
+  - origin
+  - update_check
+  - latest
+  - notes_url
+  - upgradable
+  - checked_at
+  - self_check
+properties:
+  version:
+    type: string
+  go_version:
+    type: string
+  schema:
+    type: integer
+    description: The database's schema version.
+  started_at:
+    $ref: Timestamp.yaml
+  listen:
+    type: string
+  base_url:
+    type: string
+  executors:
+    type: integer
+    description: The built-in runner's limit, the server's own stages at once; 0 for none.
+  default_runs_on:
+    type: array
+    items:
+      type: string
+    description: The labels of a stage that names none, on a server with no executors.
+  runner_env:
+    type: array
+    items:
+      type: string
+    description: The variables of the server's environment that runners' stages are given.
+  runner_url:
+    type: string
+    description: The URL a container's runner dials.
+  runner_listen:
+    type: string
+    description: The listener of the runner protocol and the cache apart from `listen`.
+  shell:
+    type: string
+  session_ttl_seconds:
+    type: integer
+  timezone:
+    type: string
+  data_dir:
+    type: string
+  jobs_dir:
+    type: string
+  free_disk_bytes:
+    type: [integer, "null"]
+    description: Bytes free on the data directory's disk; null when they could not be read.
+  db_size_bytes:
+    type: [integer, "null"]
+    description: The database file's size; null when it could not be read.
+  last_reload_at:
+    $ref: Timestamp.yaml
+  last_reload_error:
+    type: string
+    description: Why the last read of the job files was refused; empty when it was taken.
+  jobs:
+    type: integer
+    description: How many jobs are loaded.
+  job_edits:
+    type: string
+    enum: [off, store, files, ""]
+    description: What a change of a job through kipp does, `serve --job-edits`; empty on a server that keeps no job store.
+  job_conflicts:
+    type: integer
+    description: How many edits of the store wait while their job files serve.
+  origin:
+    type: string
+    description: Where the running binary came from, such as Homebrew, Docker image, or release archive or build; `data directory (the executable's own is vA.B.C)` when the server runs a newer binary kept in the data directory.
+  update_check:
+    type: boolean
+    description: Whether the server looks for newer releases; false with `--no-update-check`.
+  latest:
+    type: string
+    description: The latest release's version when it is newer than `version`; empty when it is not, or when none is known.
+  notes_url:
+    type: string
+    description: The page of the release in `latest`; empty when `latest` is.
+  upgradable:
+    type: boolean
+    description: Whether the release in `latest` carries the signed checksums an upgrade needs.
+  checked_at:
+    $ref: NullableTimestamp.yaml
+  self_check:
+    anyOf:
+      - $ref: SelfCheck.yaml
+      - type: "null"
+    description: The last self-check of the database; null before any.

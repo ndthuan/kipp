@@ -1,0 +1,19 @@
+get:
+  operationId: listUsers
+  tags: [admin]
+  summary: Every user
+  description: For an admin; a token may read it. The changes are made in a browser.
+  x-kipp-package: api
+  responses:
+    "200":
+      description: The users by name.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/UserList.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "403":
+      $ref: ../responses/Forbidden.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

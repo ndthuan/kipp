@@ -1,0 +1,10 @@
+description: Too many streams or waits are open for this caller, or too many wrong passwords.
+headers:
+  Retry-After:
+    description: Whole seconds to wait before sending the request again, when the refusal is about a password.
+    schema:
+      type: integer
+content:
+  application/problem+json:
+    schema:
+      $ref: ../schemas/Problem.yaml

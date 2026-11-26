@@ -1,0 +1,71 @@
+get:
+  operationId: getStageLog
+  tags: [builds]
+  summary: A stage's console
+  description: |
+    One of two forms; `Accept` does not change it (the stream is at
+    `/log/events`). By default one chunk from `offset`, with the log's size
+    in the `X-Kipp-*` headers (a HEAD request answers the headers alone).
+    With `download=true` the whole log as a file, each line beginning with
+    when it began (RFC 3339 in UTC) if `timestamps=true`. A stage the build
+    does not have is 404.
+  x-kipp-package: api
+  parameters:
+    - $ref: ../parameters/BuildId.yaml
+    - $ref: ../parameters/StageName.yaml
+    - name: offset
+      in: query
+      description: Where to read from, in bytes. One that is not a whole number of 0 or more is refused.
+      schema:
+        type: integer
+        format: int64
+        minimum: 0
+    - name: download
+      in: query
+      description: Set to `true` for the whole log as a file. Only `true` and `false` are accepted.
+      schema:
+        type: boolean
+    - name: timestamps
+      in: query
+      description: Set to `true` for the time each line began in a download. Only `true` and `false` are accepted.
+      schema:
+        type: boolean
+  responses:
+    "200":
+      description: The log in the form asked for.
+      headers:
+        X-Kipp-Offset:
+          description: Chunk form. The offset after the chunk, where the next one begins.
+          schema:
+            type: integer
+            format: int64
+        X-Kipp-Size:
+          description: Chunk form. The log's size in bytes when it was read.
+          schema:
+            type: integer
+            format: int64
+        X-Kipp-More:
+          description: Chunk form. `true` while there is more to read now or later, `false` once the log is complete and read to its end.
+          schema:
+            type: string
+            enum: ["true", "false"]
+        Content-Disposition:
+          description: Download form. The log as a file to save.
+          schema:
+            type: string
+      content:
+        text/plain:
+          schema:
+            type: string
+    "400":
+      $ref: ../responses/BadRequest.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "404":
+      $ref: ../responses/NotFound.yaml
+    "413":
+      $ref: ../responses/PayloadTooLarge.yaml
+    "429":
+      $ref: ../responses/TooManyRequests.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

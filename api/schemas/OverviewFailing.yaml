@@ -1,0 +1,20 @@
+type: object
+additionalProperties: false
+required: [job, build, since, flaky, recent]
+properties:
+  job:
+    type: string
+  build:
+    $ref: BuildSummary.yaml
+    description: The job's newest red build.
+  since:
+    $ref: Timestamp.yaml
+    description: When the first red build of the job's current run of red ones ended (the oldest of its last 20, if all are red).
+  flaky:
+    type: boolean
+    description: True when the job would be flaky were its newest build green.
+  recent:
+    type: array
+    description: Up to 5 of the job's newest builds that ended green or red, newest first.
+    items:
+      $ref: BuildSummary.yaml

@@ -1,0 +1,29 @@
+type: object
+additionalProperties: false
+description: |
+  One text a job had, made through kipp or found on disk by a load. A
+  deletion has no hash.
+required: [id, job, deleted, hash, author, how, at]
+properties:
+  id:
+    type: integer
+    format: int64
+  job:
+    type: string
+  deleted:
+    type: boolean
+  hash:
+    type: [string, "null"]
+    description: The job's decoded hash, null for a deletion.
+  author:
+    type: string
+    description: The user who made it, `kipp` for what a load found on disk, `cli` for an offline import.
+  how:
+    type: string
+    enum: [api, web, mcp, import, seed, files, revert, resolve]
+    description: |
+      Through what it came: the API, the web UI, MCP, `kipp job import`, a
+      seed job, a job file a load found changed, a restore of an older
+      version, or the choice of a conflict.
+  at:
+    $ref: Timestamp.yaml

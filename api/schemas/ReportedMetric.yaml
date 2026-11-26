@@ -1,0 +1,13 @@
+type: object
+additionalProperties: false
+description: A metric a stage reported, with a value for each item.
+required: [name, unit, values]
+properties:
+  name:
+    type: string
+  unit:
+    type: string
+  values:
+    type: object
+    additionalProperties:
+      type: number

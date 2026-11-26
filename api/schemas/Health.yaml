@@ -1,0 +1,12 @@
+type: object
+additionalProperties: false
+required: [ok]
+properties:
+  ok:
+    const: true
+  version:
+    type: string
+    description: The kipp version the server runs. Only a signed-in caller is told.
+  uptime_seconds:
+    type: integer
+    description: Whole seconds since the server started. Only a signed-in caller is told.

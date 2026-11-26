@@ -1,0 +1,7 @@
+type: object
+additionalProperties: false
+description: A build whose stages on the runner are over; its workspace there goes.
+required: [Workspace]
+properties:
+  Workspace:
+    type: string

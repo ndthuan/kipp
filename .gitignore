@@ -1,0 +1,16 @@
+/bin/
+
+/data/
+*.sqlite*
+
+*.out
+coverage.*
+*.test
+
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+/dist/

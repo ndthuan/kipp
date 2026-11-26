@@ -1,0 +1,28 @@
+type: object
+additionalProperties: false
+description: |
+  An edit of the store that waits while the job file serves (or while the
+  job is absent, its file gone). Worked out at each load, never stored.
+required: [job, reason, file, file_hash, edit, edit_version, edit_deletion, base]
+properties:
+  job:
+    type: string
+  reason:
+    type: string
+  file:
+    type: [string, "null"]
+    description: The job file's YAML, null when there is none.
+  file_hash:
+    type: [string, "null"]
+  edit:
+    type: [string, "null"]
+    description: The edit's YAML, null for a deletion.
+  edit_version:
+    type: integer
+    format: int64
+    description: The version the edit is.
+  edit_deletion:
+    type: boolean
+  base:
+    type: [string, "null"]
+    description: The decoded hash of the job file the edit was made over, null when there was none.

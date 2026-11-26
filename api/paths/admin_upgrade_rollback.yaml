@@ -1,0 +1,37 @@
+post:
+  operationId: startRollback
+  tags: [admin]
+  summary: Go back to the version before the last upgrade
+  description: |
+    Waits in quiet mode like an upgrade, then restarts with the backup of the
+    last upgrade put back, so that everything written since the upgrade is
+    lost. Available while that backup exists. The answer is the first status;
+    poll `GET /admin/upgrade` for the rest.
+  x-kipp-package: api
+  security:
+    - bearerToken: []
+    - sessionCookie: []
+      csrfToken: []
+  requestBody:
+    required: false
+    content:
+      application/json:
+        schema:
+          $ref: ../schemas/UpgradeRequest.yaml
+  responses:
+    "202":
+      description: The rollback has begun.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/Upgrade.yaml
+    "400":
+      $ref: ../responses/BadRequest.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "403":
+      $ref: ../responses/Forbidden.yaml
+    "409":
+      $ref: ../responses/Conflict.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

@@ -1,0 +1,23 @@
+# End-to-end tests against a test environment the build brings up and must
+# take down however the tests end. Which suite runs is a param; teardown
+# runs after a failure as after a success (needs_status: always), and a
+# report of what broke runs only after a failure. A green teardown leaves a
+# failed build failed. A cancel or the job's timeout starts neither.
+name: app-e2e
+group: ci
+description: Brings up a test environment, runs the end-to-end suite, tears it down.
+params:
+  SUITE: {type: choice, options: [smoke, full], default: smoke}
+  KEEP_LOGS: {type: bool, default: false, description: "Collect the environment's logs before teardown."}
+triggers:
+  cron: "H 2 * * *"
+concurrency: drop
+timeout: 1h
+workdir: /srv/app
+stages:
+  up: {run: ./e2e/up.sh}
+  smoke: {needs: [up], when: {params: {SUITE: [smoke]}}, run: ./e2e/run.sh smoke, junit: "reports/*.xml"}
+  full: {needs: [up], when: {params: {SUITE: [full]}}, run: ./e2e/run.sh full, junit: "reports/*.xml"}
+  logs: {needs: [smoke, full], when: {params: {KEEP_LOGS: [true]}, needs_status: always}, run: ./e2e/logs.sh}
+  report: {needs: [smoke, full], when: {needs_status: failure}, run: ./e2e/report-failure.sh}
+  teardown: {needs: [up, logs, report], when: {needs_status: always}, run: ./e2e/down.sh}

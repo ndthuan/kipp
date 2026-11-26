@@ -1,0 +1,224 @@
+version: "2"
+run:
+  build-tags: [dockerreal]
+linters:
+  default: standard
+  enable:
+    - modernize
+    - gocritic
+    - revive
+    - errorlint
+    - misspell
+    - unconvert
+    - unparam
+    - nolintlint
+    - gosec
+    - gocognit
+    - staticcheck
+    - forbidigo
+  settings:
+    gocognit:
+      min-complexity: 15
+    forbidigo:
+      analyze-types: true
+      forbid:
+        - pattern: ^time\.Sleep$
+          msg: a test waits on an event, not on the clock; use testing/synctest for timers (a fake clock in a bubble), or a hook or state of the code (internal/waitfor.Until for one it cannot announce)
+    revive:
+      rules:
+        - name: exported
+          arguments: [checkPrivateReceivers]
+  exclusions:
+    warn-unused: true
+    rules:
+      # Sleeping is refused in tests only; the exceptions below are the tests
+      # whose subject is that nothing happens in a real time, with the reason.
+      - path-except: _test\.go$
+        linters:
+          - forbidigo
+      # The grace a killed stage gets is real time across a real process, which
+      # a bubble cannot move: the test sleeps to just before it ends and looks.
+      # And a cancelled start must leave no process, which only a window of
+      # real time can show.
+      - path: ^internal/runner/local_test\.go$
+        linters:
+          - forbidigo
+      # A third scan that a failed limit would let in has no event to wait for,
+      # only a window of real time to start in.
+      - path: ^internal/index/scanner_test\.go$
+        linters:
+          - forbidigo
+      # The demo tool's tests read the job files the tool just wrote into a
+      # temporary directory.
+      - path: ^internal/devtools/demo/main_test\.go$
+        text: "G304"
+      # The demo tool's random numbers make made-up builds from a seed, so that
+      # one seed makes one store; nothing there is secret.
+      - path: ^internal/devtools/demo/main\.go$
+        text: "G404"
+      # The launcher runs the data directory's binary, which is its subject:
+      # the file an upgrade put there, checked by version before it is run.
+      - path: ^internal/upgrade/launch/(launch|supervise)\.go$
+        text: "G204"
+      # A dry run runs the binary it downloaded, checked by signature and
+      # version first, on copies: that is its subject.
+      - path: ^internal/upgrade/engine/dryrun\.go$
+        text: "G204"
+      # A restore into a directory the process cannot write is the subject.
+      - path: ^internal/upgrade/backup/backup_test\.go$
+        text: "G302"
+      # Job files are read and written in the jobs directory the server was
+      # started with, by the names of its jobs.
+      - path: ^internal/jobstore/files\.go$
+        text: "G304"
+      # A jobs directory the server cannot write is the subject.
+      - path: ^internal/(jobstore/jobstore|cli/jobedits)_test\.go$
+        text: "G302|G304"
+      # The job policy is the program the site's admin named with
+      # --job-policy; running it is the feature.
+      - path: ^internal/jobstore/policy\.go$
+        text: "G204"
+      # The policy tests make executable stand-in programs and read what
+      # they recorded.
+      - path: ^internal/(jobstore/policy|api/jobs)_test\.go$
+        text: "G304|G306"
+      # The merge tests write a stand-in git that records what it was asked,
+      # make it executable and read the record back.
+      - path: ^internal/dispatch/pr_test\.go$
+        text: "G304|G306"
+      # The CI check's test makes an executable stand-in gh.
+      - path: ^scripts/scripts_test\.go$
+        text: "G302"
+      # The launcher's tests build stand-in kipp executables and run them,
+      # and make them executable.
+      - path: ^internal/upgrade/launch/(launch|supervise)_test\.go$
+        text: "G204|G304|G306|G301|G703"
+      # Running a job's command is what kipp is for.
+      - path: ^internal/runner/local\.go$
+        text: "G204"
+      # kipp job edit runs the user's own $VISUAL or $EDITOR, as git does.
+      - path: ^internal/cli/job\.go$
+        text: "G204"
+      # git on the repo and ref of a job file; a leading dash is refused.
+      - path: ^internal/dispatch/build\.go$
+        text: "G204"
+      # A job's fingerprint commands, and git in the work tree a stage gates.
+      - path: ^internal/dispatch/reuse\.go$
+        text: "G204"
+      # The coverage tool reads the reports its caller names.
+      - path: ^internal/devtools/coverage/main\.go$
+        text: "G304"
+      # The same for the flake summary: the go test output its caller names,
+      # and the job summary file the runner names.
+      - path: ^internal/devtools/flakes/main(_test)?\.go$
+        text: "G304"
+      # The CLI talks to the server its user names (--url, KIPP_URL) and
+      # reads the token from its user's config directory.
+      - path: ^internal/cli/client\.go$
+        text: "G703|G704|G304"
+      # The ssh key of an engine is the file its admin named, or one of the
+      # user's own under ~/.ssh.
+      - path: ^internal/engine/docker/transport\.go$
+        text: "G304"
+      # metrics check reads the file KIPP_METRICS names: the one kipp wrote
+      # for the stage it runs in.
+      - path: ^internal/metrics/guard\.go$
+        text: "G304"
+      # A parameter file is the file the user names on the command line.
+      - path: ^internal/cli/run\.go$
+        text: "G304"
+      # A file secret is the file the user names on the command line.
+      - path: ^internal/cli/secret\.go$
+        text: "G304"
+      # latest redirects to a path of the server's own API: a build's id,
+      # a stage's name and a kept file's path, each checked, the path
+      # escaped part by part.
+      - path: ^internal/api/artifacts\.go$
+        text: "G710"
+      # The consent page sends the user back to the app's redirect address,
+      # which the oauth package matched exactly against the client's
+      # registered list before it was handed over.
+      - path: ^internal/web/oauth\.go$
+        text: "G710"
+      # A log is sent as text/plain with nosniff, never as markup.
+      - path: ^internal/api/log\.go$
+        text: "G705"
+      # The test that a commit status is not sent on to another host makes
+      # the server that answers with a redirect: that is its subject.
+      - path: ^internal/github/client_test\.go$
+        text: "G710"
+      # The test of the merge commit kipp writes reads it back with git.
+      - path: ^internal/dispatch/pr_test\.go$
+        text: "G204"
+      # Tests whose subject is a repo URL with a user and password in it,
+      # which must stay out of every log.
+      - path: ^internal/(cli/runner|config/repo|dispatch/dispatch|engine/docker/client|enginepool/pool)_test\.go$
+        text: "G101"
+      # Tests whose subject is a runner's token: who it lets in, and that it
+      # never reaches a stage.
+      - path: ^internal/runnerhub/hub_test\.go$
+        text: "G101"
+      # kipp cache hashes the files the stage's own command names, in the
+      # stage's own directory and as its own user.
+      - path: ^internal/cache/hash\.go$
+        text: "G304"
+      # The name of the variable that carries the cache token, not a token.
+      - path: ^internal/cache/client\.go$
+        text: "G101"
+      # The name of the variable that carries a runner's token, not a token.
+      - path: ^internal/runnerd/runner\.go$
+        text: "G101"
+      # The scope and the key in the path are checked by authorize and
+      # ValidKey before they reach the file system, and the namespace is
+      # made by kipp.
+      - path: ^internal/cachesrv/srv\.go$
+        text: "G703"
+      # A test whose subject is a file's mode survives a restore.
+      - path: ^internal/cache/tar_test\.go$
+        text: "G302|G304"
+      # The cache test removes and damages entry files it found under its
+      # own t.TempDir().
+      - path: ^internal/cachesrv/srv_test\.go$
+        text: "G703|G304"
+      # The key file of a GitHub App is the file the job file names; it is
+      # opened once, checked on the descriptor and refused when others can
+      # read it.
+      - path: ^internal/github/app\.go$
+        text: "G304"
+      # Tests whose subject is an App's key or webhook secret, and what an
+      # owner job names.
+      - path: ^internal/(web/apps|webhook/app|cli/owner)_test\.go$
+        text: "G101"
+      - path: ^internal/web/apps_test\.go$
+        text: "G304"
+      # Tests read the files they wrote under t.TempDir().
+      - path: ^internal/(runnerhub/artifacts|runnerhub/hub|api/api|artifacts/artifacts|cli/serve|dispatch/dispatch|logtime/logtime|runner/local)_test\.go$
+        text: "G304"
+      # Tests whose subject is a file's mode: a key or a database others can
+      # read, a folder that can be entered and not written, an executable
+      # stand-in for git.
+      - path: ^internal/(api/apps|cli/serve|dispatch/dispatch|retain/retain|secretbox/secretbox)_test\.go$
+        text: "G302|G306"
+      # Tests start the test binary itself (os.Args[0]) as a server, and
+      # git on a repo of their own.
+      - path: ^internal/(cli/serve|cli/multibranch|cli/owner|dispatch/dispatch|dispatch/child)_test\.go$
+        text: "G204|G702"
+      # Tests run the release scripts and make dist with hostile versions:
+      # what reaches the shell is their subject.
+      - path: ^scripts/scripts_test\.go$
+        text: "G204"
+      # A server that redirects elsewhere is the case those tests are about.
+      - path: ^internal/cli/serve_test\.go$
+        text: "G710"
+      # kipp-release writes the signature where its maintainer says and reads
+      # the files they name; its tests read what they wrote under t.TempDir().
+      - path: ^internal/releasetool/releasetool(_test)?\.go$
+        text: "G703|G304"
+      # The test builds the two binaries of this module to look for a test
+      # hook in them, and reads the result.
+      - path: ^internal/update/update_test\.go$
+        text: "G204|G304"
+formatters:
+  enable:
+    - gofmt
+    - goimports

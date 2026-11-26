@@ -1,0 +1,37 @@
+name: protected-files
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  agents-md:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: AGENTS.md is changed by maintainers only
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          files="$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[] | .filename, (.previous_filename // empty)')"
+          if ! grep -qxF 'AGENTS.md' <<<"$files"; then
+            echo "AGENTS.md is not changed."
+            exit 0
+          fi
+          permission="$(gh api "repos/$REPO/collaborators/$AUTHOR/permission" --jq .permission 2>/dev/null || echo none)"
+          case "$permission" in
+            admin | maintain | write)
+              echo "AGENTS.md is changed by $AUTHOR, who has $permission access."
+              ;;
+            *)
+              echo "::error file=AGENTS.md::AGENTS.md is changed by maintainers only, and $AUTHOR has $permission access."
+              exit 1
+              ;;
+          esac

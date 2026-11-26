@@ -1,0 +1,130 @@
+package cli
+
+import (
+	"fmt"
+	"io"
+	"net/http"
+	"strconv"
+	"time"
+)
+
+const quietUsage = `quiet on [--wait [--timeout <duration>]] | off | status | rerun <job> <number> [--restart] [--url <url>] [--token <token>]`
+
+var quietPoll = 2 * time.Second
+
+type quietState struct {
+	Quiet   bool         `json:"quiet"`
+	Since   string       `json:"since"`
+	Running int          `json:"running"`
+	Queued  int          `json:"queued"`
+	Rerun   int          `json:"rerun"`
+	Idle    bool         `json:"idle"`
+	Holding []quietBuild `json:"holding"`
+	Hint    string       `json:"hint"`
+}
+
+type quietBuild struct {
+	Job    string `json:"job"`
+	Number int    `json:"number"`
+}
+
+func (q quietState) text() string {
+	state := "off"
+	if q.Quiet {
+		state = "on"
+	}
+	s := fmt.Sprintf("quiet %s: %d running, %d queued", state, q.Running, q.Queued)
+	if q.Rerun > 0 {
+		s += fmt.Sprintf(", %d will run again after the restart", q.Rerun)
+	}
+	if q.Hint == "" {
+		return s
+	}
+	s += "\n" + q.Hint + ".\nTo run it again after the restart and restart now:"
+	for i, b := range q.Holding {
+		s += fmt.Sprintf("\n  kipp quiet rerun %s %d", b.Job, b.Number)
+		if i == len(q.Holding)-1 {
+			s += " --restart"
+		}
+	}
+	return s + "\nTo have its job always run again after a restart, add to its job file: rerun_on_restart: true"
+}
+
+func cmdQuiet(args []string, _ io.Reader, stdout, stderr io.Writer) int {
+	fs := newFlags(quietUsage, stderr)
+	wait := fs.Bool("wait", false, "on: return once no build runs or waits")
+	restart := fs.Bool("restart", false, "rerun: restart the server now, once nothing else runs or waits")
+	timeout := fs.Duration("timeout", 2*time.Hour, "on --wait: how long to wait before quiet is turned off again and the command fails")
+	newClient := clientFlags(fs)
+	positional, err := parseArgs(fs, args)
+	if err != nil {
+		return exitFor(err)
+	}
+	if !quietArgsOK(positional, *wait, *restart) {
+		fs.Usage()
+		return 2
+	}
+	c, err := newClient()
+	if err != nil {
+		return fail(stderr, "quiet", err)
+	}
+	var q quietState
+	switch positional[0] {
+	case "status":
+		err = c.call(http.MethodGet, "/admin/quiet", nil, &q)
+	case "off":
+		err = c.call(http.MethodDelete, "/admin/quiet", nil, &q)
+	case "rerun":
+		n, _ := strconv.Atoi(positional[2])
+		body := map[string]any{"builds": []map[string]any{{"job": positional[1], "number": n}}, "restart": *restart}
+		err = c.call(http.MethodPost, "/admin/quiet/rerun", body, &q)
+	default:
+		if err = c.call(http.MethodPost, "/admin/quiet", nil, &q); err == nil && *wait {
+			q, err = waitIdle(c, q, *timeout, stdout)
+		}
+	}
+	if err != nil {
+		return fail(stderr, "quiet", err)
+	}
+	say(stdout, "%s", q.text())
+	return 0
+}
+
+func quietArgsOK(args []string, wait, restart bool) bool {
+	if len(args) == 0 || (wait && args[0] != "on") || (restart && args[0] != "rerun") {
+		return false
+	}
+	switch args[0] {
+	case "on", "off", "status":
+		return len(args) == 1
+	case "rerun":
+		if len(args) != 3 {
+			return false
+		}
+		n, err := strconv.Atoi(args[2])
+		return err == nil && n > 0
+	}
+	return false
+}
+
+func waitIdle(c *client, q quietState, timeout time.Duration, stdout io.Writer) (quietState, error) {
+	deadline := time.Now().Add(timeout)
+	last := ""
+	for !q.Idle {
+		if text := q.text(); text != last {
+			say(stdout, "%s", text)
+			last = text
+		}
+		if !time.Now().Before(deadline) {
+			if err := c.call(http.MethodDelete, "/admin/quiet", nil, &q); err != nil {
+				return q, fmt.Errorf("still busy after %s, and quiet could not be turned off: %w", timeout, err)
+			}
+			return q, fmt.Errorf("still busy after %s (%d running, %d queued): quiet is off again", timeout, q.Running, q.Queued)
+		}
+		time.Sleep(quietPoll)
+		if err := c.call(http.MethodGet, "/admin/quiet", nil, &q); err != nil {
+			return q, err
+		}
+	}
+	return q, nil
+}

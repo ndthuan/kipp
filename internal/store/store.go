@@ -1,0 +1,151 @@
+// Package store is every query kipp makes, over one SQLite file in WAL mode.
+// One writer connection (SetMaxOpenConns(1)) keeps SQLITE_BUSY away at the
+// scale kipp runs at.
+package store
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"sync"
+	"time"
+
+	_ "modernc.org/sqlite"
+)
+
+// ErrNotFound is returned where a row was asked for by key and is not there.
+var ErrNotFound = errors.New("not found")
+
+// ErrLastAdmin refuses a change that would leave the server with no admin:
+// with nobody to see every job, the server's own machine would be the one
+// way back in.
+var ErrLastAdmin = errors.New("the last admin")
+
+// Store is the open database.
+type Store struct {
+	db       *sql.DB
+	upgraded Upgrade
+	path     string
+
+	roMu sync.Mutex
+	ro   *sql.DB
+}
+
+// Close closes the file.
+func (s *Store) Close() error {
+	s.roMu.Lock()
+	ro := s.ro
+	s.ro = nil
+	s.roMu.Unlock()
+	if ro != nil {
+		return errors.Join(ro.Close(), s.db.Close())
+	}
+	return s.db.Close()
+}
+
+func (s *Store) inTx(ctx context.Context, fn func(*sql.Tx) error) error {
+	return inTx(ctx, s.db, fn)
+}
+
+type beginner interface {
+	BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error)
+}
+
+func inTx(ctx context.Context, db beginner, fn func(*sql.Tx) error) (err error) {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	done := false
+	defer func() {
+		if !done {
+			err = errors.Join(err, tx.Rollback())
+		}
+	}()
+	if err := fn(tx); err != nil {
+		return err
+	}
+	done = true
+	return tx.Commit()
+}
+
+const tsLayout = "2006-01-02T15:04:05.000000000Z"
+
+func ts(t time.Time) string { return t.UTC().Format(tsLayout) }
+
+func nullTS(t *time.Time) sql.NullString {
+	if t == nil {
+		return sql.NullString{}
+	}
+	return sql.NullString{String: ts(*t), Valid: true}
+}
+
+func parseTS(s sql.NullString) (*time.Time, error) {
+	if !s.Valid {
+		return nil, nil
+	}
+	t, err := time.Parse(tsLayout, s.String)
+	if err != nil {
+		return nil, fmt.Errorf("stored time %q: %w", s.String, err)
+	}
+	return &t, nil
+}
+
+func parseSetTS(s string) (time.Time, error) {
+	t, err := parseTS(sql.NullString{String: s, Valid: true})
+	if err != nil {
+		return time.Time{}, err
+	}
+	return *t, nil
+}
+
+type scanner interface{ Scan(...any) error }
+
+type querier interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+}
+
+func collect[T any](ctx context.Context, db querier, scan func(scanner) (T, error), query string, args ...any) ([]T, error) {
+	rows, err := db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []T
+	for rows.Next() {
+		v, err := scan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+func scanOne[T any](row scanner) (T, error) {
+	var v T
+	err := row.Scan(&v)
+	return v, err
+}
+
+func requireChange(res sql.Result, err error) error {
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func notFound(err error) error {
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	return err
+}

@@ -1,0 +1,31 @@
+type: object
+additionalProperties: false
+description: One job in the list of jobs.
+required: [name, group, description, cron, next, last, removed, disabled, children_count, worst]
+properties:
+  name:
+    type: string
+  group:
+    type: string
+  description:
+    type: string
+  cron:
+    type: string
+    description: The job's cron schedule; empty for none.
+  next:
+    $ref: NullableTimestamp.yaml
+  last:
+    $ref: NullableBuild.yaml
+  removed:
+    type: boolean
+    description: True for a job that has builds but is no longer in the job files.
+  disabled:
+    type: boolean
+  children_count:
+    type: integer
+    description: A multibranch job's or an owner job's count of children that build; 0 for any other.
+  worst:
+    oneOf:
+      - $ref: BuildStatus.yaml
+      - type: "null"
+    description: The worst status among the children's last builds; null before any built.

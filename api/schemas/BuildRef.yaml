@@ -1,0 +1,19 @@
+type: object
+additionalProperties: false
+description: |
+  A build, wherever another answer refers to one. `status` is null once
+  retention has removed the build; `id` is then whatever the answer kept of
+  it, and 0 for a guard's origin, which keeps only the job and the number.
+required: [id, job, number, status]
+properties:
+  id:
+    type: integer
+    format: int64
+  job:
+    type: string
+  number:
+    type: integer
+  status:
+    oneOf:
+      - $ref: BuildStatus.yaml
+      - type: "null"

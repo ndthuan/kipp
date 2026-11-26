@@ -1,0 +1,20 @@
+type: object
+additionalProperties: false
+description: What a store remembers of one item of a metric, and the build that set it.
+required: [metric, item, value, unit, build, at]
+properties:
+  metric:
+    type: string
+  item:
+    type: string
+  value:
+    type: number
+  unit:
+    type: string
+  build:
+    oneOf:
+      - $ref: BuildRef.yaml
+      - type: "null"
+    description: The build that set the value; null for a value put by hand.
+  at:
+    $ref: Timestamp.yaml

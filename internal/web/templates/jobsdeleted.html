@@ -1,0 +1,26 @@
+{{define "content"}}
+{{with .Data}}
+<div class="head">
+<h1 class="crumbs"><a class="link-plain" href="/jobs">Jobs</a><span aria-hidden="true">/</span><span>Deleted jobs</span></h1>
+</div>
+{{with .Notice}}<p class="notice" role="status">{{.}}</p>
+{{end}}<p class="sub">Jobs deleted through kipp, and jobs whose file is gone and whose builds stay until retention removes them. Open a job's history to restore it.</p>
+{{if .Jobs}}<div class="scroll">
+<table class="stacked">
+<thead><tr><th>Job</th><th>Deleted</th><th>By</th><th>Last build</th><th>Builds kept</th><th></th></tr></thead>
+<tbody>
+{{range .Jobs}}<tr>
+<td class="lead" data-label="Job"><a class="link" href="/jobs/{{.Name}}{{if not .Builds}}/history{{end}}">{{.Name}}</a></td>
+<td data-label="Deleted">{{with .Deletion}}{{template "when" (when .At)}}{{end}}</td>
+<td data-label="By">{{with .Deletion}}{{.Author}} <span class="sub">through {{.How}}</span>{{end}}</td>
+<td data-label="Last build">{{with .Last}}<a class="link" href="{{buildPath .}}">#{{.Number}}</a> <span class="status {{.Status}}">{{.Status}}</span>{{end}}</td>
+<td data-label="Builds kept">{{if .Builds}}{{.Builds}}{{if .Kept}} <span class="sub">{{.Kept}} kept by hand</span>{{end}}{{end}}</td>
+<td>{{if .Versioned}}<a class="link" href="/jobs/{{.Name}}/history">History</a>{{end}}</td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>
+{{else}}<p class="sub">No job is deleted.</p>
+{{end}}
+{{end}}
+{{end}}

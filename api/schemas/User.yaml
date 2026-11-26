@@ -1,0 +1,30 @@
+type: object
+additionalProperties: false
+description: What an admin sees of a user, never a password or a token.
+required: [name, admin, last_login_at, grants, gone_grants, tokens, sessions]
+properties:
+  name:
+    type: string
+  admin:
+    type: boolean
+  last_login_at:
+    $ref: NullableTimestamp.yaml
+  grants:
+    type: object
+    additionalProperties:
+      type: array
+      items:
+        type: string
+    description: The permissions on each job, including jobs no longer loaded.
+  gone_grants:
+    type: array
+    items:
+      type: string
+    description: The jobs among `grants` that are no longer loaded, sorted.
+  tokens:
+    type: array
+    items:
+      $ref: Token.yaml
+  sessions:
+    type: integer
+    description: How many live browser sessions the user has.

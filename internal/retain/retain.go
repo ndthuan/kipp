@@ -1,0 +1,289 @@
+// Package retain applies each job's keep rule to its builds and logs, and
+// bounds the audit and the record of webhook deliveries.
+package retain
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io/fs"
+	"maps"
+	"os"
+	"path/filepath"
+	"slices"
+	"strconv"
+	"time"
+
+	"github.com/ndthuan/kipp/internal/config"
+	"github.com/ndthuan/kipp/internal/store"
+)
+
+const (
+	// AuditRows is how many audit rows are kept: years of changes on a
+	// server a few people run, and a bound on what a page of it costs.
+	AuditRows = 10000
+	// DeliveryDays is how long a webhook delivery's id is remembered, so
+	// that the same delivery sent again in that time is refused.
+	DeliveryDays = 30
+	// OAuthClientDays is how long an app that registered itself and was
+	// never used is kept.
+	OAuthClientDays = 30
+	// CaseHistoryBuilds is how many builds of each item of a per-case
+	// metric (config.PerCaseMetrics) a job keeps in its history: the recent
+	// trend of a case is what is read, and one row per case per build was
+	// most of the database on a busy server.
+	CaseHistoryBuilds = 30
+	// ActivityRows is how many lines of its activity a job keeps: the page
+	// shows the newest, and a job that fires every minute and is skipped
+	// writes a line each time.
+	ActivityRows = 1000
+)
+
+// Job removes the job's builds beyond its keep rule, with their log folders,
+// and gives the pages they freed back to the disk.
+func Job(ctx context.Context, st *store.Store, job *config.Job, logsDir string, now time.Time) error {
+	n, err := apply(ctx, st, job.Name, job.Keep, logsDir, now)
+	if n > 0 {
+		_, verr := st.IncrementalVacuum(ctx)
+		err = errors.Join(err, verr)
+	}
+	return err
+}
+
+// Remove removes every build of a job that has ended and is not kept by
+// hand, with its logs and artifacts, then the job's folders when nothing is
+// left in them, and its activity when no build of it is left, and is how
+// many builds it removed. It is "remove now" of a
+// job whose file is gone; the caller checks that it is.
+func Remove(ctx context.Context, st *store.Store, name, logsDir string) (int, error) {
+	if err := singleElement(name); err != nil {
+		return 0, err
+	}
+	ids, err := st.EndedBuilds(ctx, name)
+	if err != nil {
+		return 0, err
+	}
+	n, err := removeAll(ctx, st, name, logsDir, ids)
+	err = errors.Join(err, st.ForgetActivity(ctx, name))
+	for _, dir := range []string{logsDir, ArtifactsDir(logsDir)} {
+		if root, oerr := os.OpenRoot(dir); oerr == nil {
+			_ = root.Remove(name)
+			_ = root.Close()
+		}
+	}
+	if n > 0 {
+		_, verr := st.IncrementalVacuum(ctx)
+		err = errors.Join(err, verr)
+	}
+	return n, err
+}
+
+func singleElement(name string) error {
+	if !fs.ValidPath(name) || name == "." || filepath.Base(name) != name {
+		return fmt.Errorf("retain: job name %q is not a single path element", name)
+	}
+	return nil
+}
+
+func apply(ctx context.Context, st *store.Store, name string, keep config.Keep, logsDir string, now time.Time) (int, error) {
+	ids, err := st.OldBuilds(ctx, name, keep.Builds, keep.Days, now)
+	if err != nil || len(ids) == 0 {
+		return 0, err
+	}
+	if err := singleElement(name); err != nil {
+		return 0, err
+	}
+	return removeAll(ctx, st, name, logsDir, ids)
+}
+
+func removeAll(ctx context.Context, st *store.Store, name, logsDir string, ids []int64) (int, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	root, err := os.OpenRoot(logsDir)
+	if errors.Is(err, fs.ErrNotExist) {
+		root, err = nil, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	if root != nil {
+		defer func() { _ = root.Close() }()
+	}
+	n := 0
+	var errs []error
+	for _, id := range ids {
+		gone, err := remove(ctx, st, root, ArtifactsDir(logsDir), name, id)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("retain: %s, build %d: %w", name, id, err))
+		}
+		if gone {
+			n++
+		}
+	}
+	return n, errors.Join(errs...)
+}
+
+func remove(ctx context.Context, st *store.Store, root *os.Root, arts, name string, id int64) (bool, error) {
+	b, err := st.Build(ctx, id)
+	if errors.Is(err, store.ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if root != nil && b.Number > 0 {
+		if err := root.RemoveAll(filepath.Join(name, strconv.Itoa(b.Number))); err != nil {
+			return false, err
+		}
+	}
+	if err := removeArtifacts(arts, b); err != nil {
+		return false, err
+	}
+	err = st.DeleteBuild(ctx, id)
+	return err == nil, err
+}
+
+// ErrJobSetShrank is a sweep that left the builds of the jobs with no job
+// file alone: the job set is empty, or more jobs would lose builds to the
+// rule for removed jobs than the set has jobs. A jobs directory that is
+// empty by mistake (a volume not mounted) looks the same as every job
+// removed, so nothing of them is removed until the set holds at least as
+// many jobs again, or an admin removes them with "remove now".
+var ErrJobSetShrank = errors.New("retain: the job set is empty or lost most of its jobs")
+
+// Sweep is the daily pass: every job in the snapshot by its rule, every
+// job with no job file by the rule for removed jobs, and its activity with
+// its last build, unless the job set
+// shrank (ErrJobSetShrank), the history of the
+// per-case metrics beyond CaseHistoryBuilds, then expired sessions, the
+// audit beyond AuditRows, each job's activity beyond ActivityRows and
+// deliveries older than DeliveryDays; last, the
+// pages all this freed go back to the disk.
+// A job or a build that fails does not stop the rest; the error holds every
+// failure, the count what was removed all the same.
+func Sweep(ctx context.Context, st *store.Store, snap *config.Snapshot, logsDir string, now time.Time) (int, error) {
+	rules := make(map[string]config.Keep, len(snap.Names))
+	names := slices.Clone(snap.Names)
+	for _, name := range snap.Names {
+		rules[name] = snap.Jobs[name].Keep
+	}
+	removed, err := removedJobs(ctx, st, logsDir, rules)
+	errs := []error{err}
+	removed, err = unlessShrank(ctx, st, removed, len(names), now)
+	errs = append(errs, err)
+	for _, name := range removed {
+		rules[name] = removedKeep
+	}
+	total := 0
+	for _, name := range slices.Concat(names, removed) {
+		n, err := apply(ctx, st, name, rules[name], logsDir, now)
+		total += n
+		errs = append(errs, err)
+	}
+	for _, name := range removed {
+		errs = append(errs, st.ForgetActivity(ctx, name))
+	}
+	errs = append(errs, st.DeleteExpiredSessions(ctx, now), st.PruneAudit(ctx, AuditRows), st.CapActivity(ctx, ActivityRows),
+		st.PruneDeliveries(ctx, now.AddDate(0, 0, -DeliveryDays)),
+		st.DeleteExpiredOAuth(ctx, now, now.AddDate(0, 0, -OAuthClientDays)))
+	for _, m := range config.PerCaseMetrics {
+		_, err := st.CapItemHistory(ctx, m, CaseHistoryBuilds)
+		errs = append(errs, err)
+	}
+	_, err = st.IncrementalVacuum(ctx)
+	errs = append(errs, err)
+	return total, errors.Join(errs...)
+}
+
+var removedKeep = config.Keep{Builds: config.DefaultKeepBuilds, Days: config.RemovedKeepDays}
+
+func unlessShrank(ctx context.Context, st *store.Store, removed []string, live int, now time.Time) ([]string, error) {
+	losing := 0
+	var errs []error
+	for _, name := range removed {
+		ids, err := st.OldBuilds(ctx, name, removedKeep.Builds, removedKeep.Days, now)
+		errs = append(errs, err)
+		if len(ids) > 0 {
+			losing++
+		}
+	}
+	if losing > 0 && losing > live {
+		errs = append(errs, fmt.Errorf("%w: %d jobs with no job file have builds past the rule for removed jobs and the job set has %d jobs; nothing of them was removed; if they are gone for good, remove their builds with Remove now on the storage page", ErrJobSetShrank, losing, live))
+		return nil, errors.Join(errs...)
+	}
+	return removed, errors.Join(errs...)
+}
+
+func removedJobs(ctx context.Context, st *store.Store, logsDir string, known map[string]config.Keep) ([]string, error) {
+	found := map[string]bool{}
+	entries, dirErr := os.ReadDir(logsDir)
+	if errors.Is(dirErr, fs.ErrNotExist) {
+		dirErr = nil
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			found[e.Name()] = true
+		}
+	}
+	last, err := st.LastBuilds(ctx)
+	for name := range last {
+		found[name] = true
+	}
+	for name := range known {
+		delete(found, name)
+	}
+	return slices.Sorted(maps.Keys(found)), errors.Join(dirErr, err)
+}
+
+// ArtifactsDir is where the builds' artifacts are, beside their logs in
+// the data directory.
+func ArtifactsDir(logsDir string) string {
+	return filepath.Join(filepath.Dir(logsDir), "artifacts")
+}
+
+func removeArtifacts(arts string, b *store.Build) error {
+	if b.Number <= 0 {
+		return nil
+	}
+	root, err := os.OpenRoot(arts)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer func() { _ = root.Close() }()
+	return root.RemoveAll(filepath.Join(b.Job, strconv.Itoa(b.Number)))
+}
+
+// ArtifactsOver removes the artifacts of the oldest ended builds until
+// all of them come to max bytes at most, each removal a row of the audit,
+// and is how many builds lost theirs. A running build's are never
+// removed, even when they alone are over.
+func ArtifactsOver(ctx context.Context, st *store.Store, arts string, max int64, now time.Time) (int, error) {
+	builds, total, err := st.ArtifactBuilds(ctx)
+	if err != nil || total <= max {
+		return 0, err
+	}
+	n := 0
+	for _, b := range builds {
+		if total <= max {
+			break
+		}
+		if err := removeArtifacts(arts, &store.Build{Job: b.Job, Number: b.Number}); err != nil {
+			return n, fmt.Errorf("retain: artifacts of %s #%d: %w", b.Job, b.Number, err)
+		}
+		if err := st.DeleteArtifacts(ctx, b.ID); err != nil {
+			return n, err
+		}
+		total -= b.Size
+		n++
+		err := st.AppendAudit(ctx, store.Audit{At: now, Actor: "kipp", Action: "artifacts.remove",
+			Target: fmt.Sprintf("%s #%d", b.Job, b.Number), Detail: fmt.Sprintf("%d bytes, the oldest build's while the artifacts were over --artifacts-max of %d", b.Size, max)})
+		if err != nil {
+			return n, err
+		}
+	}
+	return n, nil
+}

@@ -1,0 +1,22 @@
+get:
+  operationId: getStageArtifacts
+  tags: [builds]
+  summary: What one stage of a build kept
+  description: A stage that kept nothing is 404.
+  x-kipp-package: api
+  parameters:
+    - $ref: ../parameters/BuildId.yaml
+    - $ref: ../parameters/StageName.yaml
+  responses:
+    "200":
+      description: The stage's files and where to download them.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/StageArtifacts.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "404":
+      $ref: ../responses/NotFound.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

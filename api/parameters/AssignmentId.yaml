@@ -1,0 +1,6 @@
+name: id
+in: path
+required: true
+description: The assignment's id, from the claim that gave the stage.
+schema:
+  type: string

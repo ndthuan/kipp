@@ -1,0 +1,211 @@
+package api
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/ndthuan/kipp/internal/upgrade/backup"
+	"github.com/ndthuan/kipp/internal/upgrade/engine"
+	et "github.com/ndthuan/kipp/internal/upgrade/engine/enginetest"
+	"github.com/ndthuan/kipp/internal/upgrade/launch"
+	"github.com/ndthuan/kipp/internal/upgrade/state"
+	"github.com/ndthuan/kipp/internal/waitfor"
+)
+
+func (e *env) withUpgrades(t *testing.T, tweak func(*engine.Options)) (*et.Server, string) {
+	t.Helper()
+	f := et.NewServer()
+	eng, data := et.Engine(t, et.NewRelease(t, et.GoodBinary(et.Newer)), f, tweak)
+	e.api.deps.Upgrade = eng
+	return f, data
+}
+
+func (e *env) untilUpgrade(t *testing.T, want string) map[string]any {
+	t.Helper()
+	timeout := time.After(waitfor.Safety)
+	for {
+		changes := e.api.deps.Upgrade.Changes()
+		got := e.object(t, 200, e.admin, "GET", "/api/v1/admin/upgrade", "")
+		if got["state"] == want {
+			return got
+		}
+		select {
+		case <-changes:
+		case <-timeout:
+			t.Fatalf("the upgrade is %v, not %s", got["state"], want)
+		}
+	}
+}
+
+func TestUpgradeIsAnAdminsAndAServerWithoutAnEngineSaysItDoesNotUpgrade(t *testing.T) {
+	e := newEnv(t)
+	got := e.object(t, 200, e.admin, "GET", "/api/v1/admin/upgrade", "")
+	eq(t, "state", got["state"], "idle")
+	eq(t, "unavailable", got["unavailable"], "this server does not upgrade itself")
+	e.asProblem(t, 403, "forbidden", e.viewer, "GET", "/api/v1/admin/upgrade", "")
+	for _, c := range [][2]string{{"POST", "/api/v1/admin/upgrade"}, {"DELETE", "/api/v1/admin/upgrade"}, {"POST", "/api/v1/admin/upgrade/rollback"}, {"POST", "/api/v1/admin/upgrade/dry-run"}} {
+		e.asProblem(t, 403, "forbidden", e.viewer, c[0], c[1], "")
+		e.asProblem(t, 409, "conflict", e.admin, c[0], c[1], "")
+	}
+}
+
+func TestAnAdminStartsAnUpgradeAndSeesItsStatusThroughToTheSwitch(t *testing.T) {
+	e := newEnv(t)
+	f, data := e.withUpgrades(t, nil)
+	idle := e.object(t, 200, e.admin, "GET", "/api/v1/admin/upgrade", "")
+	eq(t, "state", idle["state"], "idle")
+	eq(t, "latest", idle["latest"], et.Newer)
+	eq(t, "unavailable", idle["unavailable"], "")
+	eq(t, "last failure", idle["last_failure"], nil)
+
+	started := e.object(t, 202, e.admin, "POST", "/api/v1/admin/upgrade", `{"version":"`+et.Newer+`","wait_timeout":"5m"}`)
+	if started["state"] == "idle" || started["version"] != et.Newer || started["from"] != et.Running {
+		t.Fatalf("%v", started)
+	}
+	switching := e.untilUpgrade(t, "switching")
+	if switching["backup"] == "" || switching["updated_at"] == nil {
+		t.Fatalf("%v", switching)
+	}
+	eq(t, "restarts asked for", f.Switched.Load(), int32(1))
+	p, err := state.ReadPending(data)
+	if err != nil || p == nil || p.Kind != state.KindUpgrade {
+		t.Fatalf("%+v, %v", p, err)
+	}
+	if !strings.HasPrefix(e.lastAudit(t), "admin upgrade "+et.Newer+": safe restart") {
+		t.Fatalf("audit %q", e.lastAudit(t))
+	}
+	d, _ := e.asProblem(t, 409, "conflict", e.admin, "POST", "/api/v1/admin/upgrade", "")
+	contains(t, d.Detail, "already running")
+	d, _ = e.asProblem(t, 409, "conflict", e.admin, "DELETE", "/api/v1/admin/upgrade", "")
+	contains(t, d.Detail, "rollback")
+}
+
+func TestAnAdminCancelsAnUpgradeThatWaitsForABuild(t *testing.T) {
+	e := newEnv(t)
+	f, _ := e.withUpgrades(t, nil)
+	f.SetBusy(1)
+	e.object(t, 202, e.admin, "POST", "/api/v1/admin/upgrade", `{"safe_restart":true}`)
+	waiting := e.untilUpgrade(t, "waiting")
+	eq(t, "running", waiting["running"], any(float64(1)))
+	cancelled := e.object(t, 200, e.admin, "DELETE", "/api/v1/admin/upgrade", "")
+	eq(t, "state", cancelled["state"], "cancelled")
+	eq(t, "audit", e.lastAudit(t), "admin upgrade.cancel "+et.Newer+": ")
+	eq(t, "restarts", f.Switched.Load(), int32(0))
+}
+
+func TestAnUpgradeWithoutASafeRestartAsksToConfirmTheBuildsLost(t *testing.T) {
+	e := newEnv(t)
+	f, _ := e.withUpgrades(t, nil)
+	f.SetBusy(2)
+	d, _ := e.asProblem(t, 400, "bad_input", e.admin, "POST", "/api/v1/admin/upgrade", `{"safe_restart":false}`)
+	for _, want := range []string{"2 running builds", "lost", "confirm_lost"} {
+		contains(t, d.Detail, want)
+	}
+	e.asProblem(t, 400, "bad_input", e.admin, "POST", "/api/v1/admin/upgrade", `{"version":"v9.9.9"}`)
+	e.asProblem(t, 400, "bad_input", e.admin, "POST", "/api/v1/admin/upgrade", `{"wait_timeout":"soon"}`)
+	e.asProblem(t, 400, "bad_input", e.admin, "POST", "/api/v1/admin/upgrade", `{"surprise":1}`)
+	e.asProblem(t, 400, "bad_input", e.admin, "POST", "/api/v1/admin/upgrade", `{} {}`)
+	e.object(t, 202, e.admin, "POST", "/api/v1/admin/upgrade", `{"safe_restart":false,"confirm_lost":true}`)
+	e.untilUpgrade(t, "switching")
+	eq(t, "quiet", e.object(t, 200, e.admin, "GET", "/api/v1/admin/quiet", "")["quiet"], false)
+}
+
+func TestAnUpgradeOfADevelopmentBuildSaysSo(t *testing.T) {
+	e := newEnv(t)
+	e.withUpgrades(t, func(o *engine.Options) { o.InstallType = func() string { return "dev" } })
+	got := e.object(t, 200, e.admin, "GET", "/api/v1/admin/upgrade", "")
+	eq(t, "unavailable", got["unavailable"], "not available in a development build")
+	d, _ := e.asProblem(t, 409, "conflict", e.admin, "POST", "/api/v1/admin/upgrade", "")
+	contains(t, d.Detail, "not available in a development build")
+}
+
+func TestARollbackIsStartedByAnAdminAndTakesNoVersion(t *testing.T) {
+	e := newEnv(t)
+	f, data := e.withUpgrades(t, func(o *engine.Options) { o.Version = "v1.1.0" })
+	e.asProblem(t, 409, "conflict", e.admin, "POST", "/api/v1/admin/upgrade/rollback", "")
+	name, err := backup.Take(context.Background(), data, et.Running, time.Now())
+	must(t, err)
+	must(t, backup.MarkSucceeded(data, name, time.Now()))
+	must(t, state.WritePrevious(data, et.Running))
+	eq(t, "rollback_to", e.object(t, 200, e.admin, "GET", "/api/v1/admin/upgrade", "")["rollback_to"], et.Running)
+	e.asProblem(t, 400, "bad_input", e.admin, "POST", "/api/v1/admin/upgrade/rollback", `{"version":"v1.0.0"}`)
+	e.object(t, 202, e.admin, "POST", "/api/v1/admin/upgrade/rollback", "")
+	got := e.untilUpgrade(t, "switching")
+	eq(t, "version", got["version"], et.Running)
+	eq(t, "backup", got["backup"], any(name))
+	eq(t, "restarts", f.Switched.Load(), int32(1))
+	eq(t, "audit", e.lastAudit(t), "admin upgrade.rollback "+et.Running+": safe restart")
+}
+
+func TestAFailedUpgradeShowsItsReasonAndTheLaunchersFailureIsReported(t *testing.T) {
+	e := newEnv(t)
+	_, data := e.withUpgrades(t, func(o *engine.Options) {
+		o.Free = func(string) (uint64, bool) { return 1, true }
+	})
+	e.object(t, 202, e.admin, "POST", "/api/v1/admin/upgrade", "")
+	failed := e.untilUpgrade(t, "failed")
+	contains(t, failed["error"].(string), "not enough free space")
+	must(t, state.WriteFailure(data, state.Failure{Version: et.Newer, From: et.Running, Reason: "it did not answer its health check", LogTail: "boom", At: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)}))
+	lf := e.object(t, 200, e.admin, "GET", "/api/v1/admin/upgrade", "")["last_failure"].(map[string]any)
+	eq(t, "reason", lf["reason"], "it did not answer its health check")
+	eq(t, "at", lf["at"], "2026-01-02T03:04:05.000Z")
+}
+
+func TestAnUpgradeOrRollbackOfAPinnedServerIsRefusedBeforeAnythingIsDone(t *testing.T) {
+	e := newEnv(t)
+	_, data := e.withUpgrades(t, func(o *engine.Options) { o.Version = "v1.1.0" })
+	name, err := backup.Take(context.Background(), data, et.Running, time.Now())
+	must(t, err)
+	must(t, backup.MarkSucceeded(data, name, time.Now()))
+	must(t, state.WritePrevious(data, et.Running))
+	t.Setenv(launch.EnvUseBundled, "1")
+	got := e.object(t, 200, e.admin, "GET", "/api/v1/admin/upgrade", "")
+	contains(t, got["unavailable"].(string), "pinned to its own executable")
+	eq(t, "rollback_to", got["rollback_to"], "")
+	for _, path := range []string{"/api/v1/admin/upgrade", "/api/v1/admin/upgrade/rollback"} {
+		d, _ := e.asProblem(t, 409, "conflict", e.admin, "POST", path, `{"safe_restart":true}`)
+		contains(t, d.Detail, "pinned to its own executable")
+	}
+	eq(t, "state", e.object(t, 200, e.admin, "GET", "/api/v1/admin/upgrade", "")["state"], "idle")
+}
+
+func TestADryRunIsAnAdminsAnswersEveryStepAndChangesNothing(t *testing.T) {
+	e := newEnv(t)
+	f := et.NewServer()
+	jobs := t.TempDir()
+	rel := et.NewRelease(t, et.DryRunBinary(et.Newer, filepath.Join(t.TempDir(), "calls"), false, false, false))
+	eng, data := et.Engine(t, rel, f, func(o *engine.Options) { o.Jobs = jobs })
+	e.api.deps.Upgrade = eng
+	f.SetBusy(1)
+
+	e.asProblem(t, 403, "forbidden", e.viewer, "POST", "/api/v1/admin/upgrade/dry-run", "")
+	got := e.object(t, 200, e.admin, "POST", "/api/v1/admin/upgrade/dry-run", `{"version":"`+et.Newer+`"}`)
+	eq(t, "ok", got["ok"], true)
+	eq(t, "version", got["version"], et.Newer)
+	eq(t, "from", got["from"], et.Running)
+	eq(t, "running", got["running"], any(float64(1)))
+	steps, _ := got["steps"].([]any)
+	var names []string
+	for _, s := range steps {
+		st := s.(map[string]any)
+		names = append(names, st["name"].(string))
+		eq(t, st["name"].(string), st["result"], "passed")
+	}
+	eq(t, "steps", strings.Join(names, " "), "release space download jobs migrate builds")
+	eq(t, "audit", e.lastAudit(t), "admin upgrade.dry-run "+et.Newer+": passed")
+	eq(t, "the state", e.object(t, 200, e.admin, "GET", "/api/v1/admin/upgrade", "")["state"], "idle")
+	eq(t, "restarts", f.Switched.Load(), int32(0))
+	eq(t, "quiet calls", len(f.QuietCalls()), 0)
+	if des, _ := os.ReadDir(state.BinDir(data)); len(des) != 0 {
+		t.Fatalf("bin/ holds %v", des)
+	}
+
+	failed := e.object(t, 200, e.admin, "POST", "/api/v1/admin/upgrade/dry-run", `{"version":"v9.9.9"}`)
+	eq(t, "ok", failed["ok"], false)
+	eq(t, "audit", e.lastAudit(t), "admin upgrade.dry-run v9.9.9: failed")
+	e.asProblem(t, 400, "bad_input", e.admin, "POST", "/api/v1/admin/upgrade/dry-run", `{"safe_restart":true}`)
+}

@@ -1,0 +1,18 @@
+type: object
+additionalProperties: false
+description: One row of the audit.
+required: [id, at, actor, action, target, detail]
+properties:
+  id:
+    type: integer
+    format: int64
+  at:
+    $ref: Timestamp.yaml
+  actor:
+    type: string
+  action:
+    type: string
+  target:
+    type: string
+  detail:
+    type: string

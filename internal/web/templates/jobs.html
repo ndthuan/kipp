@@ -1,0 +1,31 @@
+{{define "scripts"}}<script src="{{static "jobs.js"}}" defer></script>{{end}}
+{{define "content"}}
+<h1 class="sr-only">{{.Data.Heading}}</h1>
+{{if .Data.Edits}}<div class="actions jobs-admin"><a class="action action-main" href="/admin/jobs/new">New job</a></div>
+{{end}}{{template "queue" .Data.Queue}}
+{{if or .Data.Groups .Data.Status}}<div id="jobs-bar" class="jobs-bar">
+<nav class="seg" role="tablist" aria-label="Show jobs by status">{{range .Data.Statuses}}<a href="{{.Href}}" role="tab" data-status="{{.Value}}" aria-selected="{{.Current}}"{{if not .Current}} tabindex="-1"{{end}} hx-get="{{.Href}}" hx-target="#jobs" hx-select="#jobs" hx-swap="outerHTML" hx-push-url="false">{{.Label}}</a>{{end}}</nav>
+</div>{{end}}
+<div id="jobs" class="stack" data-status="{{.Data.Status}}" hx-get="{{.Data.Refresh}}" hx-select="#jobs" hx-target="this" hx-swap="outerHTML" hx-trigger="kipp-changed from:body, every 60s">
+{{range .Data.Groups}}
+<section>
+<h2>{{or .Name "No group"}}</h2>
+<div class="scroll">
+<table class="jobs stacked">
+<thead><tr><th>Job</th><th>Last build</th><th>Schedule</th><th>Next</th></tr></thead>
+<tbody>
+{{range .Jobs}}<tr data-name="{{.Name}}">
+<td class="lead" data-label="Job"><a class="link" href="/jobs/{{.Name}}"{{with .Description}} title="{{.}}"{{end}}>{{.Name}}</a>{{if .Disabled}} <span class="tag">disabled</span>{{end}}</td>
+<td class="lead" data-label="Last build">{{if and .Children (not .Last)}}{{$kids := .Children}}{{with .Worst}}<span class="status {{.}}">{{.}}</span> <span class="sub">worst of {{$kids}} {{if eq $kids 1}}child{{else}}children{{end}}</span>{{else}}<span class="sub">{{$kids}} {{if eq $kids 1}}child{{else}}children{{end}}, none built yet</span>{{end}}{{else}}{{with .Last}}<a class="link" href="{{buildPath .}}">#{{.Number}}</a> <span class="status {{.Status}}">{{.Status}}</span> <span class="sub">{{ago .FinishedAt}}</span>{{else}}<span class="sub">never built</span>{{end}}{{end}}{{if .Recent}} {{template "dots" .Recent}}{{end}}</td>
+<td data-label="Schedule">{{with .Cron}}<code>{{.}}</code>{{end}}</td>
+<td data-label="Next">{{template "when" (when .Next)}}</td>
+</tr>
+{{end}}</tbody>
+</table>
+</div>
+</section>
+{{else}}
+<p class="sub">{{if .Data.Status}}No job matches this status.{{else}}There is no job you may see.{{end}}</p>
+{{end}}
+</div>
+{{end}}

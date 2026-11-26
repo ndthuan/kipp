@@ -1,0 +1,13 @@
+type: object
+additionalProperties: false
+description: One item of a metric, in two builds.
+required: [item, from, to, delta]
+properties:
+  item:
+    type: string
+  from:
+    type: [number, "null"]
+  to:
+    type: [number, "null"]
+  delta:
+    type: [number, "null"]

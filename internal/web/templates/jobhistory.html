@@ -1,0 +1,29 @@
+{{define "content"}}
+{{with .Data}}
+<div class="head">
+<h1 class="crumbs">{{if .Serves}}<a class="link-plain" href="/jobs/{{.Job}}">{{.Job}}</a>{{else}}<a class="link-plain" href="/admin/jobs/deleted">Deleted jobs</a><span aria-hidden="true">/</span><span>{{.Job}}</span>{{end}}<span aria-hidden="true">/</span><span>History</span></h1>
+</div>
+{{if .Serves}}{{template "jobtabs" .Tabs}}
+{{else}}<p class="notice notice-warn">This job serves no more.{{if .Edits}} Restore a version to bring it back.{{end}}</p>
+{{end}}{{with .Notice}}<p class="notice" role="status">{{.}}</p>
+{{end}}<p class="sub">Every version of the job, the newest first: made through kipp, or found in its file by a load. A restore makes a new version and rewrites none.</p>
+<ol class="versions">
+{{range $i, $row := .Versions}}<li class="version">
+<div class="version-head">
+<span><strong>Version {{.V.ID}}</strong>{{if .V.Deleted}} <span class="tag">deleted</span>{{end}}</span>
+<span class="sub">{{template "when" (when .V.At)}}, by {{.V.Author}} through {{.V.How}}</span>
+{{if .Restorable}}<form class="version-restore" method="post" action="/jobs/{{$.Data.Job}}/history/{{.V.ID}}/restore">
+<input type="hidden" name="csrf" value="{{$.CSRF}}">
+<input type="hidden" name="version" value="{{$.Data.Version}}">
+<button class="action action-small">Restore</button>
+</form>{{end}}
+</div>
+{{if not .V.Deleted}}<details class="version-diff"{{if eq $i 0}} open{{end}}>
+<summary>{{if .First}}The first version, {{plural .Diff.Added "line"}}{{else if .Diff.Same}}No line changed{{else}}{{plural .Diff.Added "line"}} added, {{.Diff.Taken}} removed{{end}}</summary>
+{{template "diff" .Diff}}
+</details>{{end}}
+</li>
+{{end}}</ol>
+{{if or .Paged .Older}}<p class="sub pager">{{if .Paged}}<a class="link" href="/jobs/{{.Job}}/history">Newest versions</a>{{end}}{{if .Older}}<a class="link" href="/jobs/{{.Job}}/history?before={{.Older}}">Older versions</a>{{end}}</p>{{end}}
+{{end}}
+{{end}}

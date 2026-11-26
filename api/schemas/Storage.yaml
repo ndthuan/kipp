@@ -1,0 +1,47 @@
+type: object
+additionalProperties: false
+description: What the data directory holds and what to change.
+required: [at, disk, parts, database, jobs, recommendations, self_check, heal, compact]
+properties:
+  at:
+    $ref: Timestamp.yaml
+  disk:
+    type: object
+    additionalProperties: false
+    required: [free_bytes, total_bytes, floor_bytes]
+    properties:
+      free_bytes:
+        type: [integer, "null"]
+        description: Free to kipp on the data directory's disk; null when it cannot be read, as are the other two.
+      total_bytes:
+        type: [integer, "null"]
+      floor_bytes:
+        type: [integer, "null"]
+        description: The free space under which kipp cleans what is safe to clean, the smaller of 5 GiB and 5% of the disk.
+  parts:
+    type: array
+    items:
+      $ref: StoragePart.yaml
+  database:
+    $ref: StorageDatabase.yaml
+  jobs:
+    type: array
+    description: Every job with a build, a folder of logs or one of artifacts, the largest first.
+    items:
+      $ref: StorageJob.yaml
+  recommendations:
+    type: array
+    description: The changes worth making, the largest saving first.
+    items:
+      $ref: StorageRecommendation.yaml
+  self_check:
+    anyOf:
+      - $ref: SelfCheck.yaml
+      - type: "null"
+  heal:
+    anyOf:
+      - $ref: StorageHeal.yaml
+      - type: "null"
+    description: The last clean of a disk under its floor since the server started; null when none ran.
+  compact:
+    $ref: StorageCompact.yaml

@@ -1,0 +1,13 @@
+type: object
+additionalProperties: false
+description: |
+  A build kept out of retention: `keep.builds`, `keep.days`, the rule for
+  removed jobs and `--artifacts-max` leave it, with its logs, artifacts,
+  tests and metrics, until it is no longer kept.
+required: [by, at]
+properties:
+  by:
+    type: string
+    description: The user who kept it.
+  at:
+    $ref: Timestamp.yaml

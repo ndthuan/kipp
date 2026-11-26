@@ -1,0 +1,97 @@
+name: flake-hunt
+
+on:
+  schedule:
+    - cron: "17 2 * * 0"
+  workflow_dispatch:
+    inputs:
+      count:
+        description: "Repeats of every test, 10 or more (default: the HUNT_COUNT repository variable, else 20)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  hunt:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        cpu: ["1", "4"]
+        shard: [web-1, web-2, web-3, api-1, api-2, dispatch-1, dispatch-2, cli, rest]
+        exclude:
+          - os: macos-latest
+            cpu: "4"
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    env:
+      CPU: ${{ matrix.cpu }}
+      SHARD: ${{ matrix.shard }}
+      COUNT: ${{ inputs.count || vars.HUNT_COUNT || '20' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+      - name: hunt
+        shell: bash
+        run: |
+          case "$COUNT" in
+            ''|*[!0-9]*) echo "count $COUNT is not a number"; exit 2 ;;
+          esac
+          if [ "$COUNT" -lt 10 ]; then
+            echo "count $COUNT is below 10, the least a hunt repeats"
+            exit 2
+          fi
+          name="${SHARD%-[0-9]*}"
+          parts() {
+            case "$1" in
+              web) echo 3 ;;
+              api|dispatch) echo 2 ;;
+              *) echo 1 ;;
+            esac
+          }
+          n="$(parts "$name")"
+          COUNT=$(( (COUNT + n - 1) / n ))
+          named() {
+            case "$1" in
+              web) echo ./internal/web/... ;;
+              api) echo ./internal/api/... ./internal/auth/... ;;
+              dispatch) echo ./internal/dispatch/... ./internal/upgrade/launch/... ;;
+              cli) echo ./internal/cli/... ;;
+            esac
+          }
+          if [ "$name" = rest ]; then
+            others="$(for s in web api dispatch cli; do
+              # shellcheck disable=SC2046 # patterns, word by word
+              go list $(named "$s")
+            done | sort)"
+            pkgs="$(go list ./... | sort | comm -23 - <(echo "$others"))"
+          else
+            # shellcheck disable=SC2046 # patterns, word by word
+            pkgs="$(go list $(named "$name"))"
+          fi
+          if [ -z "$pkgs" ]; then
+            echo "shard $SHARD has no package"
+            exit 2
+          fi
+          echo "$pkgs"
+          burn() { while :; do :; done; }
+          burn & burn &
+          burners="$(jobs -p)"
+          status=0
+          # shellcheck disable=SC2086 # import paths, word by word
+          go test -race -json -count="$COUNT" -shuffle=on -cpu "$CPU" -timeout 60m $pkgs > "$RUNNER_TEMP/hunt.json" || status=$?
+          # shellcheck disable=SC2086 # pids, word by word
+          kill $burners
+          echo "go test exited $status"
+          go run ./internal/devtools/flakes -summary "$GITHUB_STEP_SUMMARY" "$CPU=$RUNNER_TEMP/hunt.json"
+          exit "$status"

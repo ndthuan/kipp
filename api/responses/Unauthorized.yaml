@@ -1,0 +1,5 @@
+description: A login or a token is required, or the one sent is not valid.
+content:
+  application/problem+json:
+    schema:
+      $ref: ../schemas/Problem.yaml

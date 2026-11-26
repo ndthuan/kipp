@@ -1,0 +1,5 @@
+description: The request body is over the limit, 64 KiB for the JSON API and the webhook's own cap for a delivery.
+content:
+  application/problem+json:
+    schema:
+      $ref: ../schemas/Problem.yaml

@@ -1,0 +1,17 @@
+type: object
+additionalProperties: false
+description: The last self-check of the database, `PRAGMA quick_check` after the daily retention sweep.
+required: [at, ok, problems, error]
+properties:
+  at:
+    $ref: Timestamp.yaml
+  ok:
+    type: boolean
+  problems:
+    type: array
+    items:
+      type: string
+    description: What it found wrong, the first 20 lines.
+  error:
+    type: string
+    description: Why it could not run, which is a failure too; empty when it ran.

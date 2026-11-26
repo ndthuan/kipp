@@ -1,0 +1,289 @@
+package api
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/ndthuan/kipp/internal/config"
+	"github.com/ndthuan/kipp/internal/store"
+)
+
+func (e *env) ended(t *testing.T, job, shape string) {
+	t.Helper()
+	ctx := context.Background()
+	for i := len(shape) - 1; i >= 0; i-- {
+		at := time.Now().Add(-time.Duration(i+1) * time.Hour)
+		b := &store.Build{Job: job, Status: store.Running, Trigger: "cli", QueuedAt: at}
+		must(t, e.st.CreateBuild(ctx, b))
+		st := store.Success
+		if shape[i] == 'f' {
+			st = store.Failed
+		}
+		must(t, e.st.SetBuildStatus(ctx, b.ID, st, at))
+	}
+}
+
+func rowsOf(t *testing.T, o map[string]any, key string) []map[string]any {
+	t.Helper()
+	list, ok := o[key].([]any)
+	if !ok {
+		t.Fatalf("%s is not a list: %v", key, o[key])
+	}
+	out := make([]map[string]any, len(list))
+	for i, r := range list {
+		out[i] = r.(map[string]any)
+	}
+	return out
+}
+
+func jobsOf(rows []map[string]any, key string) string {
+	var out []string
+	for _, r := range rows {
+		if b, ok := r[key].(map[string]any); ok {
+			out = append(out, fmt.Sprint(b["job"]))
+		} else {
+			out = append(out, fmt.Sprint(r[key]))
+		}
+	}
+	return strings.Join(out, ",")
+}
+
+func TestTheOverviewAnswersEverySectionAsTheSpecDescribesItForATokenUser(t *testing.T) {
+	e := newEnv(t)
+	e.ended(t, "smoke", "fsss")
+	e.ended(t, "slow", "ssssfssssfsssssfsssf")
+	e.ended(t, "once", "ffffssffssf")
+	o := e.object(t, http.StatusOK, e.admin, "GET", "/api/v1/overview", "")
+	eqKeys(t, "keys", o, "charts,failing,flaky,groups,hidden,unstable")
+
+	failing := rowsOf(t, o, "failing")
+	eq(t, "failing", jobsOf(failing, "job"), "smoke,once")
+	eqKeys(t, "a failing row", failing[0], "build,flaky,job,recent,since")
+	eq(t, "smoke does not flap", failing[0]["flaky"], false)
+	eq(t, "once does", failing[1]["flaky"], true)
+	eq(t, "the red build", failing[0]["build"].(map[string]any)["status"], "failed")
+
+	flaky := rowsOf(t, o, "flaky")
+	eq(t, "flaky", jobsOf(flaky, "job"), "slow")
+	eqKeys(t, "a flaky row", flaky[0], "failed,failed_percent,finished,flips,job,recent")
+	eq(t, "failed", fmt.Sprint(flaky[0]["failed"], "/", flaky[0]["finished"], " ", flaky[0]["failed_percent"], "% ", flaky[0]["flips"]), "4/20 20% 7")
+
+	groups := rowsOf(t, o, "groups")
+	eq(t, "groups", jobsOf(groups, "name"), "backend,")
+	eqKeys(t, "a group", groups[0], "disabled,green,name,never_built,red,running")
+	eq(t, "backend has smoke, red", groups[0]["red"], any(float64(1)))
+}
+
+func TestTheOverviewIsAnsweredToASessionUserAsToATokenUser(t *testing.T) {
+	e := newEnv(t)
+	e.ended(t, "smoke", "fs")
+	sess := &store.Session{ID: "sess-ov", UserID: e.user(t, "admin").ID, CSRF: "csrf-ov", ExpiresAt: time.Now().Add(time.Hour)}
+	must(t, e.st.CreateSession(context.Background(), sess))
+	o := e.object(t, http.StatusOK, "", "GET", "/api/v1/overview", "", "Cookie", SessionCookieFor(sess).String())
+	eq(t, "failing", jobsOf(rowsOf(t, o, "failing"), "job"), "smoke")
+	e.call(t, http.StatusUnauthorized, "", "GET", "/api/v1/overview", "")
+}
+
+func TestTheOverviewKeepsToTheJobsTheCallerMayViewAndASectionOfNoneIsEmpty(t *testing.T) {
+	e := newEnv(t)
+	e.ended(t, "smoke", "ffff")
+	e.ended(t, "slow", "ffff")
+	o := e.object(t, http.StatusOK, e.viewer, "GET", "/api/v1/overview", "")
+	eq(t, "failing", jobsOf(rowsOf(t, o, "failing"), "job"), "smoke")
+	eq(t, "groups", jobsOf(rowsOf(t, o, "groups"), "name"), "backend")
+
+	none := token(t, e.st, "nobody", false, nil)
+	o = e.object(t, http.StatusOK, none, "GET", "/api/v1/overview", "")
+	for _, k := range []string{"failing", "flaky", "groups"} {
+		eq(t, k, len(rowsOf(t, o, k)), 0)
+	}
+}
+
+func TestAJobRemovedFromTheFilesIsInNoSectionAndADisabledOneOnlyInItsGroupCount(t *testing.T) {
+	e := newEnv(t)
+	e.ended(t, "ghost", "ffff")
+	off, err := config.ParseJob("off.yml", []byte("name: off\ngroup: backend\ndisabled: true\ntriggers: {cron: '* * * * *'}\nstages:\n  s: {run: 'true'}\n"))
+	must(t, err)
+	e.api.deps.Dispatch.SetSnapshot(e.api.deps.Dispatch.Snapshot().WithJobs(off))
+	e.ended(t, "off", "ffff")
+	o := e.object(t, http.StatusOK, e.admin, "GET", "/api/v1/overview", "")
+	eq(t, "failing", len(rowsOf(t, o, "failing")), 0)
+	groups := rowsOf(t, o, "groups")
+	eq(t, "groups", jobsOf(groups, "name"), "backend,")
+	eq(t, "disabled", groups[0]["disabled"], any(float64(1)))
+	eq(t, "backend's smoke, never built", groups[0]["never_built"], any(float64(1)))
+}
+
+func TestAMultibranchJobAndAnOwnerJobAreRepresentedByTheirChildrenAlone(t *testing.T) {
+	e := newEnv(t)
+	tok := e.withOwner(t)
+	ctx := context.Background()
+	b := &store.Build{Job: "acme.site.main", Parent: "acme.site", Status: store.Running, Trigger: "webhook", TriggerBranch: "main"}
+	must(t, e.st.CreateBuild(ctx, b))
+	must(t, e.st.SetBuildStatus(ctx, b.ID, store.Failed, time.Now()))
+	o := e.object(t, http.StatusOK, tok, "GET", "/api/v1/overview", "")
+	eq(t, "failing: the child, not the repo's node nor the owner job", jobsOf(rowsOf(t, o, "failing"), "job"), "acme.site.main")
+	groups := rowsOf(t, o, "groups")
+	eq(t, "one group, web", jobsOf(groups, "name"), "web")
+	eq(t, "one red job in it", fmt.Sprint(groups[0]["red"], groups[0]["green"], groups[0]["never_built"]), "1 0 0")
+}
+
+func TestFlakyFlipsOfZeroLeavesTheFlakySectionEmpty(t *testing.T) {
+	e := newEnv(t, func(a *API) { a.deps.FlakyFlips = 0 })
+	e.ended(t, "slow", "ssssfssssfsssssfsssf")
+	e.ended(t, "once", "ffffssffssf")
+	o := e.object(t, http.StatusOK, e.admin, "GET", "/api/v1/overview", "")
+	eq(t, "flaky", len(rowsOf(t, o, "flaky")), 0)
+	failing := rowsOf(t, o, "failing")
+	eq(t, "once is failing, untagged", fmt.Sprint(jobsOf(failing, "job"), failing[0]["flaky"]), "oncefalse")
+}
+
+func TestFlakyQuietEndsFlakyAfterThatManyGreenBuilds(t *testing.T) {
+	for quiet, want := range map[int]int{0: 1, 5: 0} {
+		e := newEnv(t, func(a *API) { a.deps.FlakyFlips = 4; a.deps.FlakyQuiet = quiet })
+		e.ended(t, "slow", "sssssfsfsfsfsfsfsfsf")
+		o := e.object(t, http.StatusOK, e.admin, "GET", "/api/v1/overview", "")
+		eq(t, fmt.Sprint("flaky rows, quiet ", quiet), len(rowsOf(t, o, "flaky")), want)
+	}
+}
+
+func (e *env) endedAt(t *testing.T, job string, st store.Status, ago time.Duration) {
+	t.Helper()
+	b := &store.Build{Job: job, Status: store.Running, Trigger: "cli", QueuedAt: time.Now().Add(-ago - 2*time.Minute)}
+	must(t, e.st.CreateBuild(context.Background(), b))
+	must(t, e.st.SetBuildStatus(context.Background(), b.ID, store.Running, time.Now().Add(-ago-time.Minute)))
+	must(t, e.st.SetBuildStatus(context.Background(), b.ID, st, time.Now().Add(-ago)))
+}
+
+func TestTheOverviewAnswersTheChartsOfTheDayAndTheWeekAndRefusesAnyOtherWindow(t *testing.T) {
+	e := newEnv(t)
+	e.endedAt(t, "smoke", store.Success, time.Hour)
+	e.endedAt(t, "smoke", store.Failed, 2*time.Hour)
+	e.endedAt(t, "smoke", store.Unstable, 3*time.Hour)
+	e.endedAt(t, "smoke", store.Failed, 3*24*time.Hour)
+	e.endedAt(t, "slow", store.Cancelled, time.Hour)
+
+	day := e.object(t, http.StatusOK, e.admin, "GET", "/api/v1/overview", "")
+	week := e.object(t, http.StatusOK, e.admin, "GET", "/api/v1/overview?window=7d", "")
+	explicit := e.object(t, http.StatusOK, e.admin, "GET", "/api/v1/overview?window=24h", "")
+	dc, wc := day["charts"].(map[string]any), week["charts"].(map[string]any)
+	eqKeys(t, "charts", dc, "bucket_seconds,buckets,end,groups,start,window")
+	eq(t, "the default window", dc["window"], "24h")
+	eq(t, "explicit 24h is the default", explicit["charts"].(map[string]any)["window"], "24h")
+	eq(t, "the week", wc["window"], "7d")
+	eq(t, "day columns", len(rowsOf(t, dc, "buckets")), 25)
+	eq(t, "week columns", len(rowsOf(t, wc, "buckets")), 29)
+	eq(t, "bucket", dc["bucket_seconds"], any(float64(3600)))
+	eqKeys(t, "a bucket", rowsOf(t, dc, "buckets")[0], "cancelled,failed,max_running,start,started,success,unstable,wait_max_seconds,wait_median_seconds")
+
+	sum := func(c map[string]any, key string) int {
+		n := 0
+		for _, b := range rowsOf(t, c, "buckets") {
+			n += int(b[key].(float64))
+		}
+		return n
+	}
+	eq(t, "day: one success", sum(dc, "success"), 1)
+	eq(t, "day: failed", sum(dc, "failed"), 1)
+	eq(t, "day: unstable", sum(dc, "unstable"), 1)
+	eq(t, "day: cancelled", sum(dc, "cancelled"), 1)
+	eq(t, "week: the failure of three days ago too", sum(wc, "failed"), 2)
+
+	groups := rowsOf(t, dc, "groups")
+	eqKeys(t, "a group's rate", groups[0], "before,change,name,now")
+	eqKeys(t, "a tally", groups[0]["now"].(map[string]any), "green,percent,red")
+	eq(t, "backend: 2 of 3 builds green, unstable being green", fmt.Sprint(groups[0]["name"], groups[0]["now"].(map[string]any)["percent"]), "backend67")
+	if groups[0]["change"] != nil {
+		t.Fatalf("no change with no build before: %v", groups[0]["change"])
+	}
+
+	for _, bad := range []string{"1h", "30d", "week", "24H"} {
+		body, _ := e.call(t, http.StatusBadRequest, e.admin, "GET", "/api/v1/overview?window="+bad, "")
+		contains(t, body, "window is 24h or 7d")
+	}
+}
+
+func TestTheUnstableSectionHoldsTheJobsWhoseNewestBuildIsUnstableAndSaysSince(t *testing.T) {
+	e := newEnv(t)
+	e.endedAt(t, "smoke", store.Success, 5*time.Hour)
+	e.endedAt(t, "smoke", store.Unstable, 4*time.Hour)
+	e.endedAt(t, "smoke", store.Unstable, time.Hour)
+	e.endedAt(t, "slow", store.Unstable, 3*time.Hour)
+	e.endedAt(t, "slow", store.Failed, time.Hour)
+	o := e.object(t, http.StatusOK, e.admin, "GET", "/api/v1/overview", "")
+	unstable := rowsOf(t, o, "unstable")
+	eq(t, "unstable", jobsOf(unstable, "job"), "smoke")
+	eqKeys(t, "an unstable row", unstable[0], "build,flaky,job,recent,since")
+	eq(t, "the build", unstable[0]["build"].(map[string]any)["status"], "unstable")
+	eq(t, "a job unstable and then failed is failing only", jobsOf(rowsOf(t, o, "failing"), "job"), "slow")
+}
+
+func TestAGoneBranchAndAGoneRepoAreInNoCountOfAGroupButALiveChildOfADisabledParentIs(t *testing.T) {
+	e := newEnv(t)
+	parent, err := config.ParseJob("site.yml", []byte("name: site\ngroup: web\nmultibranch: {repo: acme/site}\n"))
+	must(t, err)
+	off, err := config.ParseJob("old.yml", []byte("name: old\ngroup: web\ndisabled: true\nmultibranch: {repo: acme/old}\n"))
+	must(t, err)
+	live := func(p *config.Job, key string) *config.Job {
+		return p.Child(config.ChildRecord{Parent: p.Name, Key: key, Kind: config.KindBranch, Branch: key, State: config.ChildLive})
+	}
+	gone := parent.Child(config.ChildRecord{Parent: parent.Name, Key: "pr-7", Kind: config.KindPR, PR: 7, State: config.ChildGone})
+	e.api.deps.Dispatch.SetSnapshot(e.api.deps.Dispatch.Snapshot().WithJobs(parent, off, live(parent, "main"), gone, live(off, "main")))
+	o := e.object(t, http.StatusOK, e.admin, "GET", "/api/v1/overview", "")
+	var web map[string]any
+	for _, g := range rowsOf(t, o, "groups") {
+		if g["name"] == "web" {
+			web = g
+		}
+	}
+	eq(t, "web", fmt.Sprint(web["never_built"], web["disabled"]), "1 1")
+	eq(t, "the API's rates stay the groups that built", len(rowsOf(t, o["charts"].(map[string]any), "groups")), 0)
+}
+
+func TestTheOverviewOfAServerWithNoJobAndNoBuildIsEveryListEmptyAndTheChartsAllZero(t *testing.T) {
+	e := newEnv(t)
+	jobs := t.TempDir()
+	snap, err := config.Load(jobs)
+	must(t, err)
+	e.api.deps.Dispatch.SetSnapshot(snap)
+	for window, columns := range map[string]int{"24h": 25, "7d": 29} {
+		o := e.object(t, http.StatusOK, e.admin, "GET", "/api/v1/overview?window="+window, "")
+		eqKeys(t, "keys", o, "charts,failing,flaky,groups,hidden,unstable")
+		for _, k := range []string{"failing", "unstable", "flaky", "groups"} {
+			eq(t, window+" "+k, len(rowsOf(t, o, k)), 0)
+		}
+		c := o["charts"].(map[string]any)
+		eq(t, "window", c["window"], any(window))
+		eq(t, "no group rate", len(rowsOf(t, c, "groups")), 0)
+		buckets := rowsOf(t, c, "buckets")
+		eq(t, window+" buckets", len(buckets), columns)
+		for _, b := range buckets {
+			for _, k := range []string{"success", "unstable", "failed", "cancelled", "max_running", "started"} {
+				eq(t, k, b[k], any(float64(0)))
+			}
+		}
+	}
+}
+
+func TestTheOverviewListsTrunkJobsAndCountsRedPullRequestsAndSideBranchesAsHidden(t *testing.T) {
+	e := newEnv(t)
+	now := time.Now()
+	live := func(key, kind, branch string, pr int) store.Child {
+		return store.Child{Parent: "site", Key: key, Kind: kind, Branch: branch, PR: pr, State: "live", LastSeenAt: now}
+	}
+	e.withSite(t, live("main", "branch", "main", 0), live("feature", "branch", "feature", 0), live("pr-12", "pr", "feature", 12), live("pr-12-head", "pr-head", "feature", 12))
+	for _, n := range []string{"site.main", "site.feature", "site.pr-12", "site.pr-12-head"} {
+		e.ended(t, n, "fs")
+	}
+	o := e.object(t, http.StatusOK, e.admin, "GET", "/api/v1/overview", "")
+	eq(t, "failing", jobsOf(rowsOf(t, o, "failing"), "job"), "site.main")
+	hidden := o["hidden"].(map[string]any)
+	eqKeys(t, "hidden", hidden, "failing,flaky,unstable")
+	eq(t, "hidden failing", hidden["failing"], any(float64(3)))
+	eq(t, "hidden unstable", hidden["unstable"], any(float64(0)))
+	eq(t, "hidden flaky", hidden["flaky"], any(float64(0)))
+}

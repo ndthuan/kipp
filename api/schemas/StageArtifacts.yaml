@@ -1,0 +1,14 @@
+type: object
+additionalProperties: false
+description: What one stage of a build kept.
+required: [stage, zip, files]
+properties:
+  stage:
+    type: string
+  zip:
+    type: string
+    description: Where to download all of them as one zip.
+  files:
+    type: array
+    items:
+      $ref: Artifact.yaml

@@ -1,0 +1,8 @@
+name: id
+in: path
+required: true
+description: A version's id, from the job's versions.
+schema:
+  type: integer
+  format: int64
+  minimum: 1

@@ -1,0 +1,21 @@
+type: object
+additionalProperties: false
+description: |
+  A problem document with the list of what was refused, one item each;
+  `detail` is them joined by newlines.
+required: [type, title, status, detail, code, errors]
+properties:
+  type:
+    type: string
+  title:
+    type: string
+  status:
+    type: integer
+  detail:
+    type: string
+  code:
+    type: string
+  errors:
+    type: array
+    items:
+      type: string

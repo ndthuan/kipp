@@ -1,0 +1,11 @@
+type: object
+additionalProperties: false
+description: A repo that more than one job indexes, which is a mistake of the job files; each of them builds it.
+required: [repo, jobs]
+properties:
+  repo:
+    type: string
+  jobs:
+    type: array
+    items:
+      type: string

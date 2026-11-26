@@ -1,0 +1,7 @@
+type: object
+additionalProperties: false
+description: The delivery was valid and changes nothing; `ignored` says why.
+required: [ignored]
+properties:
+  ignored:
+    type: string

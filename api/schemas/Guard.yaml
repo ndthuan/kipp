@@ -1,0 +1,30 @@
+type: object
+additionalProperties: false
+description: What a guard found of one item of a metric.
+required: [metric, item, remembered, reported, tolerance, verdict, outcome, from, line]
+properties:
+  metric:
+    type: string
+  item:
+    type: string
+  remembered:
+    type: [number, "null"]
+  reported:
+    type: [number, "null"]
+  tolerance:
+    type: number
+  verdict:
+    type: string
+    enum: [held, no baseline, fell, missing, not reported]
+  outcome:
+    type: string
+    enum: [held, failed, unstable]
+    description: How the guard ends the stage, `held` being not at all.
+  from:
+    oneOf:
+      - $ref: BuildRef.yaml
+      - type: "null"
+    description: The build whose value the guard compared against; null when there was none.
+  line:
+    type: string
+    description: The guard's result as the stage's log has it.

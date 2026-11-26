@@ -1,0 +1,24 @@
+get:
+  operationId: listResults
+  tags: [builds]
+  summary: The JUnit cases of a build
+  x-kipp-package: api
+  parameters:
+    - $ref: ../parameters/BuildId.yaml
+    - $ref: ../parameters/Limit.yaml
+    - $ref: ../parameters/Cursor.yaml
+  responses:
+    "200":
+      description: Up to `limit` cases the build's stages reported, 100 by default, in the order they were stored.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/TestResultList.yaml
+    "400":
+      $ref: ../responses/BadRequest.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "404":
+      $ref: ../responses/NotFound.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

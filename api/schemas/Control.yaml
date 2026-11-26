@@ -1,0 +1,7 @@
+type: object
+additionalProperties: false
+required: [Action]
+properties:
+  Action:
+    type: string
+    enum: [none, cancel]

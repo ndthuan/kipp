@@ -1,0 +1,104 @@
+#!/bin/sh
+set -eu
+export LC_ALL=C
+
+mode=${1:?usage: smoke.sh bin|image PATH|REF [VERSION]}
+target=${2:?usage: smoke.sh bin|image PATH|REF [VERSION]}
+want=${3-}
+work=$(mktemp -d)
+pid='' container=''
+
+cleanup() {
+	[ -z "$pid" ] || kill "$pid" 2>/dev/null || true
+	[ -z "$container" ] || docker rm -f "$container" >/dev/null 2>&1 || true
+	[ -z "$container" ] || docker volume rm "$container-data" "$container-config" >/dev/null 2>&1 || true
+	rm -rf "$work"
+}
+trap cleanup EXIT INT TERM
+
+fail() {
+	echo "smoke: FAILED: $*" >&2
+	if [ -n "$container" ]; then docker logs "$container" >&2 2>&1 || true; fi
+	if [ -f "$work/serve.log" ]; then cat "$work/serve.log" >&2; fi
+	exit 1
+}
+
+mkdir -p "$work/jobs"
+cat >"$work/jobs/hello.yml" <<'JOB'
+name: hello
+stages:
+  greet: {run: echo "hello from $(uname -s)"}
+JOB
+chmod 644 "$work/jobs/hello.yml"
+
+case $mode in
+bin)
+	port=$((20000 + $$ % 20000))
+	url="http://127.0.0.1:$port"
+	kipp() { "$target" "$@"; }
+	data="$work/data"
+	"$target" serve --data "$data" --jobs "$work/jobs" --listen "127.0.0.1:$port" >"$work/serve.log" 2>&1 &
+	pid=$!
+	;;
+image)
+	container="kipp-smoke-$$"
+	url=''
+	kipp() { docker exec -i -e KIPP_TOKEN="${KIPP_TOKEN-}" "$container" kipp "$@"; }
+	data=/var/lib/kipp
+	docker create --name "$container" -p 127.0.0.1::8085 \
+		-v "$container-data:/var/lib/kipp" -v "$container-config:/etc/kipp" "$target" >/dev/null ||
+		fail "the container was not created"
+	docker cp "$work/jobs/." "$container:/etc/kipp/" || fail "docker cp of the job"
+	docker start "$container" >/dev/null || fail "the container did not start"
+	;;
+*)
+	echo "usage: smoke.sh bin|image PATH|REF [VERSION]" >&2
+	exit 2
+	;;
+esac
+
+out=$(kipp version) || fail "kipp version"
+echo "smoke: $out"
+got=$(printf '%s\n' "$out" | head -n 1)
+[ -z "$want" ] || [ "$got" = "kipp $want" ] || fail "kipp version says '$got', want 'kipp $want'"
+if [ "$mode" = image ]; then
+	printf '%s\n' "$out" | grep -q '^installed from: Docker image$' || fail "the image does not say it is a Docker image: $out"
+fi
+
+health() {
+	if [ "$mode" = bin ]; then
+		curl -fsS "$url/api/v1/health"
+	else
+		docker exec "$container" curl -fsS http://127.0.0.1:8085/api/v1/health
+	fi
+}
+i=0
+until out=$(health 2>/dev/null); do
+	i=$((i + 1))
+	[ "$i" -lt 60 ] || fail "no answer from /api/v1/health in 30 seconds"
+	sleep 0.5
+done
+case $out in *'"ok":true'*) ;; *) fail "health answered '$out'" ;; esac
+echo "smoke: health $out"
+
+kipp user add admin --admin --data "$data" >"$work/admin" || fail "user add"
+grep -q '^admin password: ' "$work/admin" || fail "user add printed no password"
+KIPP_TOKEN=$(kipp token create admin --label smoke --data "$data" | tail -n 1) || fail "token create"
+export KIPP_TOKEN
+case $KIPP_TOKEN in kipp_*) ;; *) fail "token create printed no token" ;; esac
+
+if [ "$mode" = bin ]; then
+	run=$(KIPP_URL="$url" kipp run hello --wait) || fail "kipp run: $run"
+else
+	run=$(kipp run hello --wait --url http://127.0.0.1:8085) || fail "kipp run: $run"
+fi
+printf '%s\n' "$run"
+printf '%s\n' "$run" | grep -q '^\[greet\] hello from ' || fail "the stage's output is missing"
+printf '%s\n' "$run" | grep -q '^hello #1: success$' || fail "the build did not succeed"
+
+if [ "$mode" = bin ]; then
+	[ -f "$data/db.sqlite" ] || fail "no database in $data"
+else
+	docker exec "$container" test -f /var/lib/kipp/db.sqlite || fail "no database in the data volume"
+fi
+echo "smoke: ok ($mode $target)"

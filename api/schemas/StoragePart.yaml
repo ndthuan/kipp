@@ -1,0 +1,17 @@
+type: object
+additionalProperties: false
+description: A part of the data directory.
+required: [kind, name, bytes, made_by_kipp]
+properties:
+  kind:
+    type: string
+    enum: [database, logs, artifacts, cache, workspaces, stage_temp, upgrade_backups, schema_copies, upgrade_binaries, small_files, other]
+    description: One of the kinds kipp keeps, each listed whether there or not, or `other` for any other entry of the top level.
+  name:
+    type: string
+    description: What it is on disk.
+  bytes:
+    type: integer
+  made_by_kipp:
+    type: boolean
+    description: False for an entry kipp did not make; kipp only shows it.

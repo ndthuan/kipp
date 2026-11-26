@@ -1,0 +1,84 @@
+package placement
+
+import (
+	"testing"
+	"time"
+)
+
+func TestPickFollowsTheRulesOfPlacement(t *testing.T) {
+	t0 := time.Date(2026, 10, 24, 12, 0, 0, 0, time.UTC)
+	runner := func(name string, free, online bool, idle time.Time, labels ...string) Candidate {
+		return Candidate{Name: name, Kind: KindRunner, Labels: labels, Free: free, Reachable: online, Idle: idle}
+	}
+	weighted := func(name string, weight int, free, online bool, idle time.Time) Candidate {
+		return Candidate{Name: name, Kind: KindRunner, Labels: []string{"linux"}, Free: free, Reachable: online, Idle: idle, Weight: weight}
+	}
+	engine := func(name string, room int, reachable bool, labels ...string) Candidate {
+		return Candidate{Name: name, Kind: KindEngine, Labels: labels, Free: room > 0, Room: room, Reachable: reachable, Why: "unreachable since 14:02: dial tcp: refused"}
+	}
+	linux := Want{Labels: []string{"linux"}}
+	image := Want{Labels: []string{"linux"}, Image: "golang:1.27"}
+	cases := []struct {
+		name string
+		want Want
+		cs   []Candidate
+		pick string
+		why  Why
+		line string
+	}{
+		{"nothing at all", linux, nil, "", WhyNone, "no runner or engine carries labels [linux]"},
+		{"labels not all carried", Want{Labels: []string{"linux", "arm64"}}, []Candidate{runner("a", true, true, t0, "linux")}, "", WhyNone, "no runner or engine carries labels [linux, arm64]"},
+		{"an image and only runners", image, []Candidate{runner("a", true, true, t0, "linux")}, "", WhyNone, "no engine carries labels [linux]: a stage with an image runs in a container on an engine"},
+		{"no image and only engines", linux, []Candidate{engine("e", 2, true, "linux")}, "", WhyNone, "no runner carries labels [linux]: a stage with no image runs on a standing runner"},
+		{"the runner is busy", linux, []Candidate{runner("a", false, true, t0, "linux")}, "", WhyBusy, "waiting for a runner with labels [linux]"},
+		{"the runner is offline", linux, []Candidate{runner("a", true, false, t0, "linux")}, "", WhyBusy, "waiting for a runner with labels [linux]"},
+		{"the engine is unreachable", image, []Candidate{engine("mac", 2, false, "linux")}, "", WhyUnreachable, "waiting for engine mac (unreachable since 14:02: dial tcp: refused)"},
+		{"the engine is full", image, []Candidate{engine("mac", 0, true, "linux")}, "", WhyBusy, "waiting for an engine with labels [linux]"},
+		{"the runner idle longest", linux, []Candidate{runner("new", true, true, t0.Add(time.Minute), "linux"), runner("old", true, true, t0, "linux", "x")}, "old", Picked, ""},
+		{"the engine with the most room", image, []Candidate{engine("small", 1, true, "linux"), engine("big", 3, true, "linux")}, "big", Picked, ""},
+		{"the engine already running the build's container", image, []Candidate{engine("big", 3, true, "linux"), {Name: "mine", Kind: KindEngine, Labels: []string{"linux"}, Reachable: true, Reuse: true}}, "mine", Picked, ""},
+		{"a free runner beside a busy one", linux, []Candidate{runner("busy", false, true, t0, "linux"), runner("free", true, true, t0.Add(time.Hour), "linux")}, "free", Picked, ""},
+		{"a higher weight beats idle longest", linux, []Candidate{weighted("old", 0, true, true, t0), weighted("heavy", 10, true, true, t0.Add(time.Hour))}, "heavy", Picked, ""},
+		{"an equal weight keeps idle longest", linux, []Candidate{weighted("new", 10, true, true, t0.Add(time.Hour)), weighted("old", 10, true, true, t0)}, "old", Picked, ""},
+		{"a busy heavier runner does not block a free lighter one", linux, []Candidate{weighted("heavy", 10, false, true, t0), weighted("light", 0, true, true, t0)}, "light", Picked, ""},
+		{"an offline heavier runner does not block a free lighter one", linux, []Candidate{weighted("heavy", 10, true, false, t0), weighted("light", 0, true, true, t0)}, "light", Picked, ""},
+		{"a negative weight comes after the default", linux, []Candidate{weighted("slow", -1, true, true, t0), weighted("plain", 0, true, true, t0.Add(time.Hour))}, "plain", Picked, ""},
+		{"the build's own container comes before a higher weight", linux, []Candidate{weighted("heavy", 10, true, true, t0), {Name: "mine", Kind: KindRunner, Labels: []string{"linux"}, Reachable: true, Reuse: true}}, "mine", Picked, ""},
+	}
+	for _, c := range cases {
+		got, why, line := Pick(c.want, c.cs)
+		if got.Name != c.pick || why != c.why || line != c.line {
+			t.Errorf("%s: picked %q, %q, %q; want %q, %q, %q", c.name, got.Name, why, line, c.pick, c.why, c.line)
+		}
+	}
+}
+
+func TestAvailableCountsEveryPlaceOnlineAndEnabledBusyOrNot(t *testing.T) {
+	linux := Want{Labels: []string{"linux"}}
+	runner := func(free, online, disabled bool, labels ...string) Candidate {
+		return Candidate{Name: "r", Kind: KindRunner, Labels: labels, Free: free, Reachable: online, Disabled: disabled}
+	}
+	cases := []struct {
+		name string
+		cs   []Candidate
+		want bool
+	}{
+		{"nothing at all", nil, false},
+		{"only other labels", []Candidate{runner(true, true, false, "macos")}, false},
+		{"offline", []Candidate{runner(false, false, false, "linux")}, false},
+		{"online and disabled", []Candidate{runner(false, true, true, "linux")}, false},
+		{"online, enabled and busy", []Candidate{runner(false, true, false, "linux")}, true},
+		{"online, enabled and free", []Candidate{runner(true, true, false, "linux")}, true},
+		{"an engine of the labels for a stage with no image", []Candidate{{Name: "e", Kind: KindEngine, Labels: []string{"linux"}, Free: true, Reachable: true}}, false},
+		{"one offline beside one busy", []Candidate{runner(true, false, false, "linux"), runner(false, true, false, "linux")}, true},
+	}
+	for _, c := range cases {
+		if got := Available(linux, c.cs); got != c.want {
+			t.Errorf("%s: %v, want %v", c.name, got, c.want)
+		}
+	}
+	engine := Candidate{Name: "e", Kind: KindEngine, Labels: []string{"linux"}, Reachable: true}
+	if !Available(Want{Labels: []string{"linux"}, Image: "alpine"}, []Candidate{engine}) {
+		t.Error("a full engine that answers is a place for a stage with an image")
+	}
+}

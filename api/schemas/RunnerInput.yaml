@@ -1,0 +1,10 @@
+type: object
+additionalProperties: false
+description: One stage whose artifacts a stage is given.
+required: [Stage, Size]
+properties:
+  Stage:
+    type: string
+  Size:
+    type: integer
+    format: int64

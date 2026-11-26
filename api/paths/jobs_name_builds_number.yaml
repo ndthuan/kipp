@@ -1,0 +1,28 @@
+get:
+  operationId: getJobBuild
+  tags: [jobs]
+  summary: One build of a job by its number
+  description: The same build `/builds/{id}` answers, found by its number within the job.
+  x-kipp-package: api
+  parameters:
+    - $ref: ../parameters/JobName.yaml
+    - name: number
+      in: path
+      required: true
+      description: The build's number within the job (`number` in a build), not its id.
+      schema:
+        type: integer
+        minimum: 1
+  responses:
+    "200":
+      description: The build.
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/Build.yaml
+    "401":
+      $ref: ../responses/Unauthorized.yaml
+    "404":
+      $ref: ../responses/NotFound.yaml
+    "500":
+      $ref: ../responses/InternalError.yaml

@@ -1,0 +1,5 @@
+type: [string, "null"]
+description: |
+  Opaque. Sent back as `cursor`, it reads the page after this one of the same
+  list; null when there is none. Only a cursor this server gave for the list
+  is accepted, and it holds good while rows are added to the list.

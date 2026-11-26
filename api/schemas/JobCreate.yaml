@@ -1,0 +1,10 @@
+type: object
+additionalProperties: false
+description: A new job; the YAML's `name:` must be `name`.
+required: [name, yaml]
+properties:
+  name:
+    type: string
+  yaml:
+    type: string
+    description: The job file, as `docs/jobs.md` describes it.
