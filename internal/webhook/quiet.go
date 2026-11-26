@@ -3,6 +3,7 @@ package webhook
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"maps"
@@ -97,6 +98,12 @@ func (h *hook) settle(w http.ResponseWriter, r *http.Request, p store.PendingDel
 }
 
 func (a *answer) sendTo(w http.ResponseWriter) {
+	if a.body.Len() > 0 && !json.Valid(a.body.Bytes()) {
+		slog.Error("webhook: a settled answer is not JSON", "status", a.code)
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		problem.Write(w, problem.Internal, "internal error")
+		return
+	}
 	maps.Copy(w.Header(), a.header)
 	if a.header.Get("Content-Type") == problem.MediaType {
 		w.Header().Set("Content-Type", "application/problem+json")
@@ -105,7 +112,9 @@ func (a *answer) sendTo(w http.ResponseWriter) {
 	}
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(a.code)
-	_, _ = w.Write(a.body.Bytes())
+	if a.body.Len() > 0 {
+		_ = json.NewEncoder(w).Encode(json.RawMessage(a.body.Bytes()))
+	}
 }
 
 func (h *hook) forget(ctx context.Context, p store.PendingDelivery) {

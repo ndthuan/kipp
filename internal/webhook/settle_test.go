@@ -158,8 +158,18 @@ func TestASettledAnswerIsSentAsJSONOrAProblemAndNeverAsAPage(t *testing.T) {
 		if h.Get("Content-Type") != want || h.Get("X-Content-Type-Options") != "nosniff" || h.Get("Retry-After") != "60" {
 			t.Fatalf("given %q: headers %v", given, h)
 		}
-		if rec.Body.String() != `{"ignored":"<b>"}` {
+		if rec.Body.String() != `{"ignored":"\u003cb\u003e"}`+"\n" {
 			t.Fatalf("body %q", rec.Body.String())
 		}
+	}
+}
+
+func TestASettledAnswerThatIsNotJSONIsNeverSentAsIs(t *testing.T) {
+	a := &answer{header: http.Header{}, code: http.StatusOK}
+	_, _ = a.Write([]byte(`<script>alert(1)</script>`))
+	rec := httptest.NewRecorder()
+	a.sendTo(rec)
+	if rec.Code != http.StatusInternalServerError || strings.Contains(rec.Body.String(), "script") || rec.Header().Get("Content-Type") != problem.MediaType {
+		t.Fatalf("%d %v %q", rec.Code, rec.Header(), rec.Body.String())
 	}
 }
